@@ -32,7 +32,6 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > WORD_LIMIT;
 
-  // Mock proofreading function - will be replaced with actual AI call
   const handleCheck = async () => {
     if (!inputText.trim()) {
       toast.error("Please enter some text to check");
@@ -46,40 +45,39 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
     setIsLoading(true);
     setHasResults(false);
+    try {
+      const response = await fetch("/api/proofread", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: inputText,
+          language,
+          wordLimit: WORD_LIMIT,
+        }),
+      });
 
-    // Simulate API call - will be replaced with actual Gemini AI integration
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error?.message || "Proofreading failed");
+      }
 
-    // Mock response for demonstration
-    const mockChanges: Change[] = [
-      {
-        original: "teh",
-        corrected: "the",
-        explanation: "Common spelling error",
-      },
-      {
-        original: "recieve",
-        corrected: "receive",
-        explanation: "Spelling: 'i' before 'e' except after 'c'",
-      },
-      {
-        original: "their going",
-        corrected: "they're going",
-        explanation: "Grammar: Contraction needed for 'they are'",
-      },
-    ];
+      const data = await response.json();
+      if (!data?.corrected_text) {
+        throw new Error("Invalid response format");
+      }
 
-    // For demo, just return the input with a note
-    setCorrectedText(
-      inputText
-        .replace(/teh/gi, "the")
-        .replace(/recieve/gi, "receive")
-        .replace(/their going/gi, "they're going")
-    );
-    setChanges(mockChanges);
-    setIsLoading(false);
-    setHasResults(true);
-    toast.success("Text checked successfully!");
+      setCorrectedText(data.corrected_text);
+      setChanges(Array.isArray(data.changes) ? data.changes : []);
+      setHasResults(true);
+      toast.success("Text checked successfully!");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Something went wrong";
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCopy = async () => {
@@ -109,11 +107,14 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   }, [inputText]);
 
   return (
-    <section ref={editorRef} className="py-12 md:py-20 bg-background">
+    <section
+      ref={editorRef}
+      className="relative -mt-10 md:-mt-14 py-14 md:py-20 bg-gradient-to-b from-background to-secondary/40"
+    >
       <div className="container">
         <div className="max-w-4xl mx-auto">
           {/* Input Section */}
-          <Card className="shadow-card mb-6">
+          <Card className="shadow-elevated mb-6">
             <CardHeader className="pb-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <CardTitle className="text-xl flex items-center gap-2">

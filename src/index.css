@@ -6,54 +6,60 @@
 
 @layer base {
   :root {
-    /* CorrectNow Design System */
-    --background: 210 20% 98%;
-    --foreground: 220 25% 10%;
+    /* CorrectNow Design System - Blue + White + Green */
+    /* #FFFFFF - Pure White Background */
+    --background: 0 0% 100%;
+    /* #1F2937 - Primary Text */
+    --foreground: 217 19% 18%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 10%;
+    --card-foreground: 217 19% 18%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 10%;
+    --popover-foreground: 217 19% 18%;
 
-    /* Deep navy - professional, trustworthy */
-    --primary: 213 55% 20%;
-    --primary-foreground: 210 40% 98%;
+    /* #1E6AE1 - LinkedIn Blue - Primary Brand/CTA */
+    --primary: 215 79% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Soft gray-blue */
-    --secondary: 210 20% 96%;
-    --secondary-foreground: 220 25% 25%;
+    /* Light blue background for secondary elements */
+    --secondary: 215 60% 96%;
+    --secondary-foreground: 217 19% 18%;
 
-    --muted: 210 15% 94%;
-    --muted-foreground: 215 15% 45%;
+    /* Subtle gray for muted elements */
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    /* Teal accent - fresh, modern */
-    --accent: 168 80% 35%;
+    /* #1E6AE1 - LinkedIn Blue accent (same as primary) */
+    --accent: 215 79% 50%;
     --accent-foreground: 0 0% 100%;
 
-    /* Success green for corrections */
-    --success: 152 60% 40%;
+    /* #00C853 - Success Green for corrections */
+    --success: 145 100% 39%;
     --success-foreground: 0 0% 100%;
-    --success-muted: 152 40% 95%;
+    --success-muted: 145 60% 95%;
 
-    /* Warning for original text */
-    --warning: 38 92% 50%;
+    /* #E53935 - Error Red for grammar underlines */
+    --warning: 4 90% 58%;
     --warning-foreground: 0 0% 100%;
-    --warning-muted: 38 60% 95%;
+    --warning-muted: 4 90% 95%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
+    /* #E53935 - Error/Destructive */
+    --destructive: 4 90% 58%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214 20% 90%;
-    --input: 214 20% 90%;
-    --ring: 168 80% 35%;
+    /* #E5E7EB - Border/Divider */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    /* #1E6AE1 - LinkedIn Blue ring */
+    --ring: 215 79% 50%;
 
     --radius: 0.625rem;
 
-    /* Custom gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(213 55% 20%) 0%, hsl(213 45% 30%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(168 80% 35%) 0%, hsl(168 70% 45%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(210 20% 98%) 0%, hsl(210 15% 96%) 100%);
+    /* Custom gradients with LinkedIn Blue */
+    --gradient-hero: linear-gradient(135deg, hsl(215 79% 50%) 0%, hsl(215 79% 40%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(215 79% 50%) 0%, hsl(215 70% 55%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(215 60% 98%) 100%);
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);

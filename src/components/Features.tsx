@@ -24,7 +24,7 @@ const features = [
     icon: Brain,
     title: "Smart Corrections",
     description:
-      "Powered by Gemini AI for accurate spelling and grammar fixes.",
+      "AI-powered spelling and light grammar fixes — without changing your tone.",
   },
   {
     icon: Clock,
@@ -42,7 +42,7 @@ const features = [
 
 const Features = () => {
   return (
-    <section id="features" className="py-16 md:py-24 bg-muted/30">
+    <section id="features" className="py-16 md:py-24 bg-background">
       <div className="container">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
@@ -58,11 +58,11 @@ const Features = () => {
           {features.map((feature, index) => (
             <Card
               key={index}
-              className="border-0 shadow-card hover:shadow-elevated transition-shadow duration-300 bg-card"
+              className="shadow-sm hover:shadow-card transition-all duration-300 bg-card"
             >
               <CardContent className="pt-6">
                 <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-accent/10 shrink-0">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-accent/10 shrink-0">
                     <feature.icon className="w-6 h-6 text-accent" />
                   </div>
                   <div>
