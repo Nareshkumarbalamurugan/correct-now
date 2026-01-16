@@ -57,10 +57,12 @@ const buildPrompt = (text, language) => {
 
   return `You are a professional proofreading assistant.
 ${languageInstruction}
-Task: Correct spelling mistakes and light grammar issues only.
+Task: Correct spelling mistakes and grammar issues while preserving meaning and tone.
 Rules:
 - Preserve meaning and tone. Do NOT rewrite or paraphrase.
 - Keep formatting, punctuation, and line breaks.
+- Fix sentence structure, particles, verb forms, and agreement where needed.
+- If the language is Tamil, prefer grammatically correct, natural Tamil while keeping the original intent and formality.
 - Support all languages.
 Return ONLY valid JSON in this format:
 {

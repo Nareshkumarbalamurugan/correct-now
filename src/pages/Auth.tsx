@@ -42,7 +42,7 @@ const Auth = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-3 text-accent-foreground/90">
               <CheckCircle className="w-5 h-5" />
-              <span>Instant corrections in 50+ languages</span>
+              <span>Instant corrections in global languages</span>
             </div>
             <div className="flex items-center gap-3 text-accent-foreground/90">
               <CheckCircle className="w-5 h-5" />

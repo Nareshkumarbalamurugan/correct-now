@@ -175,11 +175,25 @@
 
   /* Change indicators */
   .change-original {
-    @apply bg-warning-muted text-foreground px-1 py-0.5 rounded line-through;
+    @apply text-foreground px-1 py-0.5 rounded line-through;
+    text-decoration-color: hsl(var(--warning));
   }
 
   .change-corrected {
-    @apply bg-success-muted text-foreground px-1 py-0.5 rounded font-medium;
+    @apply text-foreground px-0.5 font-medium;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-decoration-color: hsl(var(--success));
+    text-underline-offset: 3px;
+  }
+
+  .change-error {
+    @apply text-foreground px-1 py-0.5 rounded;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-decoration-color: hsl(var(--warning));
+    text-underline-offset: 3px;
+    background: hsl(var(--warning) / 0.08);
   }
 
   /* Loading animation */

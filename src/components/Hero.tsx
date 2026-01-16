@@ -32,7 +32,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
             </h1>
 
             <p className="animate-slide-up mt-5 text-lg md:text-xl text-white/90 leading-relaxed max-w-xl mx-auto lg:mx-0">
-              CorrectNow fixes spelling mistakes and light grammar issues across 50+ languages
+              CorrectNow fixes spelling mistakes and light grammar issues across global languages
               (including Hindi, Tamil, and Bengali) — without rewriting your tone.
             </p>
 
@@ -67,7 +67,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
               </div>
               <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4" />
-                50+ languages
+                Global languages
               </div>
             </div>
           </div>

@@ -43,7 +43,7 @@ const ChangeLogTable = ({ changes }: ChangeLogTableProps) => {
             <TableRow key={index} className="animate-fade-in">
               <TableCell className="font-medium">
                 <span className="inline-flex items-center gap-2 flex-wrap">
-                  <span className="bg-warning-muted text-foreground px-2 py-1 rounded line-through">
+                  <span className="change-original">
                     {change.original}
                   </span>
                 </span>
@@ -51,7 +51,7 @@ const ChangeLogTable = ({ changes }: ChangeLogTableProps) => {
               <TableCell>
                 <span className="inline-flex items-center gap-2 flex-wrap">
                   <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0 hidden sm:block" />
-                  <span className="bg-success-muted text-foreground px-2 py-1 rounded font-medium">
+                  <span className="change-corrected">
                     {change.corrected}
                   </span>
                 </span>

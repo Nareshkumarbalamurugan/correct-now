@@ -10,9 +10,9 @@ const features = [
   },
   {
     icon: Globe,
-    title: "50+ Languages",
+    title: "Global Languages",
     description:
-      "Full support for Hindi, Tamil, Bengali, and 50+ other languages worldwide.",
+      "Full support for Hindi, Tamil, Bengali, and global languages worldwide.",
   },
   {
     icon: Shield,

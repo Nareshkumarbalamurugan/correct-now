@@ -16,7 +16,7 @@ const plans = [
       "500 words per check",
       "10 checks per day",
       "Basic spelling correction",
-      "50+ languages supported",
+      "Global languages supported",
       "Change log with explanations",
     ],
     limitations: [

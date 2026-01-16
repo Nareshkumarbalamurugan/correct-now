@@ -15,6 +15,36 @@ const countWords = (text: string): number => {
   return text.trim().split(/\s+/).filter(Boolean).length;
 };
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const highlightText = (
+  text: string,
+  changeList: Change[],
+  kind: "original" | "corrected"
+) => {
+  let safeText = escapeHtml(text);
+  if (!changeList.length) return safeText;
+
+  changeList.forEach((change) => {
+    const target = kind === "original" ? change.original : change.corrected;
+    if (!target) return;
+    const escapedTarget = escapeHtml(target);
+    const regex = new RegExp(escapeRegExp(escapedTarget), "gi");
+    const className = kind === "original" ? "change-error" : "change-corrected";
+    safeText = safeText.replace(regex, `<span class="${className}">${escapedTarget}</span>`);
+  });
+
+  return safeText;
+};
+
 interface ProofreadingEditorProps {
   editorRef: React.RefObject<HTMLDivElement>;
 }
@@ -31,6 +61,9 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > WORD_LIMIT;
+  const accuracyScore = wordCount
+    ? Math.max(0, Math.min(100, Math.round((1 - changes.length / wordCount) * 100)))
+    : 0;
 
   const handleCheck = async () => {
     if (!inputText.trim()) {
@@ -128,14 +161,41 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
               </div>
             </CardHeader>
             <CardContent>
-              <textarea
-                ref={textareaRef}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Paste or type your text here... We'll check spelling and grammar while preserving your original meaning."
-                className="editor-textarea"
-                disabled={isLoading}
-              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground mb-2">
+                    Original
+                  </div>
+                  <textarea
+                    ref={textareaRef}
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder="Paste or type your text here... We'll check spelling and grammar while preserving your original meaning."
+                    className="editor-textarea"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground mb-2">
+                    Corrected
+                  </div>
+                  <div className="editor-textarea bg-card/70">
+                    {correctedText ? (
+                      <div
+                        className="whitespace-pre-wrap text-base leading-relaxed"
+                        dangerouslySetInnerHTML={{
+                          __html: highlightText(correctedText, changes, "corrected"),
+                        }}
+                      />
+                    ) : (
+                      <div className="text-muted-foreground">
+                        Corrected text will appear here after you check.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-4">
                 <p className="text-sm text-muted-foreground">
                   {language === "auto"
@@ -180,39 +240,26 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
           {hasResults && (
             <Card className="shadow-card animate-slide-up">
               <CardContent className="pt-6">
-                <Tabs defaultValue="corrected" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
-                    <TabsTrigger value="corrected">Corrected Text</TabsTrigger>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+                  <div className="text-sm text-muted-foreground">
+                    Accuracy score
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="px-3 py-1 rounded-full bg-success-muted text-success text-sm font-semibold">
+                      {accuracyScore}%
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {changes.length} change{changes.length === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                </div>
+
+                <Tabs defaultValue="changes" className="w-full">
+                  <TabsList className="grid w-full grid-cols-1 mb-6">
                     <TabsTrigger value="changes">
                       Changes ({changes.length})
                     </TabsTrigger>
                   </TabsList>
-
-                  <TabsContent value="corrected" className="mt-0">
-                    <div className="relative">
-                      <div className="p-4 bg-muted/50 rounded-lg min-h-[200px] text-base leading-relaxed whitespace-pre-wrap">
-                        {correctedText}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCopy}
-                        className="absolute top-3 right-3"
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="w-4 h-4 text-success" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4" />
-                            Copy
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </TabsContent>
 
                   <TabsContent value="changes" className="mt-0">
                     <ChangeLogTable changes={changes} />
