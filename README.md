@@ -1,73 +1,58 @@
-# Welcome to your Lovable project
+# CorrectNow
 
-## Project info
+AI-powered proofreading for spelling and light grammar corrections across 50+ languages. No rewriting—just clean, accurate fixes.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech Stack
+- React + Vite
+- Tailwind CSS + shadcn/ui
+- Node.js + Express API
+- Google Gemini API
 
-## How can I edit this code?
+## Local Development
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### 1) Install dependencies
+```bash
+npm install
 ```
 
-**Edit a file directly in GitHub**
+### 2) Configure environment
+Create a `.env` file in the project root:
+```
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+GEMINI_MODEL=gemini-2.5-pro
+PORT=8787
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 3) Run the app
+In two terminals:
+```bash
+npm run dev
+```
+```bash
+npm run dev:server
+```
 
-**Use GitHub Codespaces**
+- Frontend: http://localhost:8080
+- API health: http://localhost:8787/api/health
+- Model list: http://localhost:8787/api/models
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Deployment (Render)
 
-## What technologies are used for this project?
+### Build Command
+```
+npm install && npm run build
+```
 
-This project is built with:
+### Start Command
+```
+npm run start
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Environment Variables
+- `GEMINI_API_KEY`
+- `GEMINI_MODEL` (example: `gemini-2.5-pro`)
+- `NODE_ENV=production`
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Notes
+- The API key must never be exposed in the frontend.
+- The Express server serves the built React app in production.
