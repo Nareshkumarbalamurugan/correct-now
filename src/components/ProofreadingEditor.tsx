@@ -2,11 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Copy, Check, RotateCcw, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LanguageSelector from "./LanguageSelector";
 import WordCounter from "./WordCounter";
 import LoadingDots from "./LoadingDots";
-import ChangeLogTable, { Change } from "./ChangeLogTable";
+import { Change } from "./ChangeLogTable";
 import { toast } from "sonner";
 
 const WORD_LIMIT = 2000;
@@ -51,6 +50,7 @@ interface ProofreadingEditorProps {
 
 const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const [inputText, setInputText] = useState("");
+  const [baseText, setBaseText] = useState("");
   const [correctedText, setCorrectedText] = useState("");
   const [changes, setChanges] = useState<Change[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -64,6 +64,23 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const accuracyScore = wordCount
     ? Math.max(0, Math.min(100, Math.round((1 - changes.length / wordCount) * 100)))
     : 0;
+  const pendingCount = changes.filter((change) => change.status !== "accepted" && change.status !== "ignored").length;
+
+  const applyAcceptedChanges = (text: string, changeList: Change[]) => {
+    return changeList
+      .filter((change) => change.status === "accepted")
+      .reduce((current, change) => {
+        if (!change.original || !change.corrected) return current;
+        const regex = new RegExp(escapeRegExp(change.original), "g");
+        return current.replace(regex, change.corrected);
+      }, text);
+  };
+
+  const updateInputWithAccepted = (updatedChanges: Change[]) => {
+    const base = baseText || inputText;
+    const updatedText = applyAcceptedChanges(base, updatedChanges);
+    setInputText(updatedText);
+  };
 
   const handleCheck = async () => {
     if (!inputText.trim()) {
@@ -102,7 +119,11 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
       }
 
       setCorrectedText(data.corrected_text);
-      setChanges(Array.isArray(data.changes) ? data.changes : []);
+      const nextChanges = Array.isArray(data.changes)
+        ? data.changes.map((change: Change) => ({ ...change, status: "pending" }))
+        : [];
+      setBaseText(inputText);
+      setChanges(nextChanges);
       setHasResults(true);
       toast.success("Text checked successfully!");
     } catch (error) {
@@ -122,10 +143,32 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
   const handleReset = () => {
     setInputText("");
+    setBaseText("");
     setCorrectedText("");
     setChanges([]);
     setHasResults(false);
     textareaRef.current?.focus();
+  };
+
+  const handleAccept = (index: number) => {
+    const updated = changes.map((change, idx) =>
+      idx === index ? { ...change, status: "accepted" } : change
+    );
+    setChanges(updated);
+    updateInputWithAccepted(updated);
+  };
+
+  const handleIgnore = (index: number) => {
+    const updated = changes.map((change, idx) =>
+      idx === index ? { ...change, status: "ignored" } : change
+    );
+    setChanges(updated);
+  };
+
+  const handleAcceptAll = () => {
+    const updated = changes.map((change) => ({ ...change, status: "accepted" }));
+    setChanges(updated);
+    updateInputWithAccepted(updated);
   };
 
   useEffect(() => {
@@ -177,15 +220,36 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                 </div>
 
                 <div>
-                  <div className="text-xs font-semibold text-muted-foreground mb-2">
-                    Corrected
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-semibold text-muted-foreground">
+                      Corrected
+                    </div>
+                    {correctedText && (
+                      <Button variant="outline" size="sm" onClick={handleCopy}>
+                        {copied ? (
+                          <>
+                            <Check className="w-4 h-4 text-success" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4" />
+                            Copy
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                   <div className="editor-textarea bg-card/70">
                     {correctedText ? (
                       <div
                         className="whitespace-pre-wrap text-base leading-relaxed"
                         dangerouslySetInnerHTML={{
-                          __html: highlightText(correctedText, changes, "corrected"),
+                          __html: highlightText(
+                            correctedText,
+                            changes.filter((change) => change.status !== "ignored"),
+                            "corrected"
+                          ),
                         }}
                       />
                     ) : (
@@ -254,17 +318,62 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                   </div>
                 </div>
 
-                <Tabs defaultValue="changes" className="w-full">
-                  <TabsList className="grid w-full grid-cols-1 mb-6">
-                    <TabsTrigger value="changes">
-                      Changes ({changes.length})
-                    </TabsTrigger>
-                  </TabsList>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <div className="text-sm font-semibold text-foreground">
+                    {changes.length} suggestion{changes.length === 1 ? "" : "s"} found
+                  </div>
+                  <Button
+                    variant="accent"
+                    size="sm"
+                    onClick={handleAcceptAll}
+                    disabled={pendingCount === 0}
+                  >
+                    Accept All
+                  </Button>
+                </div>
 
-                  <TabsContent value="changes" className="mt-0">
-                    <ChangeLogTable changes={changes} />
-                  </TabsContent>
-                </Tabs>
+                {changes.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p className="text-lg font-medium text-success mb-1">Perfect! 🎉</p>
+                    <p className="text-sm">No corrections needed in your text.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {changes.map((change, index) => (
+                      <div key={index} className="rounded-lg border border-border bg-card p-4">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <div className="text-xs font-semibold text-muted-foreground mb-1">Original</div>
+                            <div className="text-base font-medium text-foreground">{change.original}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-muted-foreground mb-1">Suggestion</div>
+                            <div className="text-base font-medium text-success">{change.corrected}</div>
+                          </div>
+                        </div>
+                        <div className="mt-3 text-sm text-muted-foreground">
+                          {change.explanation}
+                        </div>
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          {change.status === "accepted" ? (
+                            <span className="text-xs font-semibold text-success">Accepted</span>
+                          ) : change.status === "ignored" ? (
+                            <span className="text-xs font-semibold text-muted-foreground">Ignored</span>
+                          ) : (
+                            <>
+                              <Button size="sm" variant="accent" onClick={() => handleAccept(index)}>
+                                Accept
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleIgnore(index)}>
+                                Ignore
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

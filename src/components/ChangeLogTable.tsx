@@ -12,6 +12,7 @@ export interface Change {
   original: string;
   corrected: string;
   explanation: string;
+  status?: "pending" | "accepted" | "ignored";
 }
 
 interface ChangeLogTableProps {
