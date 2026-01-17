@@ -5,6 +5,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { useMemo, useState } from "react";
 
 interface LanguageSelectorProps {
   value: string;
@@ -36,17 +38,45 @@ const languages = [
 ];
 
 const LanguageSelector = ({ value, onChange }: LanguageSelectorProps) => {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return languages;
+    return languages.filter(
+      (lang) =>
+        lang.name.toLowerCase().includes(q) ||
+        lang.code.toLowerCase().includes(q)
+    );
+  }, [query]);
+
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="w-[180px] bg-card">
         <SelectValue placeholder="Select language" />
       </SelectTrigger>
-      <SelectContent>
-        {languages.map((lang) => (
-          <SelectItem key={lang.code} value={lang.code}>
-            {lang.name}
-          </SelectItem>
-        ))}
+      <SelectContent onKeyDown={(e) => e.stopPropagation()}>
+        <div className="p-2" onClick={(e) => e.stopPropagation()}>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search language"
+            autoFocus
+            onKeyDownCapture={(e) => e.stopPropagation()}
+            onKeyUpCapture={(e) => e.stopPropagation()}
+          />
+        </div>
+        {filtered.length === 0 ? (
+          <div className="px-3 py-2 text-sm text-muted-foreground">
+            No matches
+          </div>
+        ) : (
+          filtered.map((lang) => (
+            <SelectItem key={lang.code} value={lang.code}>
+              {lang.name}
+            </SelectItem>
+          ))
+        )}
       </SelectContent>
     </Select>
   );

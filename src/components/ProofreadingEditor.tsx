@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/dialog";
 
 const WORD_LIMIT = 2000;
-const DETECT_DEBOUNCE_MS = 400;
+const DETECT_DEBOUNCE_MS = 600;
 
-const detectLanguage = (text: string): string => {
+const detectLanguageLocal = (text: string): string => {
   if (!text.trim()) return "auto";
 
   const hasTamil = /[\u0B80-\u0BFF]/.test(text);
@@ -47,6 +47,14 @@ const detectLanguage = (text: string): string => {
 
   const hasMarathi = /[\u0900-\u097F]/.test(text);
   if (hasMarathi) return "mr";
+
+  const hasFrench = /[àâçéèêëîïôùûüÿœæ]/i.test(text);
+  const hasFrenchWords = /\b(je|tu|il|elle|nous|vous|ils|elles|mon|ma|mes|être|était|suis|pas|très|réveillé|bureau|alarme|réunion)\b/i.test(text);
+  if (hasFrench || hasFrenchWords) return "fr";
+
+  const hasSpanish = /[ñÑáÁéÉíÍóÓúÚüÜ¿¡]/.test(text);
+  const hasSpanishWords = /\b(yo|tú|él|ella|nosotros|vosotros|ellos|ellas|para|porque|muy|alarma|reunión|oficina)\b/i.test(text);
+  if (hasSpanish || hasSpanishWords) return "es";
 
   const hasEnglish = /[A-Za-z]/.test(text);
   if (hasEnglish) return "en";
@@ -110,6 +118,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const [editorDraft, setEditorDraft] = useState("");
   const [editorHtml, setEditorHtml] = useState("");
   const [acceptedTexts, setAcceptedTexts] = useState<string[]>([]);
+  const [lastDetectText, setLastDetectText] = useState("");
   
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
@@ -217,23 +226,25 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     setInputText(updatedText);
   };
 
-  const handleCheck = async () => {
-    if (!inputText.trim()) {
+  const handleCheck = async (overrideText?: string) => {
+    const textToCheck = (overrideText ?? inputText).trim();
+    if (!textToCheck) {
       toast.error("Please enter some text to check");
       return;
     }
 
-    if (isOverLimit) {
+    const overrideWordCount = countWords(textToCheck);
+    if (overrideWordCount > WORD_LIMIT) {
       toast.error(`Text exceeds ${WORD_LIMIT} word limit`);
       return;
     }
 
     setIsLoading(true);
     setHasResults(false);
-    const normalizedInput = inputText.trim();
+    const normalizedInput = textToCheck;
     if (acceptedTexts.some((text) => text.trim() === normalizedInput)) {
-      setCorrectedText(inputText);
-      setBaseText(inputText);
+      setCorrectedText(textToCheck);
+      setBaseText(textToCheck);
       setChanges([]);
       setHasResults(true);
       setIsLoading(false);
@@ -247,7 +258,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          text: inputText,
+          text: textToCheck,
           language,
           wordLimit: WORD_LIMIT,
         }),
@@ -265,19 +276,19 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
       const normalizedCorrected = String(data.corrected_text || "").trim();
       if (normalizedCorrected === normalizedInput) {
-        setCorrectedText(inputText);
-        setBaseText(inputText);
+        setCorrectedText(textToCheck);
+        setBaseText(textToCheck);
         setChanges([]);
         setAcceptedTexts((prev) => {
           const next = prev.filter((text) => text.trim() !== normalizedInput);
-          return [...next, inputText].slice(-50);
+          return [...next, textToCheck].slice(-50);
         });
       } else {
         setCorrectedText(data.corrected_text);
-        const nextChanges = Array.isArray(data.changes)
-          ? data.changes.map((change: Change) => ({ ...change, status: "pending" }))
+        const nextChanges: Change[] = Array.isArray(data.changes)
+          ? data.changes.map((change: Change) => ({ ...change, status: "pending" as const }))
           : [];
-        setBaseText(inputText);
+        setBaseText(textToCheck);
         setChanges(nextChanges);
       }
       setHasResults(true);
@@ -313,7 +324,6 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     const rich = html ?? formatText(text);
     try {
       if ("ClipboardItem" in window) {
-        // @ts-expect-error ClipboardItem typing for text/html
         const item = new ClipboardItem({
           "text/plain": new Blob([text], { type: "text/plain" }),
           "text/html": new Blob([rich], { type: "text/html" }),
@@ -360,8 +370,8 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   };
 
   const handleAccept = (index: number) => {
-    const updated = changes.map((change, idx) =>
-      idx === index ? { ...change, status: "accepted" } : change
+    const updated: Change[] = changes.map((change, idx) =>
+      idx === index ? { ...change, status: "accepted" as const } : change
     );
     setChanges(updated);
     const base = baseText || inputText;
@@ -378,14 +388,14 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   };
 
   const handleIgnore = (index: number) => {
-    const updated = changes.map((change, idx) =>
-      idx === index ? { ...change, status: "ignored" } : change
+    const updated: Change[] = changes.map((change, idx) =>
+      idx === index ? { ...change, status: "ignored" as const } : change
     );
     setChanges(updated);
   };
 
   const handleAcceptAll = () => {
-    const updated = changes.map((change) => ({ ...change, status: "accepted" }));
+    const updated: Change[] = changes.map((change) => ({ ...change, status: "accepted" as const }));
     const base = baseText || inputText;
     const updatedText = applyAcceptedChanges(base, updated);
     setChanges(updated);
@@ -414,19 +424,43 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
   useEffect(() => {
     if (languageMode !== "auto") return;
-    const timeout = window.setTimeout(() => {
-      const detected = detectLanguage(inputText);
-      if (!inputText.trim()) {
+    const timeout = window.setTimeout(async () => {
+      const trimmed = inputText.trim();
+      if (!trimmed) {
         setLanguage("auto");
+        setLastDetectText("");
         return;
       }
-      if (detected !== "auto") {
-        setLanguage(detected);
+
+      if (trimmed === lastDetectText) return;
+      setLastDetectText(trimmed);
+
+      // Fast local detection for scripts
+      const local = detectLanguageLocal(trimmed);
+      if (local !== "auto") {
+        setLanguage(local);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/detect-language", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: trimmed }),
+        });
+
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data?.code && data.code !== "auto") {
+          setLanguage(data.code);
+        }
+      } catch {
+        // ignore
       }
     }, DETECT_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [inputText, languageMode]);
+  }, [inputText, languageMode, lastDetectText]);
 
   useEffect(() => {
     if (modalEditorRef.current) {
@@ -444,7 +478,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             {/* Input Section */}
             <Card className="shadow-elevated">
-              <CardHeader className="pb-4">
+              <CardHeader className="pb-4 min-h-[92px]">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <CardTitle className="text-xl flex items-center gap-2">
                     <FileText className="w-5 h-5 text-accent" />
@@ -459,6 +493,24 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                       }}
                     />
                     <WordCounter count={wordCount} limit={WORD_LIMIT} />
+                    <Button
+                      variant="accent"
+                      size="sm"
+                      onClick={handleCheck}
+                      disabled={isLoading || !inputText.trim() || isOverLimit}
+                    >
+                      {isLoading ? (
+                        <>
+                          Checking
+                          <LoadingDots />
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Check Text
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -479,6 +531,14 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     spellCheck={false}
+                    onPaste={() => {
+                      window.setTimeout(() => {
+                        const next = textareaRef.current?.value || "";
+                        if (!next.trim()) return;
+                        setInputText(next);
+                        handleCheck(next);
+                      }, 0);
+                    }}
                     onClick={handleTextareaClick}
                     onScroll={(e) => {
                       if (highlightRef.current) {
@@ -516,24 +576,6 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                         Reset
                       </Button>
                     )}
-                    <Button
-                      variant="accent"
-                      size="lg"
-                      onClick={handleCheck}
-                      disabled={isLoading || !inputText.trim() || isOverLimit}
-                    >
-                      {isLoading ? (
-                        <>
-                          Checking
-                          <LoadingDots />
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4" />
-                          Check Text
-                        </>
-                      )}
-                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -541,8 +583,12 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
             {/* Suggestions Panel */}
             <Card className="shadow-card">
-              <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+              <CardHeader className="pb-4 min-h-[92px]">
+                <CardTitle className="text-xl">Suggestions</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="border border-border rounded-lg p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
                   <div className="text-sm text-muted-foreground">
                     Accuracy score
                   </div>
@@ -554,9 +600,9 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                       {changes.length} change{changes.length === 1 ? "" : "s"}
                     </div>
                   </div>
-                </div>
+                  </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                   <div className="text-sm font-semibold text-foreground">
                     {changes.length} suggestion{changes.length === 1 ? "" : "s"} found
                   </div>
@@ -568,11 +614,11 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                   >
                     Accept All
                   </Button>
-                </div>
+                  </div>
 
-                {hasResults && changes.length === 0 ? (
+                  {hasResults && changes.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <p className="text-lg font-medium text-success mb-1">Perfect! 🎉</p>
+                    <p className="text-lg font-medium text-success mb-1">Perfect! </p>
                     <p className="text-sm">No corrections needed in your text.</p>
                   </div>
                 ) : (
@@ -619,7 +665,8 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                       </div>
                     ))}
                   </div>
-                )}
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>

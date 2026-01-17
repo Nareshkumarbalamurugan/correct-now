@@ -49,6 +49,66 @@ app.get("/api/models", async (_req, res) => {
   }
 });
 
+app.post("/api/detect-language", async (req, res) => {
+  try {
+    const { text } = req.body || {};
+    if (!text || typeof text !== "string") {
+      return res.status(400).json({ message: "Text is required" });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: "Missing GEMINI_API_KEY" });
+    }
+
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    const allowed = ["en","hi","ta","te","bn","mr","gu","kn","ml","pa","es","fr","de","pt","it","ru","ja","ko","zh","ar","auto"];
+    const prompt = `Detect the language of the text and return ONLY a JSON object with one field "code".
+  Allowed codes: ${allowed.join(", ")}.
+  Return the closest matching code. If unsure, return "auto".
+  Important: Distinguish French vs Spanish carefully.
+  - French often includes: "je", "tu", "être", "réveillé", "bureau", "réunion", "très", accents (à â ç é è ê ë î ï ô ù û ü).
+  - Spanish often includes: "yo", "tú", "porque", "reunión", "oficina", "muy", and ¿ ¡ punctuation.
+  Text:\n"""${text}"""`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0, responseMimeType: "application/json" },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Detect-language error:", errorText);
+      return res.status(500).json({ message: "Detect-language error", details: errorText });
+    }
+
+    const data = await response.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!raw) {
+      return res.status(500).json({ message: "Invalid detect-language response" });
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return res.status(500).json({ message: "Failed to parse detect-language response" });
+    }
+
+    const code = typeof parsed?.code === "string" ? parsed.code : "auto";
+    return res.json({ code: allowed.includes(code) ? code : "auto" });
+  } catch (err) {
+    console.error("Detect-language server error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 const buildPrompt = (text, language) => {
   const languageInstruction =
     language && language !== "auto"
