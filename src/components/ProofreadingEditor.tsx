@@ -109,6 +109,32 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editorDraft, setEditorDraft] = useState("");
   const [editorHtml, setEditorHtml] = useState("");
+  const [acceptedTexts, setAcceptedTexts] = useState<string[]>([]);
+  
+  useEffect(() => {
+    const stored = window.localStorage.getItem("correctnow:acceptedTexts");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setAcceptedTexts(parsed);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (acceptedTexts.length) {
+      window.localStorage.setItem(
+        "correctnow:acceptedTexts",
+        JSON.stringify(acceptedTexts.slice(-50))
+      );
+    } else {
+      window.localStorage.removeItem("correctnow:acceptedTexts");
+    }
+  }, [acceptedTexts]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const modalEditorRef = useRef<HTMLDivElement>(null);
@@ -120,10 +146,10 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > WORD_LIMIT;
-  const accuracyScore = wordCount
-    ? Math.max(0, Math.min(100, Math.round((1 - changes.length / wordCount) * 100)))
-    : 0;
   const pendingCount = changes.filter((change) => change.status !== "accepted" && change.status !== "ignored").length;
+  const accuracyScore = wordCount
+    ? Math.max(0, Math.min(100, Math.round((1 - pendingCount / wordCount) * 100)))
+    : 0;
 
   const normalizeToken = (value: string) =>
     value.toLowerCase().replace(/[.,!?;:()"'“”‘’]/g, "").trim();
@@ -204,6 +230,16 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
     setIsLoading(true);
     setHasResults(false);
+    const normalizedInput = inputText.trim();
+    if (acceptedTexts.some((text) => text.trim() === normalizedInput)) {
+      setCorrectedText(inputText);
+      setBaseText(inputText);
+      setChanges([]);
+      setHasResults(true);
+      setIsLoading(false);
+      toast.success("No changes needed — 100% accurate.");
+      return;
+    }
     try {
       const response = await fetch("/api/proofread", {
         method: "POST",
@@ -227,12 +263,23 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
         throw new Error("Invalid response format");
       }
 
-      setCorrectedText(data.corrected_text);
-      const nextChanges = Array.isArray(data.changes)
-        ? data.changes.map((change: Change) => ({ ...change, status: "pending" }))
-        : [];
-      setBaseText(inputText);
-      setChanges(nextChanges);
+      const normalizedCorrected = String(data.corrected_text || "").trim();
+      if (normalizedCorrected === normalizedInput) {
+        setCorrectedText(inputText);
+        setBaseText(inputText);
+        setChanges([]);
+        setAcceptedTexts((prev) => {
+          const next = prev.filter((text) => text.trim() !== normalizedInput);
+          return [...next, inputText].slice(-50);
+        });
+      } else {
+        setCorrectedText(data.corrected_text);
+        const nextChanges = Array.isArray(data.changes)
+          ? data.changes.map((change: Change) => ({ ...change, status: "pending" }))
+          : [];
+        setBaseText(inputText);
+        setChanges(nextChanges);
+      }
       setHasResults(true);
       toast.success("Text checked successfully!");
     } catch (error) {
@@ -322,6 +369,12 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     setInputText(updatedText);
     setBaseText(updatedText);
     setCorrectedText(updatedText);
+    if (updated.filter((change) => change.status !== "accepted" && change.status !== "ignored").length === 0) {
+      setAcceptedTexts((prev) => {
+        const next = prev.filter((text) => text.trim() !== updatedText.trim());
+        return [...next, updatedText].slice(-50);
+      });
+    }
   };
 
   const handleIgnore = (index: number) => {
@@ -339,6 +392,10 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     setInputText(updatedText);
     setBaseText(updatedText);
     setCorrectedText(updatedText);
+    setAcceptedTexts((prev) => {
+      const next = prev.filter((text) => text.trim() !== updatedText.trim());
+      return [...next, updatedText].slice(-50);
+    });
   };
 
   useEffect(() => {
