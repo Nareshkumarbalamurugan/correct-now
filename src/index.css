@@ -188,15 +188,33 @@
 
   .editor-input {
     background: transparent;
-    color: transparent;
+    color: hsl(var(--foreground));
     caret-color: hsl(var(--foreground));
-    text-shadow: 0 0 0 hsl(var(--foreground));
+    text-shadow: none;
     font-family: inherit;
     font-size: inherit;
     line-height: inherit;
     letter-spacing: inherit;
     word-break: break-word;
     overflow-wrap: anywhere;
+  }
+
+  .editor-input::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 1;
+  }
+
+  .editor-input::selection {
+    background: hsl(var(--primary) / 0.15);
+  }
+
+  .rich-editor:empty:before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+  }
+
+  .rich-editor {
+    white-space: pre-wrap;
   }
 
   .editor-textarea::placeholder {
@@ -225,16 +243,13 @@
   .editor-highlight .change-error {
     background: linear-gradient(transparent calc(100% - 2px), hsl(var(--warning)) 0) no-repeat;
     background-size: 100% 2px;
-    background-position: 0 100%;
+    background-position: 0 calc(100% - 1px);
     background-color: transparent;
     padding: 0;
   }
 
-  .editor-highlight .change-error,
-  .editor-highlight .change-corrected,
-  .editor-highlight .change-original {
-    color: transparent;
-    text-shadow: none;
+  .editor-highlight .change-error {
+    color: inherit;
   }
 
   /* Loading animation */

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Copy, Check, RotateCcw, FileText } from "lucide-react";
+import { Send, Copy, Check, RotateCcw, FileText, Bold, Italic, Underline } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LanguageSelector from "./LanguageSelector";
@@ -7,6 +7,13 @@ import WordCounter from "./WordCounter";
 import LoadingDots from "./LoadingDots";
 import { Change } from "./ChangeLogTable";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const WORD_LIMIT = 2000;
 const DETECT_DEBOUNCE_MS = 400;
@@ -61,21 +68,25 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const highlightText = (
-  text: string,
-  changeList: Change[],
-  kind: "original" | "corrected"
-) => {
-  let safeText = escapeHtml(text);
+const formatText = (text: string) => {
+  let safe = escapeHtml(text);
+  safe = safe.replace(/\n/g, "<br>");
+  safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  safe = safe.replace(/__(.+?)__/g, "<u>$1</u>");
+  safe = safe.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  return safe;
+};
+
+const highlightText = (text: string, changeList: Change[]) => {
+  let safeText = formatText(text);
   if (!changeList.length) return safeText;
 
   changeList.forEach((change) => {
-    const target = kind === "original" ? change.original : change.corrected;
+    const target = change.original;
     if (!target) return;
     const escapedTarget = escapeHtml(target);
     const regex = new RegExp(escapeRegExp(escapedTarget), "gi");
-    const className = kind === "original" ? "change-error" : "change-corrected";
-    safeText = safeText.replace(regex, `<span class="${className}">${escapedTarget}</span>`);
+    safeText = safeText.replace(regex, `<span class="change-error">${escapedTarget}</span>`);
   });
 
   return safeText;
@@ -95,8 +106,12 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
   const [copied, setCopied] = useState(false);
   const [hasResults, setHasResults] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editorDraft, setEditorDraft] = useState("");
+  const [editorHtml, setEditorHtml] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
+  const modalEditorRef = useRef<HTMLDivElement>(null);
   const suggestionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [matchRanges, setMatchRanges] = useState<
     Array<{ start: number; end: number; index: number }>
@@ -247,12 +262,66 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     }
   };
 
+  const copyWithFormatting = async (text: string, html?: string) => {
+    const rich = html ?? formatText(text);
+    try {
+      if ("ClipboardItem" in window) {
+        // @ts-expect-error ClipboardItem typing for text/html
+        const item = new ClipboardItem({
+          "text/plain": new Blob([text], { type: "text/plain" }),
+          "text/html": new Blob([rich], { type: "text/html" }),
+        });
+        await navigator.clipboard.write([item]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      toast.success("Copied with formatting!");
+    } catch {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied to clipboard!");
+    }
+  };
+
+  const openEditor = () => {
+    setEditorDraft(inputText);
+    setEditorHtml(formatText(inputText));
+    setIsEditorOpen(true);
+    requestAnimationFrame(() => {
+      if (modalEditorRef.current) {
+        modalEditorRef.current.innerHTML = formatText(inputText);
+      }
+    });
+  };
+
+  const saveEditor = () => {
+    const html = modalEditorRef.current?.innerHTML ?? editorHtml;
+    const plain = html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/g, " ");
+    setInputText(plain);
+    setIsEditorOpen(false);
+  };
+
+  const applyEditorCommand = (command: "bold" | "italic" | "underline") => {
+    const target = modalEditorRef.current;
+    if (!target) return;
+    target.focus();
+    document.execCommand(command, false);
+    setEditorHtml(target.innerHTML);
+    setEditorDraft(target.innerText);
+  };
+
   const handleAccept = (index: number) => {
     const updated = changes.map((change, idx) =>
       idx === index ? { ...change, status: "accepted" } : change
     );
     setChanges(updated);
-    updateInputWithAccepted(updated);
+    const base = baseText || inputText;
+    const updatedText = applyAcceptedChanges(base, updated);
+    setInputText(updatedText);
+    setBaseText(updatedText);
+    setCorrectedText(updatedText);
   };
 
   const handleIgnore = (index: number) => {
@@ -264,8 +333,12 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
   const handleAcceptAll = () => {
     const updated = changes.map((change) => ({ ...change, status: "accepted" }));
+    const base = baseText || inputText;
+    const updatedText = applyAcceptedChanges(base, updated);
     setChanges(updated);
-    updateInputWithAccepted(updated);
+    setInputText(updatedText);
+    setBaseText(updatedText);
+    setCorrectedText(updatedText);
   };
 
   useEffect(() => {
@@ -297,6 +370,12 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
     return () => window.clearTimeout(timeout);
   }, [inputText, languageMode]);
+
+  useEffect(() => {
+    if (modalEditorRef.current) {
+      modalEditorRef.current.innerHTML = editorHtml;
+    }
+  }, [editorHtml]);
 
   return (
     <section
@@ -334,8 +413,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                     dangerouslySetInnerHTML={{
                       __html: highlightText(
                         inputText,
-                        changes.filter((change) => change.status !== "accepted" && change.status !== "ignored"),
-                        "original"
+                        changes.filter((change) => change.status !== "accepted" && change.status !== "ignored")
                       ),
                     }}
                   />
@@ -363,6 +441,14 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                       : `Checking in ${language.toUpperCase()}`}
                   </p>
                   <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={openEditor}
+                      disabled={!inputText.trim()}
+                    >
+                      Open Editor
+                    </Button>
                     {hasResults && (
                       <Button
                         variant="outline"
@@ -482,6 +568,81 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
           </div>
         </div>
       </div>
+
+      <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Editor</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => applyEditorCommand("bold")}
+                aria-label="Bold"
+                title="Bold"
+              >
+                <Bold className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => applyEditorCommand("italic")}
+                aria-label="Italic"
+                title="Italic"
+              >
+                <Italic className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => applyEditorCommand("underline")}
+                aria-label="Underline"
+                title="Underline"
+              >
+                <Underline className="w-4 h-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Select text to format
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => copyWithFormatting(editorDraft, modalEditorRef.current?.innerHTML)}
+              disabled={!editorDraft.trim()}
+            >
+              <Copy className="w-4 h-4" />
+              Copy
+            </Button>
+          </div>
+          <div
+            ref={modalEditorRef}
+            className="editor-textarea rich-editor"
+            contentEditable
+            suppressContentEditableWarning
+            onInput={(e) => {
+              const html = (e.currentTarget as HTMLDivElement).innerHTML;
+              setEditorHtml(html);
+              setEditorDraft((e.currentTarget as HTMLDivElement).innerText);
+            }}
+            data-placeholder="Write and format here..."
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditorOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="accent" onClick={saveEditor}>
+              Apply Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 };
