@@ -9,6 +9,43 @@ import { Change } from "./ChangeLogTable";
 import { toast } from "sonner";
 
 const WORD_LIMIT = 2000;
+const DETECT_DEBOUNCE_MS = 400;
+
+const detectLanguage = (text: string): string => {
+  if (!text.trim()) return "auto";
+
+  const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+  if (hasTamil) return "ta";
+
+  const hasHindi = /[\u0900-\u097F]/.test(text);
+  if (hasHindi) return "hi";
+
+  const hasBengali = /[\u0980-\u09FF]/.test(text);
+  if (hasBengali) return "bn";
+
+  const hasTelugu = /[\u0C00-\u0C7F]/.test(text);
+  if (hasTelugu) return "te";
+
+  const hasKannada = /[\u0C80-\u0CFF]/.test(text);
+  if (hasKannada) return "kn";
+
+  const hasMalayalam = /[\u0D00-\u0D7F]/.test(text);
+  if (hasMalayalam) return "ml";
+
+  const hasGujarati = /[\u0A80-\u0AFF]/.test(text);
+  if (hasGujarati) return "gu";
+
+  const hasPunjabi = /[\u0A00-\u0A7F]/.test(text);
+  if (hasPunjabi) return "pa";
+
+  const hasMarathi = /[\u0900-\u097F]/.test(text);
+  if (hasMarathi) return "mr";
+
+  const hasEnglish = /[A-Za-z]/.test(text);
+  if (hasEnglish) return "en";
+
+  return "auto";
+};
 
 const countWords = (text: string): number => {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -55,9 +92,16 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const [changes, setChanges] = useState<Change[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState("auto");
+  const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
   const [copied, setCopied] = useState(false);
   const [hasResults, setHasResults] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const suggestionRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [matchRanges, setMatchRanges] = useState<
+    Array<{ start: number; end: number; index: number }>
+  >([]);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number | null>(null);
 
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > WORD_LIMIT;
@@ -65,6 +109,56 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     ? Math.max(0, Math.min(100, Math.round((1 - changes.length / wordCount) * 100)))
     : 0;
   const pendingCount = changes.filter((change) => change.status !== "accepted" && change.status !== "ignored").length;
+
+  const normalizeToken = (value: string) =>
+    value.toLowerCase().replace(/[.,!?;:()"'“”‘’]/g, "").trim();
+
+  const scrollToSuggestion = (index: number) => {
+    const target = suggestionRefs.current[index];
+    if (target) {
+      setActiveSuggestionIndex(index);
+      target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  };
+
+  const handleTextareaClick = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const position = el.selectionStart || 0;
+    const match = matchRanges.find(
+      (range) => position >= range.start && position <= range.end
+    );
+    if (match) {
+      scrollToSuggestion(match.index);
+    }
+  };
+
+  useEffect(() => {
+    if (!inputText || changes.length === 0) {
+      setMatchRanges([]);
+      return;
+    }
+
+    const pendingChanges = changes.filter(
+      (change) => change.status !== "accepted" && change.status !== "ignored"
+    );
+
+    const ranges: Array<{ start: number; end: number; index: number }> = [];
+    pendingChanges.forEach((change, changeIndex) => {
+      if (!change.original) return;
+      const regex = new RegExp(escapeRegExp(change.original), "gi");
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(inputText)) !== null) {
+        ranges.push({
+          start: match.index,
+          end: match.index + match[0].length - 1,
+          index: changes.indexOf(change),
+        });
+      }
+    });
+
+    setMatchRanges(ranges);
+  }, [inputText, changes]);
 
   const applyAcceptedChanges = (text: string, changeList: Change[]) => {
     return changeList
@@ -148,6 +242,9 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     setChanges([]);
     setHasResults(false);
     textareaRef.current?.focus();
+    if (languageMode === "auto") {
+      setLanguage("auto");
+    }
   };
 
   const handleAccept = (index: number) => {
@@ -172,7 +269,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   };
 
   useEffect(() => {
-    // Auto-resize textarea
+    // Auto-resize textarea and sync highlight height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${Math.max(
@@ -180,7 +277,26 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
         textareaRef.current.scrollHeight
       )}px`;
     }
+    if (highlightRef.current && textareaRef.current) {
+      highlightRef.current.style.height = textareaRef.current.style.height;
+    }
   }, [inputText]);
+
+  useEffect(() => {
+    if (languageMode !== "auto") return;
+    const timeout = window.setTimeout(() => {
+      const detected = detectLanguage(inputText);
+      if (!inputText.trim()) {
+        setLanguage("auto");
+        return;
+      }
+      if (detected !== "auto") {
+        setLanguage(detected);
+      }
+    }, DETECT_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [inputText, languageMode]);
 
   return (
     <section
@@ -188,121 +304,100 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
       className="relative -mt-10 md:-mt-14 py-14 md:py-20 bg-gradient-to-b from-background to-secondary/40"
     >
       <div className="container">
-        <div className="max-w-4xl mx-auto">
-          {/* Input Section */}
-          <Card className="shadow-elevated mb-6">
-            <CardHeader className="pb-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-accent" />
-                  Your Text
-                </CardTitle>
-                <div className="flex items-center gap-4">
-                  <LanguageSelector value={language} onChange={setLanguage} />
-                  <WordCounter count={wordCount} limit={WORD_LIMIT} />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground mb-2">
-                    Original
+        <div className="max-w-6xl mx-auto">
+          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            {/* Input Section */}
+            <Card className="shadow-elevated">
+              <CardHeader className="pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-accent" />
+                    Your Text
+                  </CardTitle>
+                  <div className="flex items-center gap-4">
+                    <LanguageSelector
+                      value={language}
+                      onChange={(value) => {
+                        setLanguage(value);
+                        setLanguageMode(value === "auto" ? "auto" : "manual");
+                      }}
+                    />
+                    <WordCounter count={wordCount} limit={WORD_LIMIT} />
                   </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="editor-overlay">
+                  <div
+                    ref={highlightRef}
+                    className="editor-highlight"
+                    dangerouslySetInnerHTML={{
+                      __html: highlightText(
+                        inputText,
+                        changes.filter((change) => change.status !== "accepted" && change.status !== "ignored"),
+                        "original"
+                      ),
+                    }}
+                  />
                   <textarea
                     ref={textareaRef}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
+                    spellCheck={false}
+                    onClick={handleTextareaClick}
+                    onScroll={(e) => {
+                      if (highlightRef.current) {
+                        highlightRef.current.scrollTop = e.currentTarget.scrollTop;
+                        highlightRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                      }
+                    }}
                     placeholder="Paste or type your text here... We'll check spelling and grammar while preserving your original meaning."
-                    className="editor-textarea"
+                    className="editor-textarea editor-input"
                     disabled={isLoading}
                   />
                 </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-semibold text-muted-foreground">
-                      Corrected
-                    </div>
-                    {correctedText && (
-                      <Button variant="outline" size="sm" onClick={handleCopy}>
-                        {copied ? (
-                          <>
-                            <Check className="w-4 h-4 text-success" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4" />
-                            Copy
-                          </>
-                        )}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    {language === "auto"
+                      ? "Language will be auto-detected"
+                      : `Checking in ${language.toUpperCase()}`}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {hasResults && (
+                      <Button
+                        variant="outline"
+                        onClick={handleReset}
+                        disabled={isLoading}
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Reset
                       </Button>
                     )}
-                  </div>
-                  <div className="editor-textarea bg-card/70">
-                    {correctedText ? (
-                      <div
-                        className="whitespace-pre-wrap text-base leading-relaxed"
-                        dangerouslySetInnerHTML={{
-                          __html: highlightText(
-                            correctedText,
-                            changes.filter((change) => change.status !== "ignored"),
-                            "corrected"
-                          ),
-                        }}
-                      />
-                    ) : (
-                      <div className="text-muted-foreground">
-                        Corrected text will appear here after you check.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-4">
-                <p className="text-sm text-muted-foreground">
-                  {language === "auto"
-                    ? "Language will be auto-detected"
-                    : `Checking in ${language.toUpperCase()}`}
-                </p>
-                <div className="flex items-center gap-3">
-                  {hasResults && (
                     <Button
-                      variant="outline"
-                      onClick={handleReset}
-                      disabled={isLoading}
+                      variant="accent"
+                      size="lg"
+                      onClick={handleCheck}
+                      disabled={isLoading || !inputText.trim() || isOverLimit}
                     >
-                      <RotateCcw className="w-4 h-4" />
-                      Reset
+                      {isLoading ? (
+                        <>
+                          Checking
+                          <LoadingDots />
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Check Text
+                        </>
+                      )}
                     </Button>
-                  )}
-                  <Button
-                    variant="accent"
-                    size="lg"
-                    onClick={handleCheck}
-                    disabled={isLoading || !inputText.trim() || isOverLimit}
-                  >
-                    {isLoading ? (
-                      <>
-                        Checking
-                        <LoadingDots />
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4" />
-                        Check Text
-                      </>
-                    )}
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Results Section */}
-          {hasResults && (
-            <Card className="shadow-card animate-slide-up">
+            {/* Suggestions Panel */}
+            <Card className="shadow-card">
               <CardContent className="pt-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
                   <div className="text-sm text-muted-foreground">
@@ -332,15 +427,23 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                   </Button>
                 </div>
 
-                {changes.length === 0 ? (
+                {hasResults && changes.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <p className="text-lg font-medium text-success mb-1">Perfect! 🎉</p>
                     <p className="text-sm">No corrections needed in your text.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[520px] overflow-auto pr-1">
                     {changes.map((change, index) => (
-                      <div key={index} className="rounded-lg border border-border bg-card p-4">
+                      <div
+                        key={index}
+                        ref={(el) => (suggestionRefs.current[index] = el)}
+                        className={`rounded-lg border bg-card p-4 transition-all ${
+                          activeSuggestionIndex === index
+                            ? "border-2 border-accent shadow-lg ring-4 ring-accent/20"
+                            : "border-border"
+                        }`}
+                      >
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div>
                             <div className="text-xs font-semibold text-muted-foreground mb-1">Original</div>
@@ -376,7 +479,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                 )}
               </CardContent>
             </Card>
-          )}
+          </div>
         </div>
       </div>
     </section>

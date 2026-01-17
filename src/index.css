@@ -169,6 +169,36 @@
     @apply transition-all duration-200;
   }
 
+  .editor-overlay {
+    @apply relative w-full;
+  }
+
+  .editor-highlight {
+    @apply absolute inset-0 p-4 text-base leading-relaxed whitespace-pre-wrap overflow-hidden;
+    color: transparent;
+    text-shadow: none;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+  }
+
+  .editor-input {
+    background: transparent;
+    color: transparent;
+    caret-color: hsl(var(--foreground));
+    text-shadow: 0 0 0 hsl(var(--foreground));
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
   .editor-textarea::placeholder {
     @apply text-muted-foreground;
   }
@@ -189,11 +219,22 @@
 
   .change-error {
     @apply text-foreground px-1 py-0.5 rounded;
-    text-decoration: underline;
-    text-decoration-thickness: 2px;
-    text-decoration-color: hsl(var(--warning));
-    text-underline-offset: 3px;
-    background: hsl(var(--warning) / 0.08);
+    background-color: hsl(var(--warning) / 0.08);
+  }
+
+  .editor-highlight .change-error {
+    background: linear-gradient(transparent calc(100% - 2px), hsl(var(--warning)) 0) no-repeat;
+    background-size: 100% 2px;
+    background-position: 0 100%;
+    background-color: transparent;
+    padding: 0;
+  }
+
+  .editor-highlight .change-error,
+  .editor-highlight .change-corrected,
+  .editor-highlight .change-original {
+    color: transparent;
+    text-shadow: none;
   }
 
   /* Loading animation */
