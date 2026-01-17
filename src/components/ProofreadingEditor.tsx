@@ -8,6 +8,7 @@ import LoadingDots from "./LoadingDots";
 import { Change } from "./ChangeLogTable";
 import { toast } from "sonner";
 import html2pdf from "html2pdf.js";
+import { upsertDoc } from "@/lib/docs";
 import {
   Dialog,
   DialogContent,
@@ -103,6 +104,8 @@ const highlightText = (text: string, changeList: Change[]) => {
 
 interface ProofreadingEditorProps {
   editorRef: React.RefObject<HTMLDivElement>;
+  initialText?: string;
+  initialDocId?: string;
 }
 
 declare global {
@@ -112,7 +115,7 @@ declare global {
   }
 }
 
-const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
+const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: ProofreadingEditorProps) => {
   const [inputText, setInputText] = useState("");
   const [baseText, setBaseText] = useState("");
   const [correctedText, setCorrectedText] = useState("");
@@ -128,6 +131,8 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const [acceptedTexts, setAcceptedTexts] = useState<string[]>([]);
   const [lastDetectText, setLastDetectText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [docId, setDocId] = useState<string | undefined>(initialDocId);
+  const initializedRef = useRef(false);
   const speechRef = useRef<any>(null);
   const speechBaseRef = useRef<string>("");
   const speechFinalRef = useRef<string>("");
@@ -156,6 +161,26 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
       window.localStorage.removeItem("correctnow:acceptedTexts");
     }
   }, [acceptedTexts]);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    if (typeof initialText === "string" && initialText.length) {
+      setInputText(initialText);
+      initializedRef.current = true;
+    } else if (initialText === "") {
+      initializedRef.current = true;
+    }
+  }, [initialText]);
+
+  useEffect(() => {
+    setDocId(initialDocId);
+  }, [initialDocId]);
+
+  const persistDoc = (text: string) => {
+    if (!text.trim()) return;
+    const saved = upsertDoc(text, docId);
+    setDocId(saved.id);
+  };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const modalEditorRef = useRef<HTMLDivElement>(null);
@@ -260,6 +285,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
       setChanges([]);
       setHasResults(true);
       setIsLoading(false);
+      persistDoc(textToCheck);
       toast.success("No changes needed — 100% accurate.");
       return;
     }
@@ -303,6 +329,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
         setBaseText(textToCheck);
         setChanges(nextChanges);
       }
+      persistDoc(textToCheck);
       setHasResults(true);
       toast.success("Text checked successfully!");
     } catch (error) {
@@ -326,6 +353,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     setCorrectedText("");
     setChanges([]);
     setHasResults(false);
+    setDocId(undefined);
     textareaRef.current?.focus();
     if (languageMode === "auto") {
       setLanguage("auto");
@@ -484,6 +512,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
         const next = prev.filter((text) => text.trim() !== updatedText.trim());
         return [...next, updatedText].slice(-50);
       });
+      persistDoc(updatedText);
     }
   };
 
@@ -506,6 +535,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
       const next = prev.filter((text) => text.trim() !== updatedText.trim());
       return [...next, updatedText].slice(-50);
     });
+    persistDoc(updatedText);
   };
 
   useEffect(() => {
@@ -578,20 +608,22 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             {/* Input Section */}
             <Card className="shadow-elevated">
-              <CardHeader className="pb-4 min-h-[92px]">
+              <CardHeader className="pb-4 min-h-[72px] sm:min-h-[92px]">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <CardTitle className="text-xl flex items-center gap-2">
                     <FileText className="w-5 h-5 text-accent" />
                     Your Text
                   </CardTitle>
-                  <div className="flex items-center gap-4">
-                    <LanguageSelector
-                      value={language}
-                      onChange={(value) => {
-                        setLanguage(value);
-                        setLanguageMode(value === "auto" ? "auto" : "manual");
-                      }}
-                    />
+                  <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                    <div className="w-full sm:w-auto">
+                      <LanguageSelector
+                        value={language}
+                        onChange={(value) => {
+                          setLanguage(value);
+                          setLanguageMode(value === "auto" ? "auto" : "manual");
+                        }}
+                      />
+                    </div>
                     <WordCounter count={wordCount} limit={WORD_LIMIT} />
                     <Button
                       variant="outline"
@@ -604,6 +636,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                     <Button
                       variant="accent"
                       size="sm"
+                      className="w-full sm:w-auto"
                       onClick={() => handleCheck()}
                       disabled={isLoading || !inputText.trim() || isOverLimit}
                     >
@@ -665,10 +698,11 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                       ? "Language will be auto-detected"
                       : `Checking in ${language.toUpperCase()}`}
                   </p>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <Button
                       type="button"
                       variant="outline"
+                      className="w-full sm:w-auto"
                       onClick={openEditor}
                       disabled={!inputText.trim()}
                     >
@@ -677,6 +711,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                     {hasResults && (
                       <Button
                         variant="outline"
+                        className="w-full sm:w-auto"
                         onClick={handleReset}
                         disabled={isLoading}
                       >
@@ -691,7 +726,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
 
             {/* Suggestions Panel */}
             <Card className="shadow-card">
-              <CardHeader className="pb-4 min-h-[92px]">
+              <CardHeader className="pb-4 min-h-[72px] sm:min-h-[92px]">
                 <CardTitle className="text-xl">Suggestions</CardTitle>
               </CardHeader>
               <CardContent className="pt-0">

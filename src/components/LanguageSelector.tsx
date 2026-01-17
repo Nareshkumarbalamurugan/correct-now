@@ -52,7 +52,7 @@ const LanguageSelector = ({ value, onChange }: LanguageSelectorProps) => {
 
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[180px] bg-card">
+      <SelectTrigger className="w-full sm:w-[180px] bg-card">
         <SelectValue placeholder="Select language" />
       </SelectTrigger>
       <SelectContent onKeyDown={(e) => e.stopPropagation()}>
