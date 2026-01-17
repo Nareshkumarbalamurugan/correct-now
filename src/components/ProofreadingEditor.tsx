@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Copy, Check, RotateCcw, FileText, Bold, Italic, Underline } from "lucide-react";
+import { Send, Copy, Check, RotateCcw, FileText, Bold, Italic, Underline, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LanguageSelector from "./LanguageSelector";
@@ -105,6 +105,13 @@ interface ProofreadingEditorProps {
   editorRef: React.RefObject<HTMLDivElement>;
 }
 
+declare global {
+  interface Window {
+    webkitSpeechRecognition?: any;
+    SpeechRecognition?: any;
+  }
+}
+
 const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const [inputText, setInputText] = useState("");
   const [baseText, setBaseText] = useState("");
@@ -120,6 +127,10 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
   const [editorHtml, setEditorHtml] = useState("");
   const [acceptedTexts, setAcceptedTexts] = useState<string[]>([]);
   const [lastDetectText, setLastDetectText] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const speechRef = useRef<any>(null);
+  const speechBaseRef = useRef<string>("");
+  const speechFinalRef = useRef<string>("");
   
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
@@ -351,6 +362,81 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     });
   };
 
+  const getSpeechLocale = (code: string) => {
+    switch (code) {
+      case "ta": return "ta-IN";
+      case "hi": return "hi-IN";
+      case "bn": return "bn-IN";
+      case "te": return "te-IN";
+      case "kn": return "kn-IN";
+      case "ml": return "ml-IN";
+      case "gu": return "gu-IN";
+      case "pa": return "pa-IN";
+      case "mr": return "mr-IN";
+      case "es": return "es-ES";
+      case "fr": return "fr-FR";
+      case "de": return "de-DE";
+      case "pt": return "pt-PT";
+      case "it": return "it-IT";
+      case "ru": return "ru-RU";
+      case "ja": return "ja-JP";
+      case "ko": return "ko-KR";
+      case "zh": return "zh-CN";
+      case "ar": return "ar-SA";
+      default: return "en-US";
+    }
+  };
+
+  const toggleRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Speech recognition is not supported in this browser");
+      return;
+    }
+
+    if (isRecording) {
+      speechRef.current?.stop?.();
+      setIsRecording(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = getSpeechLocale(language === "auto" ? "en" : language);
+    recognition.interimResults = true;
+    recognition.continuous = true;
+
+    speechBaseRef.current = inputText.trim();
+    speechFinalRef.current = "";
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const chunk = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          speechFinalRef.current += `${chunk} `;
+        } else {
+          interim += chunk;
+        }
+      }
+
+      const base = speechBaseRef.current;
+      const combined = `${base} ${speechFinalRef.current}${interim}`.trim();
+      setInputText(combined);
+    };
+
+    recognition.onerror = () => {
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    speechRef.current = recognition;
+    setIsRecording(true);
+    recognition.start();
+  };
+
   const saveEditor = () => {
     const html = modalEditorRef.current?.innerHTML ?? editorHtml;
     const plain = html
@@ -507,6 +593,14 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                       }}
                     />
                     <WordCounter count={wordCount} limit={WORD_LIMIT} />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={toggleRecording}
+                      title={isRecording ? "Stop recording" : "Voice input"}
+                    >
+                      {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </Button>
                     <Button
                       variant="accent"
                       size="sm"
