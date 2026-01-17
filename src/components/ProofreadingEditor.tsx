@@ -7,6 +7,7 @@ import WordCounter from "./WordCounter";
 import LoadingDots from "./LoadingDots";
 import { Change } from "./ChangeLogTable";
 import { toast } from "sonner";
+import html2pdf from "html2pdf.js";
 import {
   Dialog,
   DialogContent,
@@ -369,6 +370,19 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
     setEditorDraft(target.innerText);
   };
 
+  const handleExportPdf = async () => {
+    const target = modalEditorRef.current;
+    if (!target) return;
+    const options = {
+      margin: 10,
+      filename: "CorrectNow-Proofread.pdf",
+      image: { type: "jpeg" as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
+    };
+    await html2pdf().set(options).from(target).save();
+  };
+
   const handleAccept = (index: number) => {
     const updated: Change[] = changes.map((change, idx) =>
       idx === index ? { ...change, status: "accepted" as const } : change
@@ -496,7 +510,7 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
                     <Button
                       variant="accent"
                       size="sm"
-                      onClick={handleCheck}
+                      onClick={() => handleCheck()}
                       disabled={isLoading || !inputText.trim() || isOverLimit}
                     >
                       {isLoading ? (
@@ -740,6 +754,9 @@ const ProofreadingEditor = ({ editorRef }: ProofreadingEditorProps) => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditorOpen(false)}>
               Cancel
+            </Button>
+            <Button variant="outline" onClick={handleExportPdf}>
+              Export PDF
             </Button>
             <Button variant="accent" onClick={saveEditor}>
               Apply Changes
