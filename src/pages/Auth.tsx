@@ -7,6 +7,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
   signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
@@ -44,6 +46,25 @@ const Auth = () => {
       navigate("/dashboard");
     } catch (error: any) {
       toast.error(error?.message ?? "Authentication failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      const auth = getFirebaseAuth();
+      if (!auth) {
+        toast.error("Firebase is not configured yet.");
+        return;
+      }
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      toast.success("Signed in with Google");
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Google sign-in failed");
     } finally {
       setIsLoading(false);
     }
@@ -202,7 +223,7 @@ const Auth = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" type="button" className="w-full">
+            <Button variant="outline" type="button" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
               <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
