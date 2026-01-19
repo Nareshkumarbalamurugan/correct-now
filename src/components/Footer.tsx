@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 const Footer = () => {
   return (
     <footer className="mt-auto w-full border-t border-border bg-background py-12">
-      <div className="container">
+      <div className="container max-w-7xl">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-20 h-10 rounded-lg bg-accent/10">
+          <div className="flex items-center">
+            <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-accent/10">
               <img
                 src="/Icon/correctnow logo final2.png"
                 alt="CorrectNow"
-                className="w-16 h-8 object-contain"
+                className="w-32 h-12 object-contain"
                 loading="lazy"
               />
             </div>
@@ -38,7 +38,7 @@ const Footer = () => {
           </nav>
 
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} CorrectNow. All rights reserved.
+            © 2026 CorrectNow. All rights reserved.
           </p>
         </div>
       </div>

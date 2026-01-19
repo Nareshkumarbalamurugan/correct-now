@@ -61,7 +61,7 @@ app.post("/api/detect-language", async (req, res) => {
       return res.status(500).json({ message: "Missing GEMINI_API_KEY" });
     }
 
-    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const model = process.env.GEMINI_DETECT_MODEL || "gemini-2.5-flash";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const allowed = ["en","hi","ta","te","bn","mr","gu","kn","ml","pa","es","fr","de","pt","it","ru","ja","ko","zh","ar","auto"];
@@ -115,18 +115,21 @@ const buildPrompt = (text, language) => {
       ? `Language: ${language}.`
       : "Auto-detect language.";
 
-  return `You are a professional proofreading assistant.
+  return `You are a senior professional editor providing publication-ready proofreading.
 ${languageInstruction}
-Task: Correct spelling mistakes and light grammar issues only.
+Task: Produce a clean, professional version with correct grammar, punctuation, and clarity.
 Rules:
-- Preserve meaning and tone. Do NOT rewrite, paraphrase, or formalize.
-- Make the smallest possible edits (minimal diff).
-- Keep the original wording and style (including colloquial language) unless it is incorrect.
-- Keep formatting, punctuation, and line breaks.
-- Fix only clear errors (spelling, particles, verb forms, agreement).
-- If the language is Tamil, keep natural spoken style; do NOT replace with formal literary Tamil.
-- Explanations must be short (max 12 words).
-- Support all languages.
+- Fix ALL errors: spelling, grammar, punctuation, verb tenses, articles, prepositions, subject-verb agreement.
+- Improve awkward phrasing and non-native expressions for natural fluency.
+- Enhance sentence structure and flow while keeping meaning and tone unchanged.
+- Do NOT add new facts, change names, or alter numbers.
+- Keep the original voice (formal/informal) and avoid unnecessary rewriting.
+- For Tamil: Keep natural spoken style; do NOT translate to formal literary Tamil.
+- For mixed language text (Tanglish): Keep code-switching natural but fix grammar around it.
+- List EVERY correction in the changes array, even minor punctuation.
+- Each changes.original must be an exact substring from the input text.
+- Explanations must be concise (max 12 words) and describe the fix.
+- If no corrections are needed, return corrected_text identical to input and an empty changes array.
 Return ONLY valid JSON in this format:
 {
   "corrected_text": "...",
@@ -157,7 +160,7 @@ app.post("/api/proofread", async (req, res) => {
       return res.status(500).json({ message: "Missing GEMINI_API_KEY" });
     }
 
-    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-pro";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
@@ -171,8 +174,13 @@ app.post("/api/proofread", async (req, res) => {
           },
         ],
         generationConfig: {
-          temperature: 0.2,
+          temperature: 0,
+          topP: 0.9,
           responseMimeType: "application/json",
+          maxOutputTokens: 8192,
+        },
+        systemInstruction: {
+          parts: [{ text: "Return the JSON response directly in the output. Do not use internal reasoning mode." }],
         },
       }),
     });
@@ -198,9 +206,23 @@ app.post("/api/proofread", async (req, res) => {
       return res.status(500).json({ message: "Failed to parse Gemini response" });
     }
 
+    const correctedText =
+      typeof parsed.corrected_text === "string" && parsed.corrected_text.trim().length
+        ? parsed.corrected_text
+        : text;
+
+    const changes = Array.isArray(parsed.changes)
+      ? parsed.changes.filter((change) => {
+          if (!change || typeof change !== "object") return false;
+          if (typeof change.original !== "string" || change.original.length === 0) return false;
+          if (typeof change.corrected !== "string") return false;
+          return text.includes(change.original);
+        })
+      : [];
+
     return res.json({
-      corrected_text: parsed.corrected_text || "",
-      changes: Array.isArray(parsed.changes) ? parsed.changes : [],
+      corrected_text: correctedText,
+      changes,
     });
   } catch (err) {
     console.error("Server error:", err);

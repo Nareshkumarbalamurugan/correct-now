@@ -23,7 +23,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
           <div className="text-center lg:text-left">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 text-white px-4 py-2 text-sm font-medium backdrop-blur-sm border border-white/15 mb-6">
               <Sparkles className="w-4 h-4" />
-              AI proofreading — spelling & light grammar
+              AI proofreading — clean, professional grammar
             </div>
 
             <h1 className="animate-slide-up text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.06] tracking-tight text-white">
@@ -32,7 +32,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
             </h1>
 
             <p className="animate-slide-up mt-5 text-lg md:text-xl text-white/90 leading-relaxed max-w-xl mx-auto lg:mx-0">
-              CorrectNow fixes spelling mistakes and light grammar issues across global languages
+              CorrectNow fixes spelling mistakes and grammar issues across global languages
               (including Hindi, Tamil, and Bengali) — without rewriting your tone.
             </p>
 
@@ -78,7 +78,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
             <div className="relative rounded-2xl bg-white border border-white/30 shadow-elevated p-6 md:p-7">
               <div className="flex items-center justify-between gap-4 mb-5">
                 <div className="text-sm font-semibold text-foreground">Live preview</div>
-                <div className="text-xs text-muted-foreground">Spelling + light grammar</div>
+                <div className="text-xs text-muted-foreground">Professional proofreading</div>
               </div>
 
               <div className="space-y-4">

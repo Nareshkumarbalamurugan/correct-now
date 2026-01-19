@@ -24,7 +24,7 @@ const features = [
     icon: Brain,
     title: "Smart Corrections",
     description:
-      "AI-powered spelling and light grammar fixes — without changing your tone.",
+      "AI-powered spelling and grammar fixes — without changing your tone.",
   },
   {
     icon: Clock,

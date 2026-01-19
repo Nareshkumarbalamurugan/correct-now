@@ -113,17 +113,13 @@ const Index = () => {
         <div className="container py-3 flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-20 h-10 rounded-lg bg-accent/10">
+              <div className="flex items-center justify-center rounded-lg bg-accent/10">
                 <img
                   src="/Icon/correctnow logo final2.png"
                   alt="CorrectNow"
-                  className="w-16 h-8 object-contain"
+                  className="w-48 h-16 object-contain p-2"
                   loading="eager"
                 />
-              </div>
-              <div>
-                <div className="text-2xl font-semibold text-foreground">CorrectNow</div>
-                <div className="text-sm text-muted-foreground">Your AI proofreading workspace</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -164,13 +160,13 @@ const Index = () => {
                         loading="eager"
                       />
                     </span>
-                    AI proofreading — spelling & light grammar
+                    AI proofreading — clean, professional grammar
                   </div>
                   <h1 className="text-4xl md:text-6xl font-bold leading-tight mt-5 tracking-tight">
                     Write with confidence. Proofread instantly.
                   </h1>
                   <p className="text-white/90 text-lg md:text-xl mt-4 leading-relaxed">
-                    CorrectNow fixes spelling mistakes and light grammar issues across global
+                    CorrectNow fixes spelling mistakes and grammar issues across global
                     languages — without rewriting your tone.
                   </p>
                   <div className="flex flex-wrap gap-3 mt-7">
@@ -199,7 +195,7 @@ const Index = () => {
                   <CardContent className="p-6 md:p-7">
                     <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
                       <span className="font-semibold">Live preview</span>
-                      <span>Spelling + light grammar</span>
+                      <span>Professional proofreading</span>
                     </div>
 
                     <div className="rounded-xl border border-border bg-white p-4">

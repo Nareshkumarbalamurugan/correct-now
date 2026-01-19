@@ -91,11 +91,18 @@ const highlightText = (text: string, changeList: Change[]) => {
   let safeText = formatText(text);
   if (!changeList.length) return safeText;
 
-  changeList.forEach((change) => {
+  // Sort changes by length (longest first) to avoid partial replacements
+  const sortedChanges = [...changeList].sort((a, b) => 
+    (b.original?.length || 0) - (a.original?.length || 0)
+  );
+
+  sortedChanges.forEach((change) => {
     const target = change.original;
     if (!target) return;
     const escapedTarget = escapeHtml(target);
-    const regex = new RegExp(escapeRegExp(escapedTarget), "gi");
+    // Use a more robust regex that handles Unicode properly
+    const pattern = escapeRegExp(escapedTarget).replace(/\s+/g, '\\s+');
+    const regex = new RegExp(pattern, "gi");
     safeText = safeText.replace(regex, `<span class="change-error">${escapedTarget}</span>`);
   });
 
@@ -153,6 +160,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         // ignore
       }
     }
+  }, []);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -290,7 +301,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       setHasResults(true);
       setIsLoading(false);
       persistDoc(normalizedInput);
-      toast.success("No changes needed — 100% accurate.");
+      toast.success("No changes needed — your text is clean.");
       return;
     }
     try {
@@ -540,10 +551,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       idx === index ? { ...change, status: "accepted" as const } : change
     );
     setChanges(updated);
-    const base = baseText || inputText;
-    const updatedText = applyAcceptedChanges(base, updated);
+    // Use baseText as the source of truth for applying changes
+    const source = baseText || inputText;
+    const updatedText = applyAcceptedChanges(source, updated);
+    // Update all text states to reflect the accepted change
     setInputText(updatedText);
-    setBaseText(updatedText);
+    setBaseText(source); // Keep baseText as the original for remaining changes
     setCorrectedText(updatedText);
     if (updated.filter((change) => change.status !== "accepted" && change.status !== "ignored").length === 0) {
       setAcceptedTexts((prev) => {
@@ -681,7 +694,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     <Button
                       variant="accent"
                       size="sm"
-                      className="w-full sm:w-auto"
+                      className={`w-full sm:w-auto${isLoading ? " is-checking" : ""}`}
                       onClick={() => handleCheck()}
                       disabled={isLoading || !inputText.trim() || isOverLimit}
                     >
@@ -732,7 +745,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         highlightRef.current.scrollLeft = e.currentTarget.scrollLeft;
                       }
                     }}
-                    placeholder="Paste or type your text here... We'll check spelling and grammar while preserving your original meaning."
+                    placeholder="Welcome! Paste or type your text here, and we’ll proofread it professionally while preserving your meaning and tone."
                     className="editor-textarea editor-input"
                     disabled={isLoading}
                   />
@@ -806,8 +819,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
                   {hasResults && changes.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <p className="text-lg font-medium text-success mb-1">Perfect! </p>
-                    <p className="text-sm">No corrections needed in your text.</p>
+                    <p className="text-lg font-medium text-success mb-1">Looks great.</p>
+                    <p className="text-sm">No corrections needed.</p>
                   </div>
                 ) : (
                   <div className="space-y-4 max-h-[520px] overflow-auto pr-1">

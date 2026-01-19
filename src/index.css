@@ -256,6 +256,28 @@
     color: inherit;
   }
 
+  /* Button blink animation */
+  @keyframes button-blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.35; }
+    100% { opacity: 1; }
+  }
+
+  .btn-blink:active {
+    animation: button-blink 0.22s ease-in-out;
+  }
+
+  .btn-blink.is-checking {
+    animation: button-blink 0.8s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-blink:active,
+    .btn-blink.is-checking {
+      animation: none;
+    }
+  }
+
   /* Loading animation */
   @keyframes pulse-dot {
     0%, 80%, 100% {
