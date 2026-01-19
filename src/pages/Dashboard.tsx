@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle,
   FileText,
@@ -14,7 +14,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 
 const mockHistory = [
   {
@@ -61,20 +63,40 @@ const mockHistory = [
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<"overview" | "history" | "settings">("overview");
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const navigate = useNavigate();
   
-  // Mock user data
-  const user = {
-    name: "John Doe",
-    email: "john@example.com",
-    plan: "Pro",
-    wordsUsedToday: 3250,
-    wordLimitToday: 10000,
-    checksToday: 5,
-    totalChecks: 127,
-    memberSince: "Dec 2023",
-  };
+  const plan = "Free";
+  const wordsUsedToday = 0;
+  const wordLimitToday = 10000;
+  const checksToday = 0;
+  const totalChecks = 0;
+  const memberSince = "2024";
 
-  const usagePercentage = (user.wordsUsedToday / user.wordLimitToday) * 100;
+  const usagePercentage = (wordsUsedToday / wordLimitToday) * 100;
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, (current) => {
+      if (!current) {
+        navigate("/auth");
+        return;
+      }
+      setUser({
+        name: current.displayName || "User",
+        email: current.email || "",
+      });
+    });
+    return () => unsub();
+  }, [navigate]);
+
+  const handleSignOut = async () => {
+    const auth = getFirebaseAuth();
+    if (!auth) return;
+    await signOut(auth);
+    navigate("/auth");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,11 +122,11 @@ const Dashboard = () => {
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">
                 <span className="text-sm font-medium text-accent-foreground">
-                  {user.name.charAt(0)}
+                  {user?.name?.charAt(0) ?? "U"}
                 </span>
               </div>
               <span className="text-sm font-medium text-foreground hidden sm:block">
-                {user.name}
+                {user?.name ?? "User"}
               </span>
             </div>
           </div>
@@ -134,14 +156,17 @@ const Dashboard = () => {
                   {item.label}
                 </button>
               ))}
-              <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+              <button
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                onClick={handleSignOut}
+              >
                 <LogOut className="w-5 h-5" />
                 Sign Out
               </button>
             </nav>
 
             {/* Upgrade Card */}
-            {user.plan === "Free" && (
+            {plan === "Free" && (
               <div className="mt-8 p-4 rounded-lg bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/20">
                 <Crown className="w-8 h-8 text-accent mb-3" />
                 <h3 className="font-semibold text-foreground mb-1">
@@ -166,7 +191,7 @@ const Dashboard = () => {
                 {/* Welcome */}
                 <div>
                   <h1 className="text-2xl font-bold text-foreground mb-1">
-                    Welcome back, {user.name.split(" ")[0]}!
+                    Welcome back, {user?.name?.split(" ")[0] ?? "User"}!
                   </h1>
                   <p className="text-muted-foreground">
                     Here's your proofreading activity summary
@@ -183,10 +208,10 @@ const Dashboard = () => {
                       <FileText className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-2xl font-bold text-foreground">
-                      {user.wordsUsedToday.toLocaleString()}
+                      {wordsUsedToday.toLocaleString()}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      of {user.wordLimitToday.toLocaleString()} limit
+                      of {wordLimitToday.toLocaleString()} limit
                     </p>
                   </div>
 
@@ -198,10 +223,10 @@ const Dashboard = () => {
                       <CheckCircle className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-2xl font-bold text-foreground">
-                      {user.checksToday}
+                      {checksToday}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {user.plan === "Pro" ? "Unlimited" : "10 remaining"}
+                      {plan === "Pro" ? "Unlimited" : "10 remaining"}
                     </p>
                   </div>
 
@@ -213,7 +238,7 @@ const Dashboard = () => {
                       <TrendingUp className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-2xl font-bold text-foreground">
-                      {user.totalChecks}
+                      {totalChecks}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
                       All time
@@ -228,10 +253,10 @@ const Dashboard = () => {
                       <Crown className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-2xl font-bold text-foreground">
-                      {user.plan}
+                      {plan}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Since {user.memberSince}
+                      Since {memberSince}
                     </p>
                   </div>
                 </div>
@@ -248,7 +273,7 @@ const Dashboard = () => {
                   </div>
                   <Progress value={usagePercentage} className="h-3 mb-2" />
                   <p className="text-sm text-muted-foreground">
-                    {(user.wordLimitToday - user.wordsUsedToday).toLocaleString()}{" "}
+                    {(wordLimitToday - wordsUsedToday).toLocaleString()}{" "}
                     words remaining today
                   </p>
                 </div>

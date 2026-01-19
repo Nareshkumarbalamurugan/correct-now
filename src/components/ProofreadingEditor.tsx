@@ -139,6 +139,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const speechBaseRef = useRef<string>("");
   const speechFinalRef = useRef<string>("");
   const speechPulseRef = useRef<number | null>(null);
+  const speechInterimRef = useRef<string>("");
   
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
@@ -281,14 +282,14 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
     setIsLoading(true);
     setHasResults(false);
-    const normalizedInput = textToCheck;
+    const normalizedInput = textToCheck.normalize("NFC");
     if (acceptedTexts.some((text) => text.trim() === normalizedInput)) {
-      setCorrectedText(textToCheck);
-      setBaseText(textToCheck);
+      setCorrectedText(normalizedInput);
+      setBaseText(normalizedInput);
       setChanges([]);
       setHasResults(true);
       setIsLoading(false);
-      persistDoc(textToCheck);
+      persistDoc(normalizedInput);
       toast.success("No changes needed — 100% accurate.");
       return;
     }
@@ -315,24 +316,24 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         throw new Error("Invalid response format");
       }
 
-      const normalizedCorrected = String(data.corrected_text || "").trim();
+      const normalizedCorrected = String(data.corrected_text || "").trim().normalize("NFC");
       if (normalizedCorrected === normalizedInput) {
-        setCorrectedText(textToCheck);
-        setBaseText(textToCheck);
+        setCorrectedText(normalizedInput);
+        setBaseText(normalizedInput);
         setChanges([]);
         setAcceptedTexts((prev) => {
           const next = prev.filter((text) => text.trim() !== normalizedInput);
-          return [...next, textToCheck].slice(-50);
+          return [...next, normalizedInput].slice(-50);
         });
       } else {
-        setCorrectedText(data.corrected_text);
+        setCorrectedText(normalizedCorrected);
         const nextChanges: Change[] = Array.isArray(data.changes)
           ? data.changes.map((change: Change) => ({ ...change, status: "pending" as const }))
           : [];
-        setBaseText(textToCheck);
+        setBaseText(normalizedInput);
         setChanges(nextChanges);
       }
-      persistDoc(textToCheck);
+      persistDoc(normalizedInput);
       setHasResults(true);
       toast.success("Text checked successfully!");
     } catch (error) {
@@ -442,14 +443,27 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
     recognition.onresult = (event: any) => {
       let interim = "";
+      let finalChunk = "";
+
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const chunk = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          speechFinalRef.current += `${chunk} `;
+          finalChunk += `${chunk} `;
         } else {
           interim += chunk;
         }
       }
+
+      if (finalChunk.trim()) {
+        speechFinalRef.current = `${speechFinalRef.current}${finalChunk}`.trim() + " ";
+        speechInterimRef.current = "";
+      }
+
+      const nextInterim = interim.trim();
+      if (nextInterim === speechInterimRef.current && !finalChunk.trim()) {
+        return;
+      }
+      speechInterimRef.current = nextInterim;
 
       setIsSpeaking(true);
       if (speechPulseRef.current) {
@@ -460,7 +474,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       }, 220);
 
       const base = speechBaseRef.current;
-      const combined = `${base} ${speechFinalRef.current}${interim}`.trim();
+      const combined = `${base} ${speechFinalRef.current}${nextInterim}`.trim();
       setInputText(combined);
     };
 

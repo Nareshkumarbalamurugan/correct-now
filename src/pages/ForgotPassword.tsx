@@ -4,20 +4,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CheckCircle, Mail, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Backend integration will be added here
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const auth = getFirebaseAuth();
+      if (!auth) {
+        toast.error("Firebase is not configured yet.");
+        return;
+      }
+      await sendPasswordResetEmail(auth, email);
       setIsSubmitted(true);
-    }, 1000);
+      toast.success("Password reset email sent");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Unable to send reset email");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

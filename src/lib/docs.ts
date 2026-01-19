@@ -1,3 +1,16 @@
+import {
+  getFirebaseAuth,
+  getFirebaseDb,
+  isFirebaseConfigured,
+} from "@/lib/firebase";
+import {
+  collection,
+  doc as firestoreDoc,
+  getDocs as getFirestoreDocs,
+  setDoc,
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+
 export interface DocItem {
   id: string;
   title: string;
@@ -7,6 +20,7 @@ export interface DocItem {
 }
 
 const STORAGE_KEY = "correctnow:docs";
+const DOC_LIMIT = 50;
 
 export const getDocs = (): DocItem[] => {
   const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -38,8 +52,18 @@ export const upsertDoc = (text: string, id?: string): DocItem => {
     updatedAt,
   };
 
-  const next = [doc, ...docs.filter((d) => d.id !== doc.id)].slice(0, 50);
+  const next = [doc, ...docs.filter((d) => d.id !== doc.id)].slice(0, DOC_LIMIT);
   saveDocs(next);
+
+  const auth = getFirebaseAuth();
+  const db = getFirebaseDb();
+  if (auth?.currentUser && db) {
+    const ref = firestoreDoc(db, `users/${auth.currentUser.uid}/docs/${doc.id}`);
+    setDoc(ref, doc, { merge: true }).catch(() => {
+      // keep local fallback if network fails
+    });
+  }
+
   return doc;
 };
 
@@ -68,4 +92,32 @@ export const sectionForDate = (iso: string) => {
   const isToday = date.toDateString() === now.toDateString();
   if (isToday) return "Today";
   return "Yesterday";
+};
+
+export const initDocsSync = () => {
+  if (!isFirebaseConfigured()) return;
+  const auth = getFirebaseAuth();
+  const db = getFirebaseDb();
+  if (!auth || !db) return;
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) return;
+    try {
+      const snap = await getFirestoreDocs(collection(db, `users/${user.uid}/docs`));
+      const remote = snap.docs
+        .map((docSnap) => ({
+          ...(docSnap.data() as DocItem),
+          id: docSnap.id,
+        }))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, DOC_LIMIT);
+
+      if (remote.length) {
+        saveDocs(remote);
+        window.dispatchEvent(new Event("correctnow:docs-updated"));
+      }
+    } catch {
+      // ignore sync errors
+    }
+  });
 };

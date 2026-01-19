@@ -37,13 +37,16 @@ const Index = () => {
         loadDocs();
       }
     };
+    const handleDocsUpdated = () => loadDocs();
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("storage", handleStorage);
+    window.addEventListener("correctnow:docs-updated", handleDocsUpdated);
 
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("correctnow:docs-updated", handleDocsUpdated);
     };
   }, [location.key]);
 
@@ -115,7 +118,15 @@ const Index = () => {
             <div className="container relative py-16 md:py-24">
               <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
                 <div className="max-w-2xl">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide">
+                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/90">
+                      <img
+                        src="/Icon/correctnow logo final2.png"
+                        alt="CorrectNow"
+                        className="w-5 h-5 object-contain"
+                        loading="eager"
+                      />
+                    </span>
                     AI proofreading — spelling & light grammar
                   </div>
                   <h1 className="text-4xl md:text-6xl font-bold leading-tight mt-5 tracking-tight">
@@ -237,6 +248,37 @@ const Index = () => {
               </div>
             ))
           )}
+
+          <div className="mt-12">
+            <Card className="border border-border bg-secondary/40">
+              <CardContent className="p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-accent/10">
+                    <img
+                      src="/Icon/correctnow logo final2.png"
+                      alt="CorrectNow"
+                      className="w-6 h-6 object-contain"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold text-foreground">
+                      Help us improve CorrectNow
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Share an idea or request a feature — we read every suggestion.
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="accent"
+                  onClick={() => window.open("mailto:info@correctnow.app?subject=Product%20Suggestion", "_blank")}
+                >
+                  Suggest an improvement
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
 

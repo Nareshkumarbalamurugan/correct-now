@@ -3,7 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CheckCircle, Mail, Lock, User, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,12 +18,35 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Backend integration will be added here
-    setTimeout(() => setIsLoading(false), 1000);
+    try {
+      const auth = getFirebaseAuth();
+      if (!auth) {
+        toast.error("Firebase is not configured yet.");
+        return;
+      }
+
+      if (isLogin) {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast.success("Signed in successfully");
+      } else {
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        if (name.trim()) {
+          await updateProfile(result.user, { displayName: name.trim() });
+        }
+        toast.success("Account created successfully");
+      }
+
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Authentication failed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
