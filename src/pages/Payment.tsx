@@ -193,7 +193,7 @@ const Payment = () => {
                     Processing...
                   </span>
                 ) : (
-                  "Pay $9.00"
+                  "Pay ₹9.00"
                 )}
               </Button>
 
@@ -214,7 +214,7 @@ const Payment = () => {
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Pro Plan</span>
-                  <span className="text-foreground">$9.00/month</span>
+                  <span className="text-foreground">₹9.00/month</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Billed monthly</span>
@@ -225,7 +225,7 @@ const Payment = () => {
               <div className="border-t border-border pt-4 mb-6">
                 <div className="flex justify-between text-lg font-semibold">
                   <span className="text-foreground">Total due today</span>
-                  <span className="text-foreground">$9.00</span>
+                  <span className="text-foreground">₹9.00</span>
                 </div>
               </div>
 

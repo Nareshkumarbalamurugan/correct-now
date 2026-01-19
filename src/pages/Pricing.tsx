@@ -9,7 +9,7 @@ const plans = [
   {
     name: "Free",
     icon: Zap,
-    price: "$0",
+    price: "₹0",
     period: "forever",
     description: "Perfect for trying out CorrectNow",
     features: [
@@ -29,7 +29,7 @@ const plans = [
   {
     name: "Pro",
     icon: Crown,
-    price: "$9",
+    price: "₹9",
     period: "per month",
     description: "For professionals who write daily",
     features: [
@@ -49,7 +49,7 @@ const plans = [
   {
     name: "Team",
     icon: Building2,
-    price: "$29",
+    price: "₹29",
     period: "per month",
     description: "For teams and organizations",
     features: [

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle,
   Users,
@@ -12,11 +12,20 @@ import {
   Search,
   Download,
   Filter,
+  MessageSquare,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
+import {
+  fetchRemoteSuggestions,
+  getSuggestions,
+  mergeSuggestions,
+  updateSuggestionStatus,
+  type SuggestionItem,
+} from "@/lib/suggestions";
 
 const mockUsers = [
   {
@@ -75,8 +84,12 @@ const mockDailyStats = [
 ];
 
 const Admin = () => {
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "logs" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "users" | "logs" | "suggestions" | "billing" | "settings"
+  >("overview");
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [suggestionSearch, setSuggestionSearch] = useState("");
 
   const stats = {
     totalUsers: 1247,
@@ -92,6 +105,29 @@ const Admin = () => {
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const filteredSuggestions = useMemo(() => {
+    if (!suggestionSearch.trim()) return suggestions;
+    const query = suggestionSearch.toLowerCase();
+    return suggestions.filter(
+      (item) =>
+        item.message.toLowerCase().includes(query) ||
+        (item.email || "").toLowerCase().includes(query)
+    );
+  }, [suggestions, suggestionSearch]);
+
+  useEffect(() => {
+    const loadSuggestions = async () => {
+      const local = getSuggestions();
+      const remote = await fetchRemoteSuggestions();
+      setSuggestions(mergeSuggestions(local, remote));
+    };
+    loadSuggestions();
+
+    const handleStorage = () => loadSuggestions();
+    window.addEventListener("correctnow:suggestions-updated", handleStorage);
+    return () => window.removeEventListener("correctnow:suggestions-updated", handleStorage);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,6 +163,8 @@ const Admin = () => {
                 { id: "overview", icon: BarChart3, label: "Dashboard" },
                 { id: "users", icon: Users, label: "Users" },
                 { id: "logs", icon: Activity, label: "Activity Logs" },
+                { id: "suggestions", icon: MessageSquare, label: "Suggestions" },
+                { id: "billing", icon: CreditCard, label: "Billing & Plans" },
                 { id: "settings", icon: Settings, label: "Settings" },
               ].map((item) => (
                 <button
@@ -247,7 +285,7 @@ const Admin = () => {
                       <TrendingUp className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      ${stats.revenue.toLocaleString()}
+                      ₹{stats.revenue.toLocaleString("en-IN")}
                     </p>
                     <p className="text-sm text-green-500 mt-1">
                       +15% from last month
@@ -519,6 +557,206 @@ const Admin = () => {
                         </span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "suggestions" && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-bold text-foreground mb-1">
+                      Suggestions
+                    </h1>
+                    <p className="text-muted-foreground">
+                      User ideas and product feedback
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search suggestions..."
+                      value={suggestionSearch}
+                      onChange={(e) => setSuggestionSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-card rounded-xl border border-border overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/50">
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Message
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            User
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Status
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Date
+                          </th>
+                          <th className="text-right py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredSuggestions.length ? (
+                          filteredSuggestions.map((item) => (
+                            <tr
+                              key={item.id}
+                              className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                            >
+                              <td className="py-4 px-6 text-sm text-foreground max-w-xl">
+                                {item.message}
+                              </td>
+                              <td className="py-4 px-6 text-sm text-muted-foreground">
+                                {item.email || "Anonymous"}
+                              </td>
+                              <td className="py-4 px-6">
+                                <Badge
+                                  variant={
+                                    item.status === "resolved"
+                                      ? "secondary"
+                                      : item.status === "reviewed"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                >
+                                  {item.status}
+                                </Badge>
+                              </td>
+                              <td className="py-4 px-6 text-sm text-muted-foreground">
+                                {new Date(item.createdAt).toLocaleString()}
+                              </td>
+                              <td className="py-4 px-6 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => updateSuggestionStatus(item.id, "reviewed")}
+                                  >
+                                    Mark reviewed
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => updateSuggestionStatus(item.id, "resolved")}
+                                  >
+                                    Resolve
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td className="py-8 text-center text-sm text-muted-foreground" colSpan={5}>
+                              No suggestions yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "billing" && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-2xl font-bold text-foreground mb-1">
+                    Billing & Plans
+                  </h1>
+                  <p className="text-muted-foreground">
+                    Manage subscriptions, payments, and revenue
+                  </p>
+                </div>
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-card rounded-xl border border-border p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-muted-foreground">MRR</span>
+                      <CreditCard className="w-5 h-5 text-accent" />
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">₹8,420</p>
+                    <p className="text-sm text-green-500 mt-1">+6% MoM</p>
+                  </div>
+                  <div className="bg-card rounded-xl border border-border p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-muted-foreground">Active Subscriptions</span>
+                      <Users className="w-5 h-5 text-accent" />
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">842</p>
+                    <p className="text-sm text-muted-foreground mt-1">Free + Paid</p>
+                  </div>
+                  <div className="bg-card rounded-xl border border-border p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-muted-foreground">Churn</span>
+                      <TrendingUp className="w-5 h-5 text-accent" />
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">2.1%</p>
+                    <p className="text-sm text-muted-foreground mt-1">Last 30 days</p>
+                  </div>
+                  <div className="bg-card rounded-xl border border-border p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-muted-foreground">Refunds</span>
+                      <FileText className="w-5 h-5 text-accent" />
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">₹320</p>
+                    <p className="text-sm text-muted-foreground mt-1">This month</p>
+                  </div>
+                </div>
+
+                <div className="bg-card rounded-xl border border-border p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-semibold text-foreground">
+                      Recent Payments
+                    </h2>
+                    <Button variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export
+                    </Button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 text-sm font-medium text-muted-foreground">Customer</th>
+                          <th className="text-left py-3 text-sm font-medium text-muted-foreground">Plan</th>
+                          <th className="text-left py-3 text-sm font-medium text-muted-foreground">Amount</th>
+                          <th className="text-left py-3 text-sm font-medium text-muted-foreground">Status</th>
+                          <th className="text-left py-3 text-sm font-medium text-muted-foreground">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { name: "john@example.com", plan: "Pro", amount: "₹9", status: "Paid", date: "Jan 18" },
+                          { name: "sarah@example.com", plan: "Team", amount: "₹49", status: "Paid", date: "Jan 17" },
+                          { name: "alex@example.com", plan: "Pro", amount: "₹9", status: "Paid", date: "Jan 16" },
+                        ].map((payment) => (
+                          <tr key={`${payment.name}-${payment.date}`} className="border-b border-border last:border-0">
+                            <td className="py-3 text-sm text-foreground">{payment.name}</td>
+                            <td className="py-3 text-sm text-foreground">{payment.plan}</td>
+                            <td className="py-3 text-sm text-foreground">{payment.amount}</td>
+                            <td className="py-3 text-sm">
+                              <Badge variant="secondary">{payment.status}</Badge>
+                            </td>
+                            <td className="py-3 text-sm text-muted-foreground">{payment.date}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>

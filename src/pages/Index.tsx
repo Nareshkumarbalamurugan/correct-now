@@ -3,9 +3,20 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FileText, Search } from "lucide-react";
 import { formatUpdated, getDocs, sectionForDate } from "@/lib/docs";
 import Footer from "@/components/Footer";
+import { addSuggestion } from "@/lib/suggestions";
+import { toast } from "sonner";
+import { getFirebaseAuth } from "@/lib/firebase";
 
 const Index = () => {
   const [query, setQuery] = useState("");
@@ -18,6 +29,9 @@ const Index = () => {
       updated: formatUpdated(doc.updatedAt),
     }))
   );
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
+  const [suggestionText, setSuggestionText] = useState("");
+  const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
 
   useEffect(() => {
     const loadDocs = () =>
@@ -68,6 +82,29 @@ const Index = () => {
 
   const openDoc = (id: string) => {
     navigate("/editor", { state: { id } });
+  };
+
+  const handleSubmitSuggestion = async () => {
+    if (!suggestionText.trim()) {
+      toast.error("Please enter a suggestion.");
+      return;
+    }
+    setIsSubmittingSuggestion(true);
+    try {
+      const auth = getFirebaseAuth();
+      await addSuggestion({
+        message: suggestionText,
+        email: auth?.currentUser?.email || "",
+        userId: auth?.currentUser?.uid || "",
+      });
+      setSuggestionText("");
+      setIsSuggestionOpen(false);
+      toast.success("Thanks! Your suggestion was submitted.");
+    } catch {
+      toast.error("Unable to submit suggestion.");
+    } finally {
+      setIsSubmittingSuggestion(false);
+    }
   };
 
   return (
@@ -272,7 +309,7 @@ const Index = () => {
                 </div>
                 <Button
                   variant="accent"
-                  onClick={() => window.open("mailto:info@correctnow.app?subject=Product%20Suggestion", "_blank")}
+                  onClick={() => setIsSuggestionOpen(true)}
                 >
                   Suggest an improvement
                 </Button>
@@ -281,6 +318,28 @@ const Index = () => {
           </div>
         </div>
       </main>
+
+      <Dialog open={isSuggestionOpen} onOpenChange={setIsSuggestionOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Share your suggestion</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder="Tell us what you want improved..."
+            value={suggestionText}
+            onChange={(e) => setSuggestionText(e.target.value)}
+            className="min-h-[120px]"
+          />
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsSuggestionOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="accent" onClick={handleSubmitSuggestion} disabled={isSubmittingSuggestion}>
+              {isSubmittingSuggestion ? "Submitting..." : "Submit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>
