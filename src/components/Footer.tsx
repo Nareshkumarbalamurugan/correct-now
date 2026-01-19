@@ -5,7 +5,7 @@ const Footer = () => {
   return (
     <footer className="mt-auto w-full border-t border-border bg-background py-12">
       <div className="container">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent">
               <CheckCircle className="w-4 h-4 text-accent-foreground" />
@@ -15,7 +15,7 @@ const Footer = () => {
             </span>
           </div>
 
-          <nav className="flex items-center gap-6 text-sm text-muted-foreground">
+          <nav className="flex flex-wrap items-center justify-center md:justify-start gap-x-6 gap-y-3 text-sm text-muted-foreground">
             <Link to="/about" className="hover:text-foreground transition-colors">
               About Us
             </Link>
