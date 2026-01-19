@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Search } from "lucide-react";
 import { formatUpdated, getDocs, sectionForDate } from "@/lib/docs";
+import Footer from "@/components/Footer";
 
 const Index = () => {
   const [query, setQuery] = useState("");
@@ -67,7 +68,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-background overflow-x-hidden">
       <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container py-3 flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -91,7 +92,7 @@ const Index = () => {
         </div>
       </div>
 
-      <main className="py-10">
+      <main className="flex-1 py-10">
         <section className="mb-10">
           <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-[#1f66d1] via-[#1b5fcc] to-[#124aa6] text-white shadow-[0_30px_80px_rgba(14,44,106,0.35)]">
             <div className="absolute inset-0 opacity-25">
@@ -225,6 +226,8 @@ const Index = () => {
           )}
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 };

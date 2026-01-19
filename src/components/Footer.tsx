@@ -1,8 +1,9 @@
 import { CheckCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Footer = () => {
   return (
-    <footer className="border-t border-border bg-background py-12">
+    <footer className="mt-auto w-full border-t border-border bg-background py-12">
       <div className="container">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
@@ -15,15 +16,24 @@ const Footer = () => {
           </div>
 
           <nav className="flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="#" className="hover:text-foreground transition-colors">
+            <Link to="/about" className="hover:text-foreground transition-colors">
+              About Us
+            </Link>
+            <Link to="/privacy-policy" className="hover:text-foreground transition-colors">
               Privacy
-            </a>
+            </Link>
+            <Link to="/refund-policy" className="hover:text-foreground transition-colors">
+              Refund Policy
+            </Link>
+            <Link to="/disclaimer" className="hover:text-foreground transition-colors">
+              Disclaimer
+            </Link>
             <a href="#" className="hover:text-foreground transition-colors">
               Terms
             </a>
-            <a href="#" className="hover:text-foreground transition-colors">
+            <Link to="/contact" className="hover:text-foreground transition-colors">
               Contact
-            </a>
+            </Link>
           </nav>
 
           <p className="text-sm text-muted-foreground">

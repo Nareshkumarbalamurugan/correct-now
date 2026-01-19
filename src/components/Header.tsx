@@ -16,12 +16,12 @@ const Header = () => {
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">
-          <a
-            href="#features"
+          <Link
+            to="/features"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             Features
-          </a>
+          </Link>
           <Link
             to="/pricing"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"

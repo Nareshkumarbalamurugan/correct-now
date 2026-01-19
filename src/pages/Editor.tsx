@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import ProofreadingEditor from "@/components/ProofreadingEditor";
 import { getDocById } from "@/lib/docs";
 
@@ -27,6 +28,7 @@ const Editor = () => {
           initialDocId={initialDocId}
         />
       </main>
+      <Footer />
     </div>
   );
 };
