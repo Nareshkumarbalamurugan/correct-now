@@ -135,6 +135,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [docId, setDocId] = useState<string | undefined>(initialDocId);
   const initializedRef = useRef(false);
   const speechRef = useRef<any>(null);
+  const shouldContinueRef = useRef(false);
   const speechBaseRef = useRef<string>("");
   const speechFinalRef = useRef<string>("");
   const speechPulseRef = useRef<number | null>(null);
@@ -425,6 +426,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     }
 
     if (isRecording) {
+      shouldContinueRef.current = false;
       speechRef.current?.stop?.();
       setIsRecording(false);
       return;
@@ -463,16 +465,26 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     };
 
     recognition.onerror = () => {
+      shouldContinueRef.current = false;
       setIsRecording(false);
       setIsSpeaking(false);
     };
 
     recognition.onend = () => {
+      if (shouldContinueRef.current) {
+        try {
+          recognition.start();
+          return;
+        } catch {
+          // ignore
+        }
+      }
       setIsRecording(false);
       setIsSpeaking(false);
     };
 
     speechRef.current = recognition;
+    shouldContinueRef.current = true;
     setIsRecording(true);
     recognition.start();
   };
