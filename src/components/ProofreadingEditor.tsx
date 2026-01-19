@@ -131,11 +131,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [acceptedTexts, setAcceptedTexts] = useState<string[]>([]);
   const [lastDetectText, setLastDetectText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [docId, setDocId] = useState<string | undefined>(initialDocId);
   const initializedRef = useRef(false);
   const speechRef = useRef<any>(null);
   const speechBaseRef = useRef<string>("");
   const speechFinalRef = useRef<string>("");
+  const speechPulseRef = useRef<number | null>(null);
   
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
@@ -447,6 +449,14 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         }
       }
 
+      setIsSpeaking(true);
+      if (speechPulseRef.current) {
+        window.clearTimeout(speechPulseRef.current);
+      }
+      speechPulseRef.current = window.setTimeout(() => {
+        setIsSpeaking(false);
+      }, 220);
+
       const base = speechBaseRef.current;
       const combined = `${base} ${speechFinalRef.current}${interim}`.trim();
       setInputText(combined);
@@ -454,10 +464,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
     recognition.onerror = () => {
       setIsRecording(false);
+      setIsSpeaking(false);
     };
 
     recognition.onend = () => {
       setIsRecording(false);
+      setIsSpeaking(false);
     };
 
     speechRef.current = recognition;
@@ -628,6 +640,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     <Button
                       variant="outline"
                       size="icon"
+                      className={
+                        isRecording
+                          ? isSpeaking
+                            ? "border-accent text-accent shadow-[0_0_0_3px_rgba(59,130,246,0.25)] animate-pulse"
+                            : "border-accent text-accent"
+                          : ""
+                      }
                       onClick={toggleRecording}
                       title={isRecording ? "Stop recording" : "Voice input"}
                     >
