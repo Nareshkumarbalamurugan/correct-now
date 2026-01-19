@@ -1,4 +1,3 @@
-import { CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
@@ -7,12 +6,14 @@ const Header = () => {
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex flex-col gap-3 py-3 md:h-16 md:flex-row md:items-center md:justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-accent">
-            <CheckCircle className="w-5 h-5 text-accent-foreground" />
+          <div className="flex items-center justify-center w-20 h-10 rounded-lg bg-accent/10">
+            <img
+              src="/Icon/correctnow logo final2.png"
+              alt="CorrectNow"
+              className="w-16 h-8 object-contain"
+              loading="eager"
+            />
           </div>
-          <span className="text-xl font-semibold text-foreground">
-            CorrectNow
-          </span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">

@@ -655,8 +655,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                       className={
                         isRecording
                           ? isSpeaking
-                            ? "border-accent text-accent shadow-[0_0_0_3px_rgba(59,130,246,0.25)] animate-pulse"
-                            : "border-accent text-accent"
+                            ? "border-accent text-accent bg-accent/10 ring-4 ring-accent/40 shadow-[0_0_0_8px_rgba(34,147,253,0.5)] animate-pulse scale-105 transition-transform"
+                            : "border-accent text-accent bg-accent/5"
                           : ""
                       }
                       onClick={toggleRecording}

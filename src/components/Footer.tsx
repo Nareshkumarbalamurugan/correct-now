@@ -1,4 +1,3 @@
-import { CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Footer = () => {
@@ -7,12 +6,14 @@ const Footer = () => {
       <div className="container">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent">
-              <CheckCircle className="w-4 h-4 text-accent-foreground" />
+            <div className="flex items-center justify-center w-20 h-10 rounded-lg bg-accent/10">
+              <img
+                src="/Icon/correctnow logo final2.png"
+                alt="CorrectNow"
+                className="w-16 h-8 object-contain"
+                loading="lazy"
+              />
             </div>
-            <span className="text-lg font-semibold text-foreground">
-              CorrectNow
-            </span>
           </div>
 
           <nav className="flex flex-wrap items-center justify-center md:justify-start gap-x-6 gap-y-3 text-sm text-muted-foreground">

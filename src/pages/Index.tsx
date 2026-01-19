@@ -72,7 +72,20 @@ const Index = () => {
       <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container py-3 flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="text-2xl font-semibold text-foreground">Docs</div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-20 h-10 rounded-lg bg-accent/10">
+                <img
+                  src="/Icon/correctnow logo final2.png"
+                  alt="CorrectNow"
+                  className="w-16 h-8 object-contain"
+                  loading="eager"
+                />
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-foreground">CorrectNow</div>
+                <div className="text-sm text-muted-foreground">Your AI proofreading workspace</div>
+              </div>
+            </div>
             <div className="flex items-center gap-3">
               <Button variant="accent" onClick={() => navigate("/editor")}>New doc</Button>
             </div>
@@ -94,7 +107,7 @@ const Index = () => {
 
       <main className="flex-1 py-10">
         <section className="mb-10">
-          <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-[#1f66d1] via-[#1b5fcc] to-[#124aa6] text-white shadow-[0_30px_80px_rgba(14,44,106,0.35)]">
+          <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_30px_80px_rgba(34,147,253,0.35)]">
             <div className="absolute inset-0 opacity-25">
               <div className="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-white/25 blur-3xl" />
               <div className="absolute -bottom-24 -left-16 h-80 w-80 rounded-full bg-white/20 blur-3xl" />
