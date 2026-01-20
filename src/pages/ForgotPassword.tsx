@@ -37,10 +37,11 @@ const ForgotPassword = () => {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 mb-8">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-accent">
-              <CheckCircle className="w-6 h-6 text-accent-foreground" />
-            </div>
-            <span className="text-2xl font-bold text-foreground">CorrectNow</span>
+            <img 
+              src="/Icon/correctnow logo final2.png" 
+              alt="CorrectNow"
+              className="w-32 h-20 object-contain"
+            />
           </Link>
 
           {!isSubmitted ? (

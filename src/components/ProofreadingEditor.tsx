@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 
 const FREE_WORD_LIMIT = 200;
-const PRO_WORD_LIMIT = 2000;
+const PRO_WORD_LIMIT = 5000;
 const PRO_CREDITS = 50000;
 const DETECT_DEBOUNCE_MS = 600;
 

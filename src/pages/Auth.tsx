@@ -171,10 +171,11 @@ const Auth = () => {
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-accent via-accent/90 to-primary/20 p-12 flex-col justify-between">
         <div>
           <Link to="/" className="flex items-center gap-2 text-accent-foreground">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-background/10">
-              <CheckCircle className="w-6 h-6" />
-            </div>
-            <span className="text-2xl font-bold">CorrectNow</span>
+            <img 
+              src="/Icon/correctnow logo final2.png" 
+              alt="CorrectNow"
+              className="w-32 h-20 object-contain"
+            />
           </Link>
         </div>
         

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Zap, Crown } from "lucide-react";
+import { Check, Zap, Crown, Building2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
@@ -38,18 +38,43 @@ const plans = [
     period: "per month",
     description: "For professionals who write daily",
     features: [
-      "Unlimited word checks",
-      "2,000 words per check",
+      "50,000 words monthly",
+      "5,000 words per check",
       "Advanced grammar fixes",
       "All languages supported",
       "Detailed explanations",
       "Check history (30 days)",
       "Priority processing",
       "Export to Word/PDF",
+      "1 word = 1 credit",
     ],
     limitations: [],
     cta: "Go Pro",
     popular: true,
+  },
+  {
+    name: "Enterprise",
+    icon: Building2,
+    price: "Custom",
+    period: "contact us",
+    description: "Tailored solutions for teams and organizations",
+    features: [
+      "Everything in Pro",
+      "Unlimited team members",
+      "Custom word limits",
+      "Dedicated account manager",
+      "API access",
+      "Custom integrations",
+      "Advanced analytics & reporting",
+      "Priority 24/7 support",
+      "Custom SLA agreements",
+      "Team training sessions",
+      "White-label options",
+    ],
+    limitations: [],
+    cta: "Contact Sales",
+    popular: false,
+    isEnterprise: true,
   },
 ];
 
@@ -170,16 +195,19 @@ const Pricing = () => {
         {/* Pricing Cards */}
         <section className="pb-20 px-4">
           <div className="container max-w-6xl mx-auto">
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {plans.map((plan) => {
                 const isCurrent = plan.name === currentPlan;
                 const canUpgrade = plan.name === "Pro" && currentPlan !== "Pro";
                 const canDowngrade = plan.name === "Free" && currentPlan === "Pro";
+                const isEnterprise = plan.isEnterprise || false;
                 const ctaLabel = isCurrent
                   ? "Current Plan"
                   : plan.name === "Pro"
                     ? "Go Pro"
-                    : "Free Plan";
+                    : isEnterprise
+                      ? "Contact Sales"
+                      : "Free Plan";
 
                 return (
                 <div
@@ -243,6 +271,16 @@ const Pricing = () => {
                         {ctaLabel}
                       </Button>
                     </Link>
+                  ) : isEnterprise ? (
+                    <a href="mailto:support@correctnow.app?subject=Enterprise%20Plan%20Inquiry">
+                      <Button
+                        variant="accent"
+                        className="w-full mb-6 flex items-center gap-2"
+                      >
+                        <Mail className="w-4 h-4" />
+                        {ctaLabel}
+                      </Button>
+                    </a>
                   ) : canDowngrade ? (
                     <Button
                       variant="destructive"
@@ -260,6 +298,18 @@ const Pricing = () => {
                     >
                       {ctaLabel}
                     </Button>
+                  )}
+
+                  {isEnterprise && (
+                    <p className="text-sm text-muted-foreground text-center mb-6">
+                      Contact us at{" "}
+                      <a 
+                        href="mailto:support@correctnow.app" 
+                        className="text-accent hover:underline"
+                      >
+                        support@correctnow.app
+                      </a>
+                    </p>
                   )}
 
                   <div className="space-y-3 flex-1">

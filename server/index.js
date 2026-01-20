@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync } from "fs";
 import Razorpay from "razorpay";
+import Stripe from "stripe";
 import crypto from "crypto";
 import admin from "firebase-admin";
 
@@ -89,7 +90,7 @@ app.post("/api/razorpay/webhook", express.raw({ type: "application/json" }), asy
       if (eventName === "subscription.charged") {
         await updateUsersBySubscriptionId(subscriptionId, {
           plan: "pro",
-          wordLimit: 2000,
+          wordLimit: 5000,
           credits: 50000,
           creditsUsed: 0,
           creditsResetDate: nowIso,
@@ -129,15 +130,199 @@ app.post("/api/razorpay/webhook", express.raw({ type: "application/json" }), asy
   return res.status(200).json({ status: "ok" });
 });
 
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  
+  if (!sig || !webhookSecret) {
+    return res.status(400).json({ error: "Missing signature or webhook secret" });
+  }
+
+  const stripe = getStripe();
+  if (!stripe) {
+    return res.status(500).json({ error: "Stripe not configured" });
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    console.error("Stripe webhook signature verification failed:", err.message);
+    return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+  }
+
+  console.log("Stripe webhook event:", event.type);
+
+  try {
+    const nowIso = new Date().toISOString();
+    
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        const customerId = session.customer;
+        const subscriptionId = session.subscription;
+        const metadata = session.metadata || {};
+        const userId = metadata.userId;
+        
+        if (!userId || !adminDb) break;
+        
+        const userRef = adminDb.collection("users").doc(userId);
+        
+        if (metadata.type === "credits") {
+          // Credit purchase
+          const credits = Number(metadata.credits || 0);
+          const userSnap = await userRef.get();
+          const currentCredits = userSnap.exists ? Number(userSnap.data()?.credits || 0) : 0;
+          
+          await userRef.set({
+            credits: currentCredits + credits,
+            creditsUpdatedAt: nowIso,
+            updatedAt: nowIso,
+          }, { merge: true });
+        } else {
+          // Subscription purchase
+          await userRef.set({
+            plan: "pro",
+            wordLimit: 5000,
+            credits: 50000,
+            creditsUsed: 0,
+            creditsResetDate: nowIso,
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscriptionId,
+            subscriptionStatus: "active",
+            subscriptionUpdatedAt: nowIso,
+            updatedAt: nowIso,
+          }, { merge: true });
+        }
+        break;
+      }
+      
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object;
+        const subscriptionId = subscription.id;
+        const status = subscription.status;
+        
+        if (!adminDb || !subscriptionId) break;
+        
+        const snapshot = await adminDb
+          .collection("users")
+          .where("stripeSubscriptionId", "==", subscriptionId)
+          .get();
+          
+        if (snapshot.empty) break;
+        
+        const batch = adminDb.batch();
+        const updates = {};
+        
+        if (status === "active") {
+          updates.plan = "pro";
+          updates.wordLimit = 5000;
+          updates.credits = 50000;
+          updates.creditsUsed = 0;
+          updates.creditsResetDate = nowIso;
+          updates.subscriptionStatus = "active";
+        } else if (["canceled", "unpaid"].includes(status)) {
+          updates.plan = "free";
+          updates.wordLimit = 200;
+          updates.credits = 0;
+          updates.creditsUsed = 0;
+          updates.subscriptionStatus = status;
+        } else if (status === "past_due") {
+          updates.subscriptionStatus = "past_due";
+        }
+        
+        updates.subscriptionUpdatedAt = nowIso;
+        updates.updatedAt = nowIso;
+        
+        snapshot.forEach((doc) => {
+          batch.set(doc.ref, updates, { merge: true });
+        });
+        
+        await batch.commit();
+        break;
+      }
+      
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+        const subscriptionId = invoice.subscription;
+        
+        if (!adminDb || !subscriptionId) break;
+        
+        const snapshot = await adminDb
+          .collection("users")
+          .where("stripeSubscriptionId", "==", subscriptionId)
+          .get();
+          
+        if (snapshot.empty) break;
+        
+        const batch = adminDb.batch();
+        snapshot.forEach((doc) => {
+          batch.set(doc.ref, {
+            plan: "pro",
+            wordLimit: 5000,
+            credits: 50000,
+            creditsUsed: 0,
+            creditsResetDate: nowIso,
+            subscriptionStatus: "active",
+            subscriptionUpdatedAt: nowIso,
+            updatedAt: nowIso,
+          }, { merge: true });
+        });
+        
+        await batch.commit();
+        break;
+      }
+      
+      case "invoice.payment_failed": {
+        const invoice = event.data.object;
+        const subscriptionId = invoice.subscription;
+        
+        if (!adminDb || !subscriptionId) break;
+        
+        const snapshot = await adminDb
+          .collection("users")
+          .where("stripeSubscriptionId", "==", subscriptionId)
+          .get();
+          
+        if (snapshot.empty) break;
+        
+        const batch = adminDb.batch();
+        snapshot.forEach((doc) => {
+          batch.set(doc.ref, {
+            subscriptionStatus: "past_due",
+            subscriptionUpdatedAt: nowIso,
+            updatedAt: nowIso,
+          }, { merge: true });
+        });
+        
+        await batch.commit();
+        break;
+      }
+    }
+    
+    res.json({ received: true });
+  } catch (error) {
+    console.error("Stripe webhook error:", error);
+    res.status(500).json({ error: "Webhook processing failed" });
+  }
+});
+
 app.use(express.json({ limit: "1mb" }));
 
-const WORD_LIMIT = 2000;
+const WORD_LIMIT = 5000;
 
 const getRazorpay = () => {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
   if (!keyId || !keySecret) return null;
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
+};
+
+const getStripe = () => {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) return null;
+  return new Stripe(secretKey, { apiVersion: "2024-11-20.acacia" });
 };
 
 app.get("/api/health", (_req, res) => {
@@ -219,9 +404,18 @@ app.post("/api/razorpay/order", async (req, res) => {
 
 app.post("/api/razorpay/subscription", async (req, res) => {
   try {
+    console.log("Razorpay subscription request received");
+    console.log("Environment check:", {
+      hasKeyId: !!process.env.RAZORPAY_KEY_ID,
+      hasKeySecret: !!process.env.RAZORPAY_KEY_SECRET,
+    });
+
     const razorpay = getRazorpay();
     if (!razorpay) {
-      return res.status(500).json({ message: "Razorpay is not configured" });
+      console.error("Razorpay not configured - missing RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET");
+      return res.status(500).json({ 
+        message: "Razorpay is not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET environment variables." 
+      });
     }
 
     const requestedPlanId = req.body?.planId;
@@ -233,19 +427,22 @@ app.post("/api/razorpay/subscription", async (req, res) => {
     let planId = requestedPlanId || process.env.RAZORPAY_PLAN_ID;
 
     if (!planId) {
+      console.log("Creating new Razorpay plan");
       const plan = await razorpay.plans.create({
         period,
         interval,
         item: {
           name: "CorrectNow Pro",
-          amount: 100,
+          amount: 50000, // ₹500 in paise
           currency: "INR",
-          description: "Monthly subscription",
+          description: "Monthly Pro subscription - 2000 word limit, 50,000 credits",
         },
       });
       planId = plan.id;
+      console.log("Plan created:", planId);
     }
 
+    console.log("Creating subscription with plan:", planId);
     const totalCount = Number(req.body?.totalCount ?? 12);
     const subscription = await razorpay.subscriptions.create({
       plan_id: planId,
@@ -254,10 +451,107 @@ app.post("/api/razorpay/subscription", async (req, res) => {
       notes: { plan: "pro" },
     });
 
+    console.log("Subscription created successfully:", subscription.id);
     return res.json(subscription);
   } catch (err) {
     console.error("Razorpay subscription error:", err);
-    return res.status(500).json({ message: "Failed to create subscription" });
+    console.error("Error details:", {
+      message: err.message,
+      statusCode: err.statusCode,
+      error: err.error,
+    });
+    return res.status(500).json({ 
+      message: "Failed to create subscription",
+      error: err.message,
+      details: err.error?.description || err.error?.reason || "Unknown error"
+    });
+  }
+});
+
+app.get("/api/stripe/config", (_req, res) => {
+  const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+  if (!publishableKey) {
+    return res.status(500).json({ message: "Missing STRIPE_PUBLISHABLE_KEY" });
+  }
+  return res.json({ publishableKey });
+});
+
+app.post("/api/stripe/create-checkout-session", async (req, res) => {
+  try {
+    const stripe = getStripe();
+    if (!stripe) {
+      return res.status(500).json({ message: "Stripe is not configured" });
+    }
+
+    const { userId, userEmail, type, credits, amount } = req.body;
+    
+    if (!userId || !userEmail) {
+      return res.status(400).json({ message: "User ID and email required" });
+    }
+
+    const baseUrl = process.env.VITE_API_BASE_URL || "http://localhost:8787";
+    const clientUrl = baseUrl.replace(/:\d+$/, ":5173"); // Assume client on 5173
+
+    let sessionConfig = {
+      payment_method_types: ["card"],
+      mode: type === "credits" ? "payment" : "subscription",
+      customer_email: userEmail,
+      success_url: `${clientUrl}/?payment=success`,
+      cancel_url: `${clientUrl}/payment?payment=cancelled`,
+      metadata: {
+        userId,
+      },
+    };
+
+    if (type === "credits") {
+      // One-time credit purchase
+      const creditAmount = Number(amount || 50);
+      sessionConfig.line_items = [{
+        price_data: {
+          currency: "inr",
+          product_data: {
+            name: `${credits || 10000} Credits Pack`,
+            description: "Credits for extra checks",
+          },
+          unit_amount: Math.round(creditAmount * 100), // Convert to paise
+        },
+        quantity: 1,
+      }];
+      sessionConfig.metadata.type = "credits";
+      sessionConfig.metadata.credits = String(credits || 10000);
+    } else {
+      // Subscription
+      let priceId = process.env.STRIPE_PRICE_ID;
+      
+      if (!priceId) {
+        // Create a price if not configured
+        const product = await stripe.products.create({
+          name: "CorrectNow Pro",
+          description: "Monthly subscription",
+        });
+        
+        const price = await stripe.prices.create({
+          product: product.id,
+          unit_amount: 4900, // ₹1 in paise (for testing)
+          currency: "inr",
+          recurring: { interval: "month" },
+        });
+        
+        priceId = price.id;
+      }
+      
+      sessionConfig.line_items = [{
+        price: priceId,
+        quantity: 1,
+      }];
+      sessionConfig.metadata.type = "subscription";
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (err) {
+    console.error("Stripe checkout session error:", err);
+    res.status(500).json({ message: "Failed to create checkout session" });
   }
 });
 

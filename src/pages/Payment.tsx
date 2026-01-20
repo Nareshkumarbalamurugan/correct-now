@@ -23,7 +23,7 @@ declare global {
 
 const Payment = () => {
   const [paymentMethod, setPaymentMethod] = useState("card");
-  const [cardProvider, setCardProvider] = useState("razorpay");
+  const [cardProvider, setCardProvider] = useState("stripe");
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
   const [subscriptionStatus, setSubscriptionStatus] = useState("");
@@ -93,6 +93,38 @@ const Payment = () => {
     e.preventDefault();
     setIsProcessing(true);
     try {
+      const auth = getFirebaseAuth();
+      const user = auth?.currentUser;
+      const db = getFirebaseDb();
+      
+      if (!user) {
+        throw new Error("Please sign in to continue");
+      }
+
+      // Handle Stripe payment
+      if (paymentMethod === "card" && cardProvider === "stripe") {
+        const checkoutRes = await fetch(`${apiBase}/api/stripe/create-checkout-session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.uid,
+            userEmail: user.email,
+            type: isCreditPurchase ? "credits" : "subscription",
+            credits: isCreditPurchase ? creditPack.credits : undefined,
+            amount: isCreditPurchase ? creditPack.price : 500,
+          }),
+        });
+        
+        if (!checkoutRes.ok) {
+          throw new Error("Failed to create Stripe checkout session");
+        }
+        
+        const { url } = await checkoutRes.json();
+        window.location.href = url;
+        return;
+      }
+
+      // Handle Razorpay payment
       const scriptLoaded = await loadRazorpay();
       if (!scriptLoaded) {
         throw new Error("Razorpay SDK failed to load");
@@ -101,10 +133,6 @@ const Payment = () => {
       const keyRes = await fetch(`${apiBase}/api/razorpay/key`);
       if (!keyRes.ok) throw new Error("Unable to fetch payment key");
       const { keyId } = await keyRes.json();
-
-      const auth = getFirebaseAuth();
-      const user = auth?.currentUser;
-      const db = getFirebaseDb();
 
       if (isCreditPurchase) {
         if (!user || !db) {
@@ -163,7 +191,7 @@ const Payment = () => {
       const subRes = await fetch(`${apiBase}/api/razorpay/subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totalCount: 1, period: "daily", interval: 1 }),
+        body: JSON.stringify({ totalCount: 12, period: "monthly", interval: 1 }),
       });
       if (!subRes.ok) throw new Error("Unable to create subscription");
       const subscription = await subRes.json();
@@ -220,12 +248,11 @@ const Payment = () => {
       <header className="border-b border-border bg-background/95 backdrop-blur">
         <div className="container flex h-16 items-center">
           <Link to="/" className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-accent">
-              <CheckCircle className="w-5 h-5 text-accent-foreground" />
-            </div>
-            <span className="text-xl font-semibold text-foreground">
-              CorrectNow
-            </span>
+            <img 
+              src="/Icon/correctnow logo final2.png" 
+              alt="CorrectNow"
+              className="w-32 h-20 object-contain"
+            />
           </Link>
         </div>
       </header>
@@ -307,18 +334,6 @@ const Payment = () => {
                     className="grid grid-cols-2 gap-4"
                   >
                     <Label
-                      htmlFor="razorpay"
-                      className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                        cardProvider === "razorpay"
-                          ? "border-accent bg-accent/5"
-                          : "border-border hover:border-accent/50"
-                      }`}
-                    >
-                      <RadioGroupItem value="razorpay" id="razorpay" />
-                      <CreditCard className="w-5 h-5 text-muted-foreground" />
-                      <span>Razorpay</span>
-                    </Label>
-                    <Label
                       htmlFor="stripe"
                       className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
                         cardProvider === "stripe"
@@ -330,12 +345,19 @@ const Payment = () => {
                       <CreditCard className="w-5 h-5 text-muted-foreground" />
                       <span>Stripe</span>
                     </Label>
+                    <Label
+                      htmlFor="razorpay"
+                      className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                        cardProvider === "razorpay"
+                          ? "border-accent bg-accent/5"
+                          : "border-border hover:border-accent/50"
+                      }`}
+                    >
+                      <RadioGroupItem value="razorpay" id="razorpay" />
+                      <CreditCard className="w-5 h-5 text-muted-foreground" />
+                      <span>Razorpay</span>
+                    </Label>
                   </RadioGroup>
-                  {cardProvider === "stripe" && (
-                    <p className="text-sm text-muted-foreground">
-                      Stripe checkout will be enabled once Stripe keys are configured.
-                    </p>
-                  )}
                 </div>
               ) : null}
 
@@ -345,7 +367,6 @@ const Payment = () => {
                 className="w-full h-12 text-base"
                 disabled={
                   isProcessing ||
-                  (paymentMethod === "card" && cardProvider === "stripe") ||
                   (isCreditPurchase && !canBuyCredits)
                 }
               >
@@ -430,8 +451,9 @@ const Payment = () => {
                         "Credits never expire",
                       ]
                     : [
-                        "2,000 words per check",
-                        "Unlimited checks",
+                        "5,000 words per check",
+                        "50,000 words monthly",
+                        "1 word = 1 credit",
                         "Advanced grammar fixes",
                         "Check history (30 days)",
                         "Priority processing",
