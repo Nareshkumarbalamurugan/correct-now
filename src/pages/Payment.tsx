@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -10,10 +9,11 @@ import {
   ArrowLeft,
   Smartphone,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
-import { doc as firestoreDoc, setDoc } from "firebase/firestore";
+import { doc as firestoreDoc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 declare global {
   interface Window {
@@ -23,9 +23,56 @@ declare global {
 
 const Payment = () => {
   const [paymentMethod, setPaymentMethod] = useState("card");
+  const [cardProvider, setCardProvider] = useState("razorpay");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
+  const [subscriptionStatus, setSubscriptionStatus] = useState("");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";
+  const isCreditPurchase = searchParams.get("mode") === "credits";
+  const creditPack = { credits: 10000, price: 1 };
+  const canBuyCredits = currentPlan === "Pro" && String(subscriptionStatus).toLowerCase() === "active";
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    const db = getFirebaseDb();
+    if (!auth || !db) return;
+
+    let snapUnsub: (() => void) | undefined;
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (snapUnsub) {
+        snapUnsub();
+        snapUnsub = undefined;
+      }
+      if (!user) {
+        setCurrentPlan("Free");
+        setSubscriptionStatus("");
+        return;
+      }
+      const ref = firestoreDoc(db, `users/${user.uid}`);
+      snapUnsub = onSnapshot(ref, (snap) => {
+        const data = snap.exists() ? snap.data() : {};
+        const planField = String(data?.plan || "").toLowerCase();
+        const entitlementPlan = Number(data?.wordLimit) >= 2000 || planField === "pro";
+        const status = String(data?.subscriptionStatus || "").toLowerCase();
+        const updatedAt = data?.subscriptionUpdatedAt
+          ? new Date(String(data.subscriptionUpdatedAt))
+          : null;
+        const isRecent = updatedAt
+          ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
+          : false;
+        const isActive = status === "active" && (updatedAt ? isRecent : true);
+        setCurrentPlan(isActive && entitlementPlan ? "Pro" : "Free");
+        setSubscriptionStatus(status);
+      });
+    });
+
+    return () => {
+      if (snapUnsub) snapUnsub();
+      unsub();
+    };
+  }, []);
 
   const loadRazorpay = () =>
     new Promise<boolean>((resolve) => {
@@ -50,16 +97,71 @@ const Payment = () => {
       if (!keyRes.ok) throw new Error("Unable to fetch payment key");
       const { keyId } = await keyRes.json();
 
+      const auth = getFirebaseAuth();
+      const user = auth?.currentUser;
+      const db = getFirebaseDb();
+
+      if (isCreditPurchase) {
+        if (!user || !db) {
+          throw new Error("Please sign in to buy credits");
+        }
+        if (!canBuyCredits) {
+          throw new Error("Credits add-ons are available for active Pro plans only");
+        }
+
+        const orderRes = await fetch(`${apiBase}/api/razorpay/order`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: creditPack.price, credits: creditPack.credits }),
+        });
+        if (!orderRes.ok) throw new Error("Unable to create order");
+        const order = await orderRes.json();
+
+        const options = {
+          key: keyId,
+          order_id: order.id,
+          name: "CorrectNow",
+          description: `${creditPack.credits.toLocaleString()} credits pack`,
+          image: "/Icon/correctnow logo final2.png",
+          method: paymentMethod === "upi" ? { upi: true } : { card: true, upi: false },
+          prefill: {
+            name: user?.displayName || "",
+            email: user?.email || "",
+          },
+          theme: { color: "#2563EB" },
+          handler: async () => {
+            const ref = firestoreDoc(db, `users/${user.uid}`);
+            const snap = await getDoc(ref);
+            const currentCredits = Number(snap.exists() ? snap.data()?.credits : 0) || 0;
+            await setDoc(
+              ref,
+              {
+                credits: currentCredits + creditPack.credits,
+                creditsUpdatedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            );
+            toast.success("Credits added successfully");
+            navigate("/");
+          },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on("payment.failed", (response: any) => {
+          toast.error(response?.error?.description || "Payment failed");
+        });
+        rzp.open();
+        return;
+      }
+
       const subRes = await fetch(`${apiBase}/api/razorpay/subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totalCount: 12 }),
+        body: JSON.stringify({ totalCount: 1, period: "daily", interval: 1 }),
       });
       if (!subRes.ok) throw new Error("Unable to create subscription");
       const subscription = await subRes.json();
-
-      const auth = getFirebaseAuth();
-      const user = auth?.currentUser;
 
       const options = {
         key: keyId,
@@ -67,13 +169,13 @@ const Payment = () => {
         name: "CorrectNow",
         description: "Pro plan subscription",
         image: "/Icon/correctnow logo final2.png",
+        method: paymentMethod === "upi" ? { upi: true } : { card: true, upi: false },
         prefill: {
           name: user?.displayName || "",
           email: user?.email || "",
         },
-        theme: { color: "#2293fd" },
+        theme: { color: "#2563EB" },
         handler: async () => {
-          const db = getFirebaseDb();
           if (user && db) {
             const ref = firestoreDoc(db, `users/${user.uid}`);
             await setDoc(
@@ -136,11 +238,24 @@ const Payment = () => {
           {/* Payment Form */}
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">
-              Complete your purchase
+              {isCreditPurchase ? "Buy add-on credits" : "Complete your purchase"}
             </h1>
             <p className="text-muted-foreground mb-8">
-              You're upgrading to the Pro plan
+              {isCreditPurchase
+                ? "Add extra credits to keep checking without interruptions"
+                : "You're upgrading to the Pro plan"}
             </p>
+
+            {isCreditPurchase && !canBuyCredits && (
+              <div className="mb-6 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                Credits add-ons are available only for active Pro subscribers.
+                <div className="mt-2">
+                  <Link to="/payment" className="text-accent hover:underline">
+                    Start Pro subscription
+                  </Link>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-8">
               {/* Payment Method Selection */}
@@ -179,97 +294,55 @@ const Payment = () => {
               </div>
 
               {paymentMethod === "card" ? (
-                <>
-                  {/* Card Details */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="cardName">Name on card</Label>
-                      <Input
-                        id="cardName"
-                        placeholder="John Doe"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cardNumber">Card number</Label>
-                      <div className="relative">
-                        <Input
-                          id="cardNumber"
-                          placeholder="1234 5678 9012 3456"
-                          className="pr-12"
-                          required
-                        />
-                        <CreditCard className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="expiry">Expiry date</Label>
-                        <Input id="expiry" placeholder="MM/YY" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cvv">CVV</Label>
-                        <Input
-                          id="cvv"
-                          placeholder="123"
-                          type="password"
-                          maxLength={4}
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="upiId">UPI ID</Label>
-                    <Input
-                      id="upiId"
-                      placeholder="yourname@upi"
-                      required
-                    />
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    You'll receive a payment request on your UPI app
-                  </p>
+                  <Label className="text-base font-medium">Card Provider</Label>
+                  <RadioGroup
+                    value={cardProvider}
+                    onValueChange={setCardProvider}
+                    className="grid grid-cols-2 gap-4"
+                  >
+                    <Label
+                      htmlFor="razorpay"
+                      className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                        cardProvider === "razorpay"
+                          ? "border-accent bg-accent/5"
+                          : "border-border hover:border-accent/50"
+                      }`}
+                    >
+                      <RadioGroupItem value="razorpay" id="razorpay" />
+                      <CreditCard className="w-5 h-5 text-muted-foreground" />
+                      <span>Razorpay</span>
+                    </Label>
+                    <Label
+                      htmlFor="stripe"
+                      className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                        cardProvider === "stripe"
+                          ? "border-accent bg-accent/5"
+                          : "border-border hover:border-accent/50"
+                      }`}
+                    >
+                      <RadioGroupItem value="stripe" id="stripe" />
+                      <CreditCard className="w-5 h-5 text-muted-foreground" />
+                      <span>Stripe</span>
+                    </Label>
+                  </RadioGroup>
+                  {cardProvider === "stripe" && (
+                    <p className="text-sm text-muted-foreground">
+                      Stripe checkout will be enabled once Stripe keys are configured.
+                    </p>
+                  )}
                 </div>
-              )}
-
-              {/* Billing Address */}
-              <div className="space-y-4">
-                <Label className="text-base font-medium">Billing Address</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="country">Country</Label>
-                    <Input id="country" placeholder="India" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Input id="state" placeholder="Maharashtra" required />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
-                  <Input id="address" placeholder="123 Main Street" required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input id="city" placeholder="Mumbai" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="zip">ZIP / Postal code</Label>
-                    <Input id="zip" placeholder="400001" required />
-                  </div>
-                </div>
-              </div>
+              ) : null}
 
               <Button
                 type="submit"
                 variant="accent"
                 className="w-full h-12 text-base"
-                disabled={isProcessing}
+                disabled={
+                  isProcessing ||
+                  (paymentMethod === "card" && cardProvider === "stripe") ||
+                  (isCreditPurchase && !canBuyCredits)
+                }
               >
                 {isProcessing ? (
                   <span className="flex items-center gap-2">
@@ -277,7 +350,7 @@ const Payment = () => {
                     Processing...
                   </span>
                 ) : (
-                  "Pay ₹1"
+                  `Pay ₹${isCreditPurchase ? creditPack.price : 1}`
                 )}
               </Button>
 
@@ -309,22 +382,31 @@ const Payment = () => {
               <div className="border-t border-border pt-4 mb-6">
                 <div className="flex justify-between text-lg font-semibold">
                   <span className="text-foreground">Total due today</span>
-                  <span className="text-foreground">₹1</span>
+                  <span className="text-foreground">
+                    ₹{isCreditPurchase ? creditPack.price : 1}
+                  </span>
                 </div>
               </div>
 
               <div className="bg-accent/10 rounded-lg p-4 mb-6">
                 <h3 className="font-medium text-foreground mb-2">
-                  What's included:
+                  {isCreditPurchase ? "Credits pack" : "What's included:"}
                 </h3>
                 <ul className="space-y-2">
-                  {[
-                    "2,000 words per check",
-                    "Unlimited checks",
-                    "Advanced grammar fixes",
-                    "Check history (30 days)",
-                    "Priority processing",
-                  ].map((feature) => (
+                  {(isCreditPurchase
+                    ? [
+                        `${creditPack.credits.toLocaleString()} credits added`,
+                        "Use credits for extra checks",
+                        "Credits never expire",
+                      ]
+                    : [
+                        "2,000 words per check",
+                        "Unlimited checks",
+                        "Advanced grammar fixes",
+                        "Check history (30 days)",
+                        "Priority processing",
+                      ]
+                  ).map((feature) => (
                     <li
                       key={feature}
                       className="flex items-center gap-2 text-sm text-muted-foreground"

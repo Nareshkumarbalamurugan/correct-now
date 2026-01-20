@@ -1,9 +1,13 @@
+import { useEffect, useState } from "react";
 import { Check, Zap, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Link } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc as firestoreDoc, onSnapshot } from "firebase/firestore";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 
 const plans = [
   {
@@ -50,6 +54,50 @@ const plans = [
 ];
 
 const Pricing = () => {
+  const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    const db = getFirebaseDb();
+    if (!auth || !db) return;
+
+    let snapUnsub: (() => void) | undefined;
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (snapUnsub) {
+        snapUnsub();
+        snapUnsub = undefined;
+      }
+      if (!user) {
+        setCurrentPlan("Free");
+        return;
+      }
+
+      const ref = firestoreDoc(db, `users/${user.uid}`);
+      snapUnsub = onSnapshot(ref, (snap) => {
+        const data = snap.exists() ? snap.data() : {};
+        const planField = String(data?.plan || "").toLowerCase();
+        const entitlementPlan =
+          Number(data?.wordLimit) >= 2000 || planField === "pro";
+        const status = String(data?.subscriptionStatus || "").toLowerCase();
+        const hasStatus = Boolean(status);
+        const updatedAt = data?.subscriptionUpdatedAt
+          ? new Date(String(data.subscriptionUpdatedAt))
+          : null;
+        const isRecent = updatedAt
+          ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
+          : false;
+        const isActive = status === "active" && (updatedAt ? isRecent : true);
+        const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
+        setCurrentPlan(plan);
+      });
+    });
+
+    return () => {
+      if (snapUnsub) snapUnsub();
+      unsub();
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
@@ -74,23 +122,41 @@ const Pricing = () => {
         <section className="pb-20 px-4">
           <div className="container max-w-6xl mx-auto">
             <div className="grid md:grid-cols-2 gap-8">
-              {plans.map((plan) => (
+              {plans.map((plan) => {
+                const isCurrent = plan.name === currentPlan;
+                const canUpgrade = plan.name === "Pro" && currentPlan !== "Pro";
+                const ctaLabel = isCurrent
+                  ? "Current Plan"
+                  : plan.name === "Pro"
+                    ? "Go Pro"
+                    : "Free Plan";
+
+                return (
                 <div
                   key={plan.name}
                   className={`relative rounded-2xl border ${
-                    plan.popular
-                      ? "border-accent bg-accent/5 shadow-lg shadow-accent/10"
-                      : "border-border bg-card"
+                    isCurrent
+                      ? "border-accent bg-accent/10 shadow-lg shadow-accent/20"
+                      : plan.popular
+                        ? "border-accent bg-accent/5 shadow-lg shadow-accent/10"
+                        : "border-border bg-card"
                   } p-8 flex flex-col`}
                 >
-                  {plan.popular && (
+                  {isCurrent ? (
+                    <Badge
+                      variant="default"
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent text-accent-foreground"
+                    >
+                      Current Plan
+                    </Badge>
+                  ) : plan.popular ? (
                     <Badge
                       variant="default"
                       className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent text-accent-foreground"
                     >
                       Most Popular
                     </Badge>
-                  )}
+                  ) : null}
 
                   <div className="flex items-center gap-3 mb-4">
                     <div
@@ -118,14 +184,24 @@ const Pricing = () => {
 
                   <p className="text-muted-foreground mb-6">{plan.description}</p>
 
-                  <Link to={"/payment"}>
+                  {canUpgrade ? (
+                    <Link to="/payment">
+                      <Button
+                        variant="accent"
+                        className="w-full mb-6"
+                      >
+                        {ctaLabel}
+                      </Button>
+                    </Link>
+                  ) : (
                     <Button
-                      variant={plan.popular ? "accent" : "outline"}
+                      variant={isCurrent ? "accent" : "outline"}
                       className="w-full mb-6"
+                      disabled
                     >
-                      {plan.cta}
+                      {ctaLabel}
                     </Button>
-                  </Link>
+                  )}
 
                   <div className="space-y-3 flex-1">
                     {plan.features.map((feature) => (
@@ -147,7 +223,8 @@ const Pricing = () => {
                     ))}
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           </div>
         </section>

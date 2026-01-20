@@ -32,7 +32,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
       <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-primary/10" />
 
-      <div className="container relative z-10 py-20 md:py-28 lg:py-32">
+      <div className="container relative z-10 py-28 md:py-36 lg:py-40">
         <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
           {/* Left: copy + CTAs */}
           <div className="text-center lg:text-left">
@@ -41,17 +41,17 @@ const Hero = ({ onGetStarted }: HeroProps) => {
               AI proofreading — clean, professional grammar
             </div>
 
-            <h1 className="animate-slide-up text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.06] tracking-tight text-white">
+            <h1 className="animate-slide-up text-5xl sm:text-6xl md:text-7xl font-extrabold leading-[1.06] tracking-tight text-white">
               Write with confidence.
               <span className="block mt-2">Proofread instantly.</span>
             </h1>
 
-            <p className="animate-slide-up mt-5 text-lg md:text-xl text-white/90 leading-relaxed max-w-xl mx-auto lg:mx-0">
+            <p className="animate-slide-up mt-6 text-xl md:text-2xl text-white/90 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-medium">
               CorrectNow fixes spelling mistakes and grammar issues across global languages
               (including Hindi, Tamil, and Bengali) — without rewriting your tone.
             </p>
 
-            <div className="animate-slide-up mt-7 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+            <div className="animate-slide-up mt-8 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
               <Button
                 variant="hero"
                 onClick={onGetStarted}
@@ -86,7 +86,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
               </div>
             )}
 
-            <div className="animate-fade-in mt-7 flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center lg:justify-start text-white/85 text-sm">
+            <div className="animate-fade-in mt-8 flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center lg:justify-start text-white text-base font-semibold drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4" />
                 No rewriting
@@ -103,7 +103,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
           </div>
 
           {/* Right: live preview (adds “stunning” without gimmicks) */}
-          <div className="relative">
+          <div className="relative space-y-6">
             <div className="absolute -inset-4 rounded-3xl bg-white/10 blur-2xl" />
             <div className="relative rounded-2xl bg-white border border-white/30 shadow-elevated p-6 md:p-7">
               <div className="flex items-center justify-between gap-4 mb-5">
@@ -144,6 +144,30 @@ const Hero = ({ onGetStarted }: HeroProps) => {
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="relative rounded-2xl border border-white/40 bg-white/20 backdrop-blur-md p-5 text-white shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+              <div className="text-sm font-bold uppercase tracking-wide text-white/80 mb-3">
+                Why CorrectNow
+              </div>
+              <ul className="space-y-3 text-base font-semibold">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Correct all global languages
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Grammerly alternative
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  More to improve
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Trusted by professionals worldwide
+                </li>
+              </ul>
             </div>
           </div>
         </div>

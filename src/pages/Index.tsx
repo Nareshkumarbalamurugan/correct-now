@@ -128,7 +128,7 @@ const Index = () => {
 
       <main className="flex-1 pt-2 pb-0">
         <section className="mb-0">
-          <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_30px_80px_rgba(34,147,253,0.35)]">
+          <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_30px_80px_rgba(37,99,235,0.35)]">
             <div className="absolute inset-0 opacity-25">
               <div className="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-white/25 blur-3xl" />
               <div className="absolute -bottom-24 -left-16 h-80 w-80 rounded-full bg-white/20 blur-3xl" />

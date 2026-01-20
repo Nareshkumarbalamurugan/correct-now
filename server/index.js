@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { existsSync } from "fs";
 import Razorpay from "razorpay";
 import crypto from "crypto";
+import admin from "firebase-admin";
 
 dotenv.config();
 
@@ -15,9 +16,42 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, "..", "dist");
 
+const initAdminDb = () => {
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!serviceAccount) return null;
+  try {
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(JSON.parse(serviceAccount)),
+      });
+    }
+    return admin.firestore();
+  } catch (err) {
+    console.error("Firebase admin init error:", err);
+    return null;
+  }
+};
+
+const adminDb = initAdminDb();
+
+const updateUsersBySubscriptionId = async (subscriptionId, updates) => {
+  if (!adminDb || !subscriptionId) return;
+  const snapshot = await adminDb
+    .collection("users")
+    .where("subscriptionId", "==", subscriptionId)
+    .get();
+  if (snapshot.empty) return;
+
+  const batch = adminDb.batch();
+  snapshot.forEach((doc) => {
+    batch.set(doc.ref, updates, { merge: true });
+  });
+  await batch.commit();
+};
+
 app.use(cors());
 
-app.post("/api/razorpay/webhook", express.raw({ type: "application/json" }), (req, res) => {
+app.post("/api/razorpay/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   const signature = req.headers["x-razorpay-signature"];
   if (!secret || !signature) {
@@ -31,7 +65,52 @@ app.post("/api/razorpay/webhook", express.raw({ type: "application/json" }), (re
 
   try {
     const event = JSON.parse(req.body.toString("utf8"));
-    console.log("Razorpay webhook:", event?.event || "unknown");
+    const eventName = event?.event || "unknown";
+    console.log("Razorpay webhook:", eventName);
+
+    const subscriptionId =
+      event?.payload?.subscription?.entity?.id ||
+      event?.payload?.payment?.entity?.subscription_id ||
+      event?.payload?.invoice?.entity?.subscription_id ||
+      event?.payload?.subscription?.id ||
+      "";
+
+    if (adminDb && subscriptionId) {
+      const nowIso = new Date().toISOString();
+      if (eventName === "subscription.charged") {
+        await updateUsersBySubscriptionId(subscriptionId, {
+          plan: "pro",
+          wordLimit: 2000,
+          credits: 50000,
+          subscriptionStatus: "active",
+          subscriptionUpdatedAt: nowIso,
+          updatedAt: nowIso,
+        });
+      } else if (eventName === "payment.failed") {
+        await updateUsersBySubscriptionId(subscriptionId, {
+          plan: "free",
+          wordLimit: 200,
+          credits: 0,
+          subscriptionStatus: "past_due",
+          updatedAt: nowIso,
+        });
+      } else if (
+        [
+          "subscription.halted",
+          "subscription.cancelled",
+          "subscription.paused",
+          "subscription.completed",
+        ].includes(eventName)
+      ) {
+        await updateUsersBySubscriptionId(subscriptionId, {
+          plan: "free",
+          wordLimit: 200,
+          credits: 0,
+          subscriptionStatus: "inactive",
+          updatedAt: nowIso,
+        });
+      }
+    }
   } catch {
     return res.status(400).json({ message: "Invalid webhook payload" });
   }
@@ -70,12 +149,13 @@ app.post("/api/razorpay/order", async (req, res) => {
     }
 
     const amountInRupees = Number(req.body?.amount ?? 500);
+    const credits = Number(req.body?.credits ?? 0);
     const amount = Math.round(amountInRupees * 100);
     const order = await razorpay.orders.create({
       amount,
       currency: "INR",
       receipt: `rcpt_${Date.now()}`,
-      notes: { plan: "pro" },
+      notes: { plan: "pro", credits: credits || undefined },
     });
 
     return res.json(order);
@@ -93,12 +173,17 @@ app.post("/api/razorpay/subscription", async (req, res) => {
     }
 
     const requestedPlanId = req.body?.planId;
+    const requestedPeriod = String(req.body?.period || "monthly");
+    const period = ["daily", "weekly", "monthly", "yearly"].includes(requestedPeriod)
+      ? requestedPeriod
+      : "monthly";
+    const interval = Math.max(1, Number(req.body?.interval ?? 1));
     let planId = requestedPlanId || process.env.RAZORPAY_PLAN_ID;
 
     if (!planId) {
       const plan = await razorpay.plans.create({
-        period: "monthly",
-        interval: 1,
+        period,
+        interval,
         item: {
           name: "CorrectNow Pro",
           amount: 100,
@@ -166,11 +251,36 @@ app.post("/api/detect-language", async (req, res) => {
     const model = process.env.GEMINI_DETECT_MODEL || "gemini-2.5-flash";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const allowed = ["en","hi","ta","te","bn","mr","gu","kn","ml","pa","ur","fa","es","fr","de","pt","it","nl","sv","no","da","fi","pl","ro","tr","el","he","id","ms","th","vi","tl","sw","ru","uk","ja","ko","zh","ar","auto"];
+    const allowed = ["en","hi","ta","te","bn","mr","gu","kn","ml","pa","ur","fa","es","fr","de","pt","it","nl","sv","no","da","fi","pl","ro","tr","el","he","id","ms","th","vi","tl","sw","ru","uk","ja","ko","zh","ar","af","cs","hu","auto"];
     const prompt = `Detect the language of the text and return ONLY a JSON object with one field "code".
   Allowed codes: ${allowed.join(", ")}.
   Return the closest matching code. If unsure, return "auto".
   Important: Distinguish closely related languages carefully.
+  Examples that commonly look like English (DO NOT return "en" for these):
+  - French: "Ce document contient des informations importantes concernant l’organisation du système."
+  - German: "Dieses Dokument erklärt die Struktur und Funktion des Organisationssystems."
+  - Dutch: "Dit document beschrijft de structuur en organisatie van het systeem."
+  - Afrikaans: "Hierdie dokument verduidelik die struktuur en funksie van die organisasie."
+  - Spanish: "Este documento explica la estructura y organización del sistema."
+  - Portuguese: "Este documento explica a estrutura e organização do sistema."
+  - Italian: "Questo documento spiega la struttura e l’organizzazione del sistema."
+  Very confusing for detectors:
+  - Norwegian: "Dette dokumentet forklarer strukturen og organiseringen av systemet."
+  - Swedish: "Detta dokument förklarar strukturen och organisationen av systemet."
+  - Danish: "Dette dokument forklarer strukturen og organisationen af systemet."
+  - Romanian: "Acest document explică structura și organizarea sistemului."
+  - Czech: "Tento dokument vysvětluje strukturu a organizaci systému."
+  - Polish: "Ten dokument wyjaśnia strukturę i organizację systemu."
+  - Hungarian: "Ez a dokument elmagyarázza a rendszer struktúráját és szervezését."
+  Asian languages in Latin script:
+  - Indonesian: "Dokumen ini menjelaskan struktur dan organisasi sistem."
+  - Malay: "Dokumen ini menerangkan struktur dan organisasi sistem."
+  - Filipino/Tagalog: "Ipinapaliwanag ng dokumentong ito ang istruktura at organisasyon ng sistema."
+  Control languages (NEVER English):
+  - Tamil: "இந்த ஆவணம் அமைப்பின் கட்டமைப்பை விளக்குகிறது."
+  - Hindi: "यह दस्तावेज़ प्रणाली की संरचना को समझाता है।"
+  - Arabic: "تشرح هذه الوثيقة هيكل وتنظيم النظام."
+  - Chinese: "本文件解释了系统的结构和组织。"
   - French often includes: "je", "tu", "être", "réveillé", "bureau", "réunion", "très", accents (à â ç é è ê ë î ï ô ù û ü).
   - Spanish often includes: "yo", "tú", "porque", "reunión", "oficina", "muy", and ¿ ¡ punctuation.
   - Portuguese often includes: "você", "não", "obrigado", "amanhã".

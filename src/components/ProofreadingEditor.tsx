@@ -13,6 +13,7 @@ import { upsertDoc } from "@/lib/docs";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc as firestoreDoc, onSnapshot, setDoc } from "firebase/firestore";
+import { Link } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -74,56 +75,168 @@ const detectLanguageLocal = (text: string): string => {
   const hasThai = /[\u0E00-\u0E7F]/.test(text);
   if (hasThai) return "th";
 
+  const countMatches = (patterns: RegExp[]) =>
+    patterns.reduce((count, pattern) => count + ((text.match(pattern) || []).length), 0);
+
   const hasVietnamese = /[ăâđêôơưĂÂĐÊÔƠƯ]/i.test(text);
   const hasVietnameseWords = /\b(voi|ban|toi|khong|va|la|mot)\b/i.test(text);
   if (hasVietnamese || hasVietnameseWords) return "vi";
 
-  const hasFrench = /[àâçéèêëîïôùûüÿœæ]/i.test(text);
-  const hasFrenchWords = /\b(je|tu|il|elle|nous|vous|ils|elles|mon|ma|mes|être|était|suis|pas|très|réveillé|bureau|alarme|réunion)\b/i.test(text);
-  if (hasFrench || hasFrenchWords) return "fr";
+  const frenchSignals = [
+    /\bce document contient\b/i,
+    /\borganisation\b/i,
+    /\bsystème\b/i,
+    /\binformations\b/i,
+    /[àâçéèêëîïôùûüÿœæ]/i,
+  ];
+  if (countMatches(frenchSignals) >= 2) return "fr";
 
-  const hasSpanish = /[ñÑáÁéÉíÍóÓúÚüÜ¿¡]/.test(text);
-  const hasSpanishWords = /\b(yo|tú|él|ella|nosotros|vosotros|ellos|ellas|para|porque|muy|alarma|reunión|oficina)\b/i.test(text);
-  if (hasSpanish || hasSpanishWords) return "es";
+  const germanSignals = [
+    /\bdieses dokument\b/i,
+    /\berklärt\b/i,
+    /\bstruktur\b/i,
+    /\bfunktion\b/i,
+    /\borganisationssystem\b/i,
+    /[äöüß]/i,
+  ];
+  if (countMatches(germanSignals) >= 2) return "de";
 
-  const hasPortugueseWords = /\b(olá|você|não|para|porque|muito|obrigado|amanhã)\b/i.test(text);
-  if (hasPortugueseWords) return "pt";
+  const dutchSignals = [
+    /\bdit document\b/i,
+    /\bbeschrijft\b/i,
+    /\bstructuur\b/i,
+    /\borganisatie\b/i,
+  ];
+  if (countMatches(dutchSignals) >= 2) return "nl";
 
-  const hasItalianWords = /\b(ciao|non|perché|molto|grazie|domani|ufficio)\b/i.test(text);
-  if (hasItalianWords) return "it";
+  const afrikaansSignals = [
+    /\bhierdie dokument\b/i,
+    /\bverduidelik\b/i,
+    /\bstruktuur\b/i,
+    /\borganisasie\b/i,
+    /\bfunksie\b/i,
+  ];
+  if (countMatches(afrikaansSignals) >= 2) return "af";
 
-  const hasGermanWords = /\b(und|nicht|danke|bitte|heute|morgen|büro)\b/i.test(text);
-  if (hasGermanWords) return "de";
+  const spanishSignals = [
+    /\beste documento\b/i,
+    /\bexplica\b/i,
+    /\bestructura\b/i,
+    /\borganización\b/i,
+    /[ñÑáÁéÉíÍóÓúÚüÜ¿¡]/,
+  ];
+  if (countMatches(spanishSignals) >= 2) return "es";
 
-  const hasDutchWords = /\b(hallo|niet|dank|alsjeblieft|vandaag|morgen)\b/i.test(text);
-  if (hasDutchWords) return "nl";
+  const portugueseSignals = [
+    /\beste documento\b/i,
+    /\bexplica\b/i,
+    /\bestrutura\b/i,
+    /\borganiza(?:ç|c)ão\b/i,
+    /\bnão\b/i,
+  ];
+  if (countMatches(portugueseSignals) >= 2) return "pt";
+
+  const italianSignals = [
+    /\bquesto documento\b/i,
+    /\bspiega\b/i,
+    /\bstruttura\b/i,
+    /\borganizzazione\b/i,
+  ];
+  if (countMatches(italianSignals) >= 2) return "it";
+
+  const norwegianSignals = [
+    /\bdette dokumentet\b/i,
+    /\bforklarer\b/i,
+    /\bstrukturen\b/i,
+    /\borganiseringen\b/i,
+    /[æøå]/i,
+  ];
+  if (countMatches(norwegianSignals) >= 2) return "no";
+
+  const swedishSignals = [
+    /\bdetta dokument\b/i,
+    /\bförklarar\b/i,
+    /\bstrukturen\b/i,
+    /\borganisationen\b/i,
+    /[åäö]/i,
+  ];
+  if (countMatches(swedishSignals) >= 2) return "sv";
+
+  const danishSignals = [
+    /\bdette dokument\b/i,
+    /\bforklarer\b/i,
+    /\bstrukturen\b/i,
+    /\borganisationen\b/i,
+    /\baf\b/i,
+    /[æøå]/i,
+  ];
+  if (countMatches(danishSignals) >= 2) return "da";
+
+  const romanianSignals = [
+    /\bacest document\b/i,
+    /\bexplică\b/i,
+    /\bstructura\b/i,
+    /\borganizarea\b/i,
+    /[ăâîșț]/i,
+  ];
+  if (countMatches(romanianSignals) >= 2) return "ro";
+
+  const czechSignals = [
+    /\btento dokument\b/i,
+    /\bvysvětluje\b/i,
+    /\bstrukturu\b/i,
+    /\borganizaci\b/i,
+    /[áčďéěíňóřšťúůýž]/i,
+  ];
+  if (countMatches(czechSignals) >= 2) return "cs";
+
+  const polishSignals = [
+    /\bten dokument\b/i,
+    /\bwyjaśnia\b/i,
+    /\bstruktur(?:ę|e)\b/i,
+    /\borganizację\b/i,
+    /[ąćęłńóśźż]/i,
+  ];
+  if (countMatches(polishSignals) >= 2) return "pl";
+
+  const hungarianSignals = [
+    /\bez a dokument\b/i,
+    /\belmagyarázza\b/i,
+    /\brendszer\b/i,
+    /\bszerkezet\b/i,
+    /[áéíóöőúüű]/i,
+  ];
+  if (countMatches(hungarianSignals) >= 2) return "hu";
+
+  const indonesianSignals = [
+    /\bdokumen ini\b/i,
+    /\bmenjelaskan\b/i,
+    /\bstruktur\b/i,
+    /\borganisasi\b/i,
+  ];
+  if (countMatches(indonesianSignals) >= 2) return "id";
+
+  const malaySignals = [
+    /\bdokumen ini\b/i,
+    /\bmenerangkan\b/i,
+    /\bstruktur\b/i,
+    /\borganisasi\b/i,
+  ];
+  if (countMatches(malaySignals) >= 2) return "ms";
+
+  const tagalogSignals = [
+    /\bipinapaliwanag\b/i,
+    /\bdokumentong ito\b/i,
+    /\bistruktura\b/i,
+    /\borganisasyon\b/i,
+  ];
+  if (countMatches(tagalogSignals) >= 2) return "tl";
 
   const hasTurkish = /[çğıİöşü]/i.test(text) || /\b(ve|değil|teşekkür|lütfen|bugün|yarın)\b/i.test(text);
   if (hasTurkish) return "tr";
 
-  const hasPolish = /[ąćęłńóśźż]/i.test(text) || /\b(dzień|dziękuję|proszę|dzisiaj|jutro)\b/i.test(text);
-  if (hasPolish) return "pl";
-
-  const hasRomanian = /[ăâîșț]/i.test(text) || /\b(și|nu|mulțumesc|astăzi|mâine)\b/i.test(text);
-  if (hasRomanian) return "ro";
-
-  const hasSwedish = /[åäö]/i.test(text) || /\b(tack|hej|inte|idag|imorgon)\b/i.test(text);
-  if (hasSwedish) return "sv";
-
-  const hasNorwegian = /[æøå]/i.test(text) || /\b(takk|hei|ikke|i dag|i morgen)\b/i.test(text);
-  if (hasNorwegian) return "no";
-
-  const hasDanish = /[æøå]/i.test(text) || /\b(tak|hej|ikke|i dag|i morgen)\b/i.test(text);
-  if (hasDanish) return "da";
-
   const hasFinnish = /\b(kiitos|hei|tänään|huomenna|en)\b/i.test(text);
   if (hasFinnish) return "fi";
-
-  const hasIndonesian = /\b(terima kasih|kamu|tidak|hari ini|besok|dan)\b/i.test(text);
-  if (hasIndonesian) return "id";
-
-  const hasMalay = /\b(terima kasih|anda|tidak|hari ini|esok|dan)\b/i.test(text);
-  if (hasMalay) return "ms";
 
   const tagalogWords = (text.match(/\b(salamat|ikaw|hindi|ngayon|bukas|at|ako|tayo|kayo|sila|wala|meron)\b/gi) || []).length;
   const englishWords = (text.match(/\b(the|and|is|are|was|were|this|that|I|you|we|they|to|for|of|in|on|with)\b/gi) || []).length;
@@ -265,9 +378,19 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         const ref = firestoreDoc(db, `users/${user.uid}`);
         onSnapshot(ref, (snap) => {
           const data = snap.exists() ? snap.data() : {};
+          const planField = String(data?.plan || "").toLowerCase();
           const entitlementPlan =
-            Number(data?.wordLimit) >= PRO_WORD_LIMIT || Number(data?.credits) >= PRO_CREDITS;
-          const plan = String(data?.plan || "").toLowerCase() === "pro" || entitlementPlan ? "Pro" : "Free";
+            Number(data?.wordLimit) >= PRO_WORD_LIMIT || planField === "pro";
+          const status = String(data?.subscriptionStatus || "").toLowerCase();
+          const hasStatus = Boolean(status);
+          const updatedAt = data?.subscriptionUpdatedAt
+            ? new Date(String(data.subscriptionUpdatedAt))
+            : null;
+          const isRecent = updatedAt
+            ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
+            : false;
+          const isActive = status === "active" && (updatedAt ? isRecent : true);
+          const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
           const limit = Number(data?.wordLimit || (plan === "Pro" ? PRO_WORD_LIMIT : FREE_WORD_LIMIT));
           const creditValue = Number(data?.credits || (plan === "Pro" ? PRO_CREDITS : 0));
           const usedValue = Number(data?.creditsUsed || 0);
@@ -332,6 +455,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > wordLimit;
+  const creditsLimitEnabled = planName === "Pro" && credits > 0;
+  const creditsRemaining = creditsLimitEnabled
+    ? Math.max(0, credits - creditsUsed)
+    : null;
+  const isOverCredits = creditsLimitEnabled && wordCount > (creditsRemaining ?? 0);
+  const isOutOfCredits = creditsLimitEnabled && (creditsRemaining ?? 0) <= 0;
   const pendingCount = changes.filter((change) => change.status !== "accepted" && change.status !== "ignored").length;
   const accuracyScore = hasResults && wordCount
     ? Math.max(0, Math.min(100, Math.round((1 - pendingCount / wordCount) * 100)))
@@ -413,6 +542,11 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const overrideWordCount = countWords(textToCheck);
     if (overrideWordCount > wordLimit) {
       toast.error(`Text exceeds ${wordLimit} word limit`);
+      return;
+    }
+
+    if (creditsLimitEnabled && overrideWordCount > (creditsRemaining ?? 0)) {
+      toast.error("Not enough credits. Please buy add-on credits to continue.");
       return;
     }
 
@@ -869,12 +1003,21 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         }}
                       />
                     </div>
-                    <div className="flex flex-col items-start">
+                    <div className="flex flex-col items-start gap-1">
                       <WordCounter count={wordCount} limit={wordLimit} />
-                      <span className="text-xs text-muted-foreground">
-                        Plan: {planName}
-                        {planName === "Pro" ? ` • ${PRO_WORD_LIMIT.toLocaleString()} words/check • ${credits.toLocaleString()} credits` : ` • ${FREE_WORD_LIMIT.toLocaleString()} words/check`}
-                      </span>
+                      {creditsLimitEnabled && (
+                        <div className="text-xs text-muted-foreground">
+                          Credits left: {creditsRemaining?.toLocaleString()}
+                        </div>
+                      )}
+                      {isOverCredits && (
+                        <div className="text-xs text-destructive flex items-center gap-2">
+                          Not enough credits.
+                          <Link to="/payment?mode=credits" className="text-accent hover:underline">
+                            Buy credits
+                          </Link>
+                        </div>
+                      )}
                     </div>
                     <Button
                       variant="outline"
@@ -882,7 +1025,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                       className={
                         isRecording
                           ? isSpeaking
-                            ? "border-accent text-accent bg-accent/10 ring-4 ring-accent/40 shadow-[0_0_0_8px_rgba(34,147,253,0.5)] animate-pulse scale-105 transition-transform"
+                            ? "border-accent text-accent bg-accent/10 ring-4 ring-accent/40 shadow-[0_0_0_8px_rgba(37,99,235,0.5)] animate-pulse scale-105 transition-transform"
                             : "border-accent text-accent bg-accent/5"
                           : ""
                       }
@@ -896,7 +1039,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                       size="sm"
                       className={`w-full sm:w-auto${isLoading ? " is-checking" : ""}`}
                       onClick={() => handleCheck()}
-                      disabled={isLoading || !inputText.trim() || isOverLimit}
+                      disabled={isLoading || !inputText.trim() || isOverLimit || isOverCredits || isOutOfCredits}
                     >
                       {isLoading ? (
                         <>

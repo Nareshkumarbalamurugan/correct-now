@@ -47,11 +47,19 @@ const Header = () => {
         const ref = firestoreDoc(db, `users/${current.uid}`);
         onSnapshot(ref, (snap) => {
           const data = snap.exists() ? snap.data() : {};
+          const planField = String(data?.plan || "").toLowerCase();
           const entitlementPlan =
-            Number(data?.wordLimit) >= 2000 || Number(data?.credits) >= 50000;
-          const plan = String(data?.plan || "").toLowerCase() === "pro" || entitlementPlan
-            ? "Pro"
-            : "Free";
+            Number(data?.wordLimit) >= 2000 || planField === "pro";
+          const status = String(data?.subscriptionStatus || "").toLowerCase();
+          const hasStatus = Boolean(status);
+          const updatedAt = data?.subscriptionUpdatedAt
+            ? new Date(String(data.subscriptionUpdatedAt))
+            : null;
+          const isRecent = updatedAt
+            ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
+            : false;
+          const isActive = status === "active" && (updatedAt ? isRecent : true);
+          const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
           setPlanName(plan);
           setCredits(Number(data?.credits || (plan === "Pro" ? 50000 : 0)));
           setWordLimit(Number(data?.wordLimit || (plan === "Pro" ? 2000 : 200)));

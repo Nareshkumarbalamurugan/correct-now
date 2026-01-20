@@ -18,8 +18,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 217 19% 18%;
 
-    /* #2293fd - Brand Blue */
-    --primary: 210 98% 57%;
+    /* #2563EB - Stunning Blue */
+    --primary: 221 83% 54%;
     --primary-foreground: 0 0% 100%;
 
     /* Light blue background for secondary elements */
@@ -30,8 +30,8 @@
     --muted: 220 14% 96%;
     --muted-foreground: 215 16% 47%;
 
-    /* #2293fd - Brand Blue accent (same as primary) */
-    --accent: 210 98% 57%;
+    /* #2563EB - Stunning Blue accent (same as primary) */
+    --accent: 221 83% 54%;
     --accent-foreground: 0 0% 100%;
 
     /* #00C853 - Success Green for corrections */
@@ -51,14 +51,14 @@
     /* #E5E7EB - Border/Divider */
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    /* #2293fd - Brand Blue ring */
-    --ring: 210 98% 57%;
+    /* #2563EB - Stunning Blue ring */
+    --ring: 221 83% 54%;
 
     --radius: 0.625rem;
 
     /* Custom gradients with Brand Blue */
-    --gradient-hero: linear-gradient(135deg, hsl(210 98% 57%) 0%, hsl(210 98% 47%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(210 98% 57%) 0%, hsl(210 90% 62%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(221 83% 54%) 0%, hsl(224 76% 48%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(221 83% 54%) 0%, hsl(217 91% 60%) 100%);
     --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(215 60% 98%) 100%);
 
     /* Shadows */
@@ -88,7 +88,7 @@
     --popover: 220 20% 12%;
     --popover-foreground: 210 20% 95%;
 
-    --primary: 210 98% 57%;
+    --primary: 221 83% 54%;
     --primary-foreground: 220 25% 8%;
 
     --secondary: 220 20% 18%;
@@ -97,7 +97,7 @@
     --muted: 220 15% 20%;
     --muted-foreground: 215 15% 60%;
 
-    --accent: 210 98% 57%;
+    --accent: 221 83% 54%;
     --accent-foreground: 220 25% 8%;
 
     --success: 152 60% 45%;
@@ -113,10 +113,10 @@
 
     --border: 220 15% 22%;
     --input: 220 15% 22%;
-    --ring: 210 98% 57%;
+    --ring: 221 83% 54%;
 
     --gradient-hero: linear-gradient(135deg, hsl(220 25% 8%) 0%, hsl(220 20% 15%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(210 98% 57%) 0%, hsl(210 90% 62%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(221 83% 54%) 0%, hsl(217 91% 60%) 100%);
 
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
