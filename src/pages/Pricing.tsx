@@ -6,8 +6,9 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Link } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc as firestoreDoc, onSnapshot } from "firebase/firestore";
+import { doc as firestoreDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { toast } from "sonner";
 
 const plans = [
   {
@@ -19,12 +20,11 @@ const plans = [
     features: [
       "200 words per check",
       "Limited daily checks",
-      "Basic spelling correction",
+      "Advanced grammar fixes",
       "Global languages supported",
       "Change log with explanations",
     ],
     limitations: [
-      "No history saved",
       "Standard processing speed",
       "Word checks beyond 200 words are Pro-only",
     ],
@@ -55,6 +55,8 @@ const plans = [
 
 const Pricing = () => {
   const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
+  const [subscriptionId, setSubscriptionId] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -89,6 +91,7 @@ const Pricing = () => {
         const isActive = status === "active" && (updatedAt ? isRecent : true);
         const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
         setCurrentPlan(plan);
+        setSubscriptionId(String(data?.subscriptionId || ""));
       });
     });
 
@@ -97,6 +100,52 @@ const Pricing = () => {
       unsub();
     };
   }, []);
+
+  const handleDowngrade = async () => {
+    if (!subscriptionId) {
+      toast.error("No active subscription found");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Are you sure you want to downgrade to the Free plan? This will cancel your subscription and stop all future payments immediately."
+    );
+    if (!confirmed) return;
+
+    setIsCancelling(true);
+    try {
+      const auth = getFirebaseAuth();
+      const db = getFirebaseDb();
+      const user = auth?.currentUser;
+
+      if (!user || !db) {
+        throw new Error("Please sign in to cancel subscription");
+      }
+
+      // Update user to free plan immediately
+      const userRef = firestoreDoc(db, `users/${user.uid}`);
+      await setDoc(
+        userRef,
+        {
+          plan: "free",
+          wordLimit: 200,
+          credits: 0,
+          creditsUsed: 0,
+          subscriptionStatus: "cancelled",
+          subscriptionUpdatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      toast.success("Successfully downgraded to Free plan. Subscription cancelled.");
+    } catch (error: any) {
+      console.error("Downgrade error:", error);
+      toast.error(error?.message || "Failed to cancel subscription");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -125,6 +174,7 @@ const Pricing = () => {
               {plans.map((plan) => {
                 const isCurrent = plan.name === currentPlan;
                 const canUpgrade = plan.name === "Pro" && currentPlan !== "Pro";
+                const canDowngrade = plan.name === "Free" && currentPlan === "Pro";
                 const ctaLabel = isCurrent
                   ? "Current Plan"
                   : plan.name === "Pro"
@@ -193,6 +243,15 @@ const Pricing = () => {
                         {ctaLabel}
                       </Button>
                     </Link>
+                  ) : canDowngrade ? (
+                    <Button
+                      variant="destructive"
+                      className="w-full mb-6"
+                      onClick={handleDowngrade}
+                      disabled={isCancelling}
+                    >
+                      {isCancelling ? "Cancelling..." : "Downgrade to Free"}
+                    </Button>
                   ) : (
                     <Button
                       variant={isCurrent ? "accent" : "outline"}
@@ -246,12 +305,8 @@ const Pricing = () => {
                   a: "We accept all major credit cards, debit cards, and UPI payments through our secure payment gateway.",
                 },
                 {
-                  q: "Is there a free trial for Pro?",
-                  a: "Yes! Pro plan comes with a 7-day free trial. No credit card required to start.",
-                },
-                {
-                  q: "Can I upgrade or downgrade my plan?",
-                  a: "Absolutely. You can change your plan at any time. The change will be reflected in your next billing cycle.",
+                  q: "How do I downgrade to the Free plan?",
+                  a: "You can downgrade to the Free plan anytime from the pricing page. This will cancel your subscription and stop all future payments immediately.",
                 },
               ].map((faq) => (
                 <div

@@ -91,6 +91,8 @@ app.post("/api/razorpay/webhook", express.raw({ type: "application/json" }), asy
           plan: "pro",
           wordLimit: 2000,
           credits: 50000,
+          creditsUsed: 0,
+          creditsResetDate: nowIso,
           subscriptionStatus: "active",
           subscriptionUpdatedAt: nowIso,
           updatedAt: nowIso,

@@ -64,7 +64,19 @@ const Header = () => {
           setCredits(Number(data?.credits || (plan === "Pro" ? 50000 : 0)));
           setWordLimit(Number(data?.wordLimit || (plan === "Pro" ? 2000 : 200)));
           setSubscriptionStatus(String(data?.subscriptionStatus || ""));
-          setCreditsUsed(Number(data?.creditsUsed || 0));
+          
+          // Check if credits should reset (monthly billing cycle)
+          const lastResetDate = data?.creditsResetDate ? new Date(String(data.creditsResetDate)) : null;
+          const now = new Date();
+          const shouldReset = plan === "Pro" && isActive && (!lastResetDate || 
+            (now.getTime() - lastResetDate.getTime() > 30 * 24 * 60 * 60 * 1000)); // 30 days
+          
+          if (shouldReset) {
+            // Reset usage for new billing cycle
+            setCreditsUsed(0);
+          } else {
+            setCreditsUsed(Number(data?.creditsUsed || 0));
+          }
         });
       }
     });
@@ -135,10 +147,14 @@ const Header = () => {
                   )}
                 </div>
                 <div className="px-2 pb-2">
-                  <div className="text-xs text-muted-foreground mb-1">
-                    Usage: {creditsUsed.toLocaleString()} / {credits.toLocaleString() || "0"}
-                  </div>
-                  <Progress value={credits ? Math.min(100, (creditsUsed / credits) * 100) : 0} />
+                  {planName === "Pro" && (
+                    <>
+                      <div className="text-xs text-muted-foreground mb-1">
+                        Usage: {creditsUsed.toLocaleString()} / {credits.toLocaleString() || "0"}
+                      </div>
+                      <Progress value={credits ? Math.min(100, (creditsUsed / credits) * 100) : 0} />
+                    </>
+                  )}
                   {planName === "Pro" && creditsUsed >= credits && String(subscriptionStatus).toLowerCase() === "active" && (
                     <Button
                       variant="accent"
