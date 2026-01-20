@@ -223,8 +223,10 @@ const Admin = () => {
         updates.credits = 0;
         updates.plan = "free";
       } else {
-        updates.wordLimit = parseInt(wordLimitValue) || 2000;
-        updates.credits = parseInt(creditsValue) || 50000;
+        const wordLimit = parseInt(wordLimitValue);
+        const credits = parseInt(creditsValue);
+        updates.wordLimit = isNaN(wordLimit) ? 2000 : wordLimit;
+        updates.credits = isNaN(credits) ? 50000 : credits;
       }
 
       if (limitStartDate) updates.limitStartDate = limitStartDate;

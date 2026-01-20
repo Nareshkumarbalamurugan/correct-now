@@ -139,6 +139,16 @@ const Header = () => {
                     Usage: {creditsUsed.toLocaleString()} / {credits.toLocaleString() || "0"}
                   </div>
                   <Progress value={credits ? Math.min(100, (creditsUsed / credits) * 100) : 0} />
+                  {planName === "Pro" && creditsUsed >= credits && String(subscriptionStatus).toLowerCase() === "active" && (
+                    <Button
+                      variant="accent"
+                      size="sm"
+                      className="w-full mt-2 text-xs h-7"
+                      onClick={() => navigate("/payment?mode=credits")}
+                    >
+                      Buy More Credits
+                    </Button>
+                  )}
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate("/pricing")}>Manage Plan</DropdownMenuItem>

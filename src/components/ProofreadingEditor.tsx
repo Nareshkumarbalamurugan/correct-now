@@ -1010,7 +1010,15 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                           Credits left: {creditsRemaining?.toLocaleString()}
                         </div>
                       )}
-                      {isOverCredits && (
+                      {isOutOfCredits && (
+                        <div className="text-xs text-destructive font-semibold flex items-center gap-2">
+                          Credits exhausted!
+                          <Link to="/payment?mode=credits" className="text-accent hover:underline font-medium">
+                            Buy more
+                          </Link>
+                        </div>
+                      )}
+                      {isOverCredits && !isOutOfCredits && (
                         <div className="text-xs text-destructive flex items-center gap-2">
                           Not enough credits.
                           <Link to="/payment?mode=credits" className="text-accent hover:underline">
