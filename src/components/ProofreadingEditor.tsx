@@ -28,6 +28,15 @@ const DETECT_DEBOUNCE_MS = 600;
 const detectLanguageLocal = (text: string): string => {
   if (!text.trim()) return "auto";
 
+  const hasArabicScript = /[\u0600-\u06FF]/.test(text);
+  if (hasArabicScript) return "ar";
+
+  const hasUrdu = /[\u0600-\u06FF]/.test(text) && /\b(میں|ہے|نہیں|آپ|اور|ہے)\b/.test(text);
+  if (hasUrdu) return "ur";
+
+  const hasPersian = /[\u0600-\u06FF]/.test(text) && /\b(است|نیست|این|برای|شما)\b/.test(text);
+  if (hasPersian) return "fa";
+
   const hasTamil = /[\u0B80-\u0BFF]/.test(text);
   if (hasTamil) return "ta";
 
@@ -55,6 +64,19 @@ const detectLanguageLocal = (text: string): string => {
   const hasMarathi = /[\u0900-\u097F]/.test(text);
   if (hasMarathi) return "mr";
 
+  const hasGreek = /[\u0370-\u03FF]/.test(text);
+  if (hasGreek) return "el";
+
+  const hasHebrew = /[\u0590-\u05FF]/.test(text);
+  if (hasHebrew) return "he";
+
+  const hasThai = /[\u0E00-\u0E7F]/.test(text);
+  if (hasThai) return "th";
+
+  const hasVietnamese = /[ăâđêôơưĂÂĐÊÔƠƯ]/i.test(text);
+  const hasVietnameseWords = /\b(voi|ban|toi|khong|va|la|mot)\b/i.test(text);
+  if (hasVietnamese || hasVietnameseWords) return "vi";
+
   const hasFrench = /[àâçéèêëîïôùûüÿœæ]/i.test(text);
   const hasFrenchWords = /\b(je|tu|il|elle|nous|vous|ils|elles|mon|ma|mes|être|était|suis|pas|très|réveillé|bureau|alarme|réunion)\b/i.test(text);
   if (hasFrench || hasFrenchWords) return "fr";
@@ -62,6 +84,51 @@ const detectLanguageLocal = (text: string): string => {
   const hasSpanish = /[ñÑáÁéÉíÍóÓúÚüÜ¿¡]/.test(text);
   const hasSpanishWords = /\b(yo|tú|él|ella|nosotros|vosotros|ellos|ellas|para|porque|muy|alarma|reunión|oficina)\b/i.test(text);
   if (hasSpanish || hasSpanishWords) return "es";
+
+  const hasPortugueseWords = /\b(olá|você|não|para|porque|muito|obrigado|amanhã)\b/i.test(text);
+  if (hasPortugueseWords) return "pt";
+
+  const hasItalianWords = /\b(ciao|non|perché|molto|grazie|domani|ufficio)\b/i.test(text);
+  if (hasItalianWords) return "it";
+
+  const hasGermanWords = /\b(und|nicht|danke|bitte|heute|morgen|büro)\b/i.test(text);
+  if (hasGermanWords) return "de";
+
+  const hasDutchWords = /\b(hallo|niet|dank|alsjeblieft|vandaag|morgen)\b/i.test(text);
+  if (hasDutchWords) return "nl";
+
+  const hasTurkish = /[çğıİöşü]/i.test(text) || /\b(ve|değil|teşekkür|lütfen|bugün|yarın)\b/i.test(text);
+  if (hasTurkish) return "tr";
+
+  const hasPolish = /[ąćęłńóśźż]/i.test(text) || /\b(dzień|dziękuję|proszę|dzisiaj|jutro)\b/i.test(text);
+  if (hasPolish) return "pl";
+
+  const hasRomanian = /[ăâîșț]/i.test(text) || /\b(și|nu|mulțumesc|astăzi|mâine)\b/i.test(text);
+  if (hasRomanian) return "ro";
+
+  const hasSwedish = /[åäö]/i.test(text) || /\b(tack|hej|inte|idag|imorgon)\b/i.test(text);
+  if (hasSwedish) return "sv";
+
+  const hasNorwegian = /[æøå]/i.test(text) || /\b(takk|hei|ikke|i dag|i morgen)\b/i.test(text);
+  if (hasNorwegian) return "no";
+
+  const hasDanish = /[æøå]/i.test(text) || /\b(tak|hej|ikke|i dag|i morgen)\b/i.test(text);
+  if (hasDanish) return "da";
+
+  const hasFinnish = /\b(kiitos|hei|tänään|huomenna|en)\b/i.test(text);
+  if (hasFinnish) return "fi";
+
+  const hasIndonesian = /\b(terima kasih|kamu|tidak|hari ini|besok|dan)\b/i.test(text);
+  if (hasIndonesian) return "id";
+
+  const hasMalay = /\b(terima kasih|anda|tidak|hari ini|esok|dan)\b/i.test(text);
+  if (hasMalay) return "ms";
+
+  const hasTagalog = /\b(salamat|ikaw|hindi|ngayon|bukas|at)\b/i.test(text);
+  if (hasTagalog) return "tl";
+
+  const hasSwahili = /\b(asante|habari|siku|leo|kesho|na)\b/i.test(text);
+  if (hasSwahili) return "sw";
 
   const hasEnglish = /[A-Za-z]/.test(text);
   if (hasEnglish) return "en";
@@ -147,6 +214,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [lastDetectText, setLastDetectText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLanguageOpen, setIsLanguageOpen] = useState(false);
+  const [pendingRecording, setPendingRecording] = useState(false);
   const [docId, setDocId] = useState<string | undefined>(initialDocId);
   const initializedRef = useRef(false);
   const speechRef = useRef<any>(null);
@@ -447,6 +516,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
   const getSpeechLocale = (code: string) => {
     switch (code) {
+      case "ur": return "ur-PK";
+      case "fa": return "fa-IR";
       case "ta": return "ta-IN";
       case "hi": return "hi-IN";
       case "bn": return "bn-IN";
@@ -461,7 +532,24 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       case "de": return "de-DE";
       case "pt": return "pt-PT";
       case "it": return "it-IT";
+      case "nl": return "nl-NL";
+      case "sv": return "sv-SE";
+      case "no": return "nb-NO";
+      case "da": return "da-DK";
+      case "fi": return "fi-FI";
+      case "pl": return "pl-PL";
+      case "ro": return "ro-RO";
+      case "tr": return "tr-TR";
+      case "el": return "el-GR";
+      case "he": return "he-IL";
+      case "id": return "id-ID";
+      case "ms": return "ms-MY";
+      case "th": return "th-TH";
+      case "vi": return "vi-VN";
+      case "tl": return "fil-PH";
+      case "sw": return "sw-KE";
       case "ru": return "ru-RU";
+      case "uk": return "uk-UA";
       case "ja": return "ja-JP";
       case "ko": return "ko-KR";
       case "zh": return "zh-CN";
@@ -470,17 +558,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     }
   };
 
-  const toggleRecording = () => {
+  const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast.error("Speech recognition is not supported in this browser");
-      return;
-    }
-
-    if (isRecording) {
-      shouldContinueRef.current = false;
-      speechRef.current?.stop?.();
-      setIsRecording(false);
       return;
     }
 
@@ -553,6 +634,32 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setIsRecording(true);
     recognition.start();
   };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      shouldContinueRef.current = false;
+      speechRef.current?.stop?.();
+      setIsRecording(false);
+      return;
+    }
+
+    if (language === "auto") {
+      setPendingRecording(true);
+      setIsLanguageOpen(true);
+      toast.info("Select a language to start voice input.");
+      return;
+    }
+
+    startRecording();
+  };
+
+  useEffect(() => {
+    if (!pendingRecording) return;
+    if (language !== "auto") {
+      setPendingRecording(false);
+      startRecording();
+    }
+  }, [language, pendingRecording]);
 
   const saveEditor = () => {
     const html = modalEditorRef.current?.innerHTML ?? editorHtml;
@@ -709,9 +816,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     <div className="w-full sm:w-auto">
                       <LanguageSelector
                         value={language}
+                        open={isLanguageOpen}
+                        onOpenChange={setIsLanguageOpen}
                         onChange={(value) => {
                           setLanguage(value);
                           setLanguageMode(value === "auto" ? "auto" : "manual");
+                          setIsLanguageOpen(false);
                         }}
                       />
                     </div>

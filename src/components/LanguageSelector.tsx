@@ -11,11 +11,14 @@ import { useMemo, useState } from "react";
 interface LanguageSelectorProps {
   value: string;
   onChange: (value: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const languages = [
   { code: "auto", name: "Auto-detect" },
   { code: "en", name: "English" },
+  { code: "ur", name: "Urdu (اردو)" },
   { code: "hi", name: "Hindi (हिन्दी)" },
   { code: "ta", name: "Tamil (தமிழ்)" },
   { code: "te", name: "Telugu (తెలుగు)" },
@@ -30,14 +33,32 @@ const languages = [
   { code: "de", name: "German" },
   { code: "pt", name: "Portuguese" },
   { code: "it", name: "Italian" },
+  { code: "nl", name: "Dutch" },
+  { code: "sv", name: "Swedish" },
+  { code: "no", name: "Norwegian" },
+  { code: "da", name: "Danish" },
+  { code: "fi", name: "Finnish" },
+  { code: "pl", name: "Polish" },
+  { code: "ro", name: "Romanian" },
+  { code: "tr", name: "Turkish" },
+  { code: "el", name: "Greek" },
+  { code: "he", name: "Hebrew" },
+  { code: "fa", name: "Persian (فارسی)" },
+  { code: "id", name: "Indonesian" },
+  { code: "ms", name: "Malay" },
+  { code: "th", name: "Thai" },
+  { code: "vi", name: "Vietnamese" },
+  { code: "tl", name: "Tagalog" },
+  { code: "sw", name: "Swahili" },
   { code: "ru", name: "Russian" },
+  { code: "uk", name: "Ukrainian" },
   { code: "ja", name: "Japanese" },
   { code: "ko", name: "Korean" },
   { code: "zh", name: "Chinese" },
   { code: "ar", name: "Arabic" },
 ];
 
-const LanguageSelector = ({ value, onChange }: LanguageSelectorProps) => {
+const LanguageSelector = ({ value, onChange, open, onOpenChange }: LanguageSelectorProps) => {
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -51,7 +72,7 @@ const LanguageSelector = ({ value, onChange }: LanguageSelectorProps) => {
   }, [query]);
 
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={onChange} open={open} onOpenChange={onOpenChange}>
       <SelectTrigger className="w-full sm:w-[180px] bg-card">
         <SelectValue placeholder="Select language" />
       </SelectTrigger>

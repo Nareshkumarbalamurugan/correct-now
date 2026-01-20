@@ -101,7 +101,7 @@ app.post("/api/razorpay/subscription", async (req, res) => {
         interval: 1,
         item: {
           name: "CorrectNow Pro",
-          amount: 50000,
+          amount: 100,
           currency: "INR",
           description: "Monthly subscription",
         },
@@ -166,13 +166,19 @@ app.post("/api/detect-language", async (req, res) => {
     const model = process.env.GEMINI_DETECT_MODEL || "gemini-2.5-flash";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const allowed = ["en","hi","ta","te","bn","mr","gu","kn","ml","pa","es","fr","de","pt","it","ru","ja","ko","zh","ar","auto"];
+    const allowed = ["en","hi","ta","te","bn","mr","gu","kn","ml","pa","ur","fa","es","fr","de","pt","it","nl","sv","no","da","fi","pl","ro","tr","el","he","id","ms","th","vi","tl","sw","ru","uk","ja","ko","zh","ar","auto"];
     const prompt = `Detect the language of the text and return ONLY a JSON object with one field "code".
   Allowed codes: ${allowed.join(", ")}.
   Return the closest matching code. If unsure, return "auto".
-  Important: Distinguish French vs Spanish carefully.
+  Important: Distinguish closely related languages carefully.
   - French often includes: "je", "tu", "être", "réveillé", "bureau", "réunion", "très", accents (à â ç é è ê ë î ï ô ù û ü).
   - Spanish often includes: "yo", "tú", "porque", "reunión", "oficina", "muy", and ¿ ¡ punctuation.
+  - Portuguese often includes: "você", "não", "obrigado", "amanhã".
+  - Turkish includes: ç, ğ, ı, ö, ş, ü and words like "teşekkür".
+  - Polish includes: ą, ć, ę, ł, ń, ó, ś, ź, ż.
+  - Romanian includes: ă, â, î, ș, ț.
+  - Hindi/Marathi share script; prefer Marathi for common Marathi words.
+  - Urdu/Persian use Arabic script; use common Urdu/Persian words to distinguish.
   Text:\n"""${text}"""`;
 
     const response = await fetch(endpoint, {
