@@ -60,6 +60,8 @@ const Admin = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [totalDocs, setTotalDocs] = useState(0);
   const [totalWords, setTotalWords] = useState(0);
+  const [checksToday, setChecksToday] = useState(0);
+  const [wordsToday, setWordsToday] = useState(0);
 
   // User limit management
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -148,13 +150,36 @@ const Admin = () => {
       const docsSnap = await getDocs(collectionGroup(db, "docs"));
       setTotalDocs(docsSnap.size);
 
-      let words = 0;
+      // Calculate today's stats
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let wordsAll = 0;
+      let checksTodayCount = 0;
+      let wordsTodayCount = 0;
+
       docsSnap.forEach((docSnap) => {
         const data = docSnap.data() as Record<string, any>;
         const text = typeof data?.text === "string" ? data.text : "";
-        words += text.trim().split(/\s+/).filter(Boolean).length;
+        const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+        wordsAll += wordCount;
+
+        // Check if document was created today
+        const createdAt = data?.createdAt;
+        if (createdAt) {
+          const docDate = typeof createdAt === "string" 
+            ? new Date(createdAt) 
+            : createdAt?.toDate ? createdAt.toDate() : null;
+          
+          if (docDate && docDate >= todayStart) {
+            checksTodayCount++;
+            wordsTodayCount += wordCount;
+          }
+        }
       });
-      setTotalWords(words);
+
+      setTotalWords(wordsAll);
+      setChecksToday(checksTodayCount);
+      setWordsToday(wordsTodayCount);
     };
 
     loadUsers();
@@ -436,7 +461,7 @@ const Admin = () => {
                   <div className="bg-card rounded-xl border border-border p-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-sm text-muted-foreground">
-                        Active Today
+                        Active Pro Users
                       </span>
                       <Activity className="w-5 h-5 text-accent" />
                     </div>
@@ -444,7 +469,7 @@ const Admin = () => {
                       {proUsers}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Pro subscribers
+                      Pro plan subscribers
                     </p>
                   </div>
 
@@ -456,10 +481,10 @@ const Admin = () => {
                       <CheckCircle className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      {totalDocs.toLocaleString()}
+                      {checksToday.toLocaleString()}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Total checks stored
+                      Total all time: {totalDocs.toLocaleString()}
                     </p>
                   </div>
 
@@ -471,9 +496,13 @@ const Admin = () => {
                       <FileText className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      {(totalWords / 1000).toFixed(0)}K
+                      {wordsToday >= 1000 
+                        ? `${(wordsToday / 1000).toFixed(1)}K` 
+                        : wordsToday}
                     </p>
-                    <p className="text-sm text-muted-foreground mt-1">Today</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Today (Total: {(totalWords / 1000).toFixed(0)}K)
+                    </p>
                   </div>
 
                   <div className="bg-card rounded-xl border border-border p-6">
@@ -539,8 +568,12 @@ const Admin = () => {
                       <tbody>
                         <tr className="border-b border-border last:border-0">
                           <td className="py-3 text-sm text-foreground">Today</td>
-                          <td className="py-3 text-sm text-foreground">{totalDocs}</td>
-                          <td className="py-3 text-sm text-foreground">{(totalWords / 1000).toFixed(0)}K</td>
+                          <td className="py-3 text-sm text-foreground">{checksToday}</td>
+                          <td className="py-3 text-sm text-foreground">
+                            {wordsToday >= 1000 
+                              ? `${(wordsToday / 1000).toFixed(1)}K` 
+                              : wordsToday}
+                          </td>
                           <td className="py-3 text-sm text-foreground">+{newUsersToday}</td>
                         </tr>
                       </tbody>
@@ -998,30 +1031,27 @@ const Admin = () => {
                       <label className="text-sm text-muted-foreground">
                         Free Plan - Words/Check
                       </label>
-                      <p className="text-foreground font-medium">500</p>
+                      <p className="text-foreground font-medium">200</p>
                     </div>
                     <div>
                       <label className="text-sm text-muted-foreground">
-                        Free Plan - Checks/Day
+                        Free Plan - Monthly Words
                       </label>
-                      <p className="text-foreground font-medium">10</p>
+                      <p className="text-foreground font-medium">Limited</p>
                     </div>
                     <div>
                       <label className="text-sm text-muted-foreground">
                         Pro Plan - Words/Check
                       </label>
-                      <p className="text-foreground font-medium">2,000</p>
+                      <p className="text-foreground font-medium">5,000</p>
                     </div>
                     <div>
                       <label className="text-sm text-muted-foreground">
-                        Pro Plan - Checks/Day
+                        Pro Plan - Monthly Words
                       </label>
-                      <p className="text-foreground font-medium">Unlimited</p>
+                      <p className="text-foreground font-medium">50,000</p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" className="mt-4">
-                    Edit Limits
-                  </Button>
                 </div>
               </div>
             )}

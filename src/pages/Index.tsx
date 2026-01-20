@@ -270,22 +270,12 @@ const Index = () => {
           <div className="mt-12">
             <Card className="border border-border bg-secondary/40">
               <CardContent className="p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-accent/10">
-                    <img
-                      src="/Icon/correctnow logo final2.png"
-                      alt="CorrectNow"
-                      className="w-6 h-6 object-contain"
-                      loading="lazy"
-                    />
+                <div>
+                  <div className="text-base font-semibold text-foreground">
+                    Help us improve CorrectNow
                   </div>
-                  <div>
-                    <div className="text-base font-semibold text-foreground">
-                      Help us improve CorrectNow
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Share an idea or request a feature — we read every suggestion.
-                    </div>
+                  <div className="text-sm text-muted-foreground">
+                    Share an idea or request a feature — we read every suggestion.
                   </div>
                 </div>
                 <Button
