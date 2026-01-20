@@ -17,13 +17,22 @@ const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, "..", "dist");
 
 const initAdminDb = () => {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!serviceAccount) return null;
   try {
     if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(JSON.parse(serviceAccount)),
-      });
+      // Try to load from file first
+      const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
+      if (existsSync(serviceAccountPath)) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccountPath),
+        });
+      } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        // Fallback to env variable
+        admin.initializeApp({
+          credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)),
+        });
+      } else {
+        return null;
+      }
     }
     return admin.firestore();
   } catch (err) {
@@ -131,6 +140,47 @@ const getRazorpay = () => {
 
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
+});
+
+// Set admin claim and create user if needed (SECURE THIS IN PRODUCTION)
+app.post("/api/set-admin", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email required" });
+    }
+
+    let user;
+    try {
+      // Try to get existing user
+      user = await admin.auth().getUserByEmail(email);
+    } catch (error) {
+      // User doesn't exist, create it
+      if (password) {
+        user = await admin.auth().createUser({
+          email,
+          password,
+          emailVerified: true,
+        });
+        console.log(`Created new user: ${email}`);
+      } else {
+        return res.status(400).json({ error: "Password required for new user" });
+      }
+    }
+
+    // Set admin claim
+    await admin.auth().setCustomUserClaims(user.uid, { admin: true });
+    console.log(`Admin claim set for ${email} (${user.uid})`);
+
+    res.json({ 
+      success: true, 
+      message: `Admin claim set for ${email}`,
+      uid: user.uid
+    });
+  } catch (error) {
+    console.error("Set admin error:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get("/api/razorpay/key", (_req, res) => {

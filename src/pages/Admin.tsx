@@ -19,8 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
-import { getFirebaseDb } from "@/lib/firebase";
-import { collection, collectionGroup, getDocs } from "firebase/firestore";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { collection, collectionGroup, getDocs, doc, updateDoc } from "firebase/firestore";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { useAuthState } from "react-firebase-hooks/auth";
 import {
   fetchRemoteSuggestions,
   getSuggestions,
@@ -42,8 +44,15 @@ type AdminUser = {
 };
 
 const Admin = () => {
+  const auth = getFirebaseAuth();
+  const [user, loading] = useAuthState(auth);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
+
   const [activeTab, setActiveTab] = useState<
-    "overview" | "users" | "logs" | "suggestions" | "billing" | "settings"
+    "overview" | "users" | "suggestions" | "billing" | "settings"
   >("overview");
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
@@ -52,6 +61,15 @@ const Admin = () => {
   const [totalDocs, setTotalDocs] = useState(0);
   const [totalWords, setTotalWords] = useState(0);
 
+  // User limit management
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [limitType, setLimitType] = useState<"unlimited" | "limited" | "disabled">("limited");
+  const [limitStartDate, setLimitStartDate] = useState("");
+  const [limitEndDate, setLimitEndDate] = useState("");
+  const [wordLimitValue, setWordLimitValue] = useState("2000");
+  const [creditsValue, setCreditsValue] = useState("50000");
+
+  // All hooks must be called before any conditional returns
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -68,7 +86,47 @@ const Admin = () => {
     );
   }, [suggestions, suggestionSearch]);
 
+  const proUsers = users.filter((user) => user.plan === "Pro").length;
+  const totalUsers = users.length;
+  const conversionRate = totalUsers ? Math.round((proUsers / totalUsers) * 100) : 0;
+  const monthlyRevenue = proUsers * 500;
+  const isToday = (iso?: string) => {
+    if (!iso) return false;
+    const date = new Date(iso);
+    const now = new Date();
+    return date.toDateString() === now.toDateString();
+  };
+  const newUsersToday = users.filter((user) => isToday(user.createdAt) || isToday(user.updatedAt)).length;
+
+  const billingRows = useMemo(() => {
+    return users
+      .filter((user) => user.plan === "Pro" || user.subscriptionStatus)
+      .map((user) => {
+        const statusRaw = String(user.subscriptionStatus || "").toLowerCase();
+        const statusLabel = statusRaw
+          ? statusRaw === "active"
+            ? "Paid"
+            : statusRaw === "past_due"
+              ? "Past Due"
+              : "Cancelled"
+          : user.plan === "Pro"
+            ? "Paid"
+            : "Free";
+        return {
+          name: user.email || user.name,
+          plan: user.plan,
+          amount: user.plan === "Pro" ? "₹500" : "₹0",
+          status: statusLabel,
+          date: user.updatedAt || user.createdAt || new Date().toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 10);
+  }, [users]);
+
   useEffect(() => {
+    if (!user) return; // Don't load data if not logged in
+    
     const loadUsers = async () => {
       const db = getFirebaseDb();
       if (!db) return;
@@ -104,28 +162,188 @@ const Admin = () => {
     loadUsers();
 
     const loadSuggestions = async () => {
-      const local = getSuggestions();
-      const remote = await fetchRemoteSuggestions();
-      setSuggestions(mergeSuggestions(local, remote));
+      try {
+        const local = getSuggestions();
+        const remote = await fetchRemoteSuggestions();
+        setSuggestions(mergeSuggestions(local, remote));
+      } catch (error) {
+        console.error("Failed to load suggestions:", error);
+        // Use local suggestions only if remote fails
+        setSuggestions(getSuggestions());
+      }
     };
     loadSuggestions();
 
     const handleStorage = () => loadSuggestions();
     window.addEventListener("correctnow:suggestions-updated", handleStorage);
     return () => window.removeEventListener("correctnow:suggestions-updated", handleStorage);
-  }, []);
+  }, [user]);
 
-  const proUsers = users.filter((user) => user.plan === "Pro").length;
-  const totalUsers = users.length;
-  const conversionRate = totalUsers ? Math.round((proUsers / totalUsers) * 100) : 0;
-  const monthlyRevenue = proUsers * 500;
-  const isToday = (iso?: string) => {
-    if (!iso) return false;
-    const date = new Date(iso);
-    const now = new Date();
-    return date.toDateString() === now.toDateString();
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+    setLoggingIn(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error: any) {
+      setLoginError(error.message || "Failed to login");
+    } finally {
+      setLoggingIn(false);
+    }
   };
-  const newUsersToday = users.filter((user) => isToday(user.createdAt) || isToday(user.updatedAt)).length;
+
+  const handleEditUser = (userId: string, userData: AdminUser) => {
+    setEditingUserId(userId);
+    setWordLimitValue(String(userData.wordLimit || 2000));
+    setCreditsValue(String(userData.credits || 50000));
+    if (userData.wordLimit === 999999) {
+      setLimitType("unlimited");
+    } else if (userData.wordLimit === 0) {
+      setLimitType("disabled");
+    } else {
+      setLimitType("limited");
+    }
+  };
+
+  const handleSaveUserLimits = async () => {
+    if (!editingUserId) return;
+    
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    try {
+      const updates: any = {};
+      
+      if (limitType === "unlimited") {
+        updates.wordLimit = 999999;
+        updates.credits = 999999;
+        updates.plan = "pro";
+      } else if (limitType === "disabled") {
+        updates.wordLimit = 0;
+        updates.credits = 0;
+        updates.plan = "free";
+      } else {
+        updates.wordLimit = parseInt(wordLimitValue) || 2000;
+        updates.credits = parseInt(creditsValue) || 50000;
+      }
+
+      if (limitStartDate) updates.limitStartDate = limitStartDate;
+      if (limitEndDate) updates.limitEndDate = limitEndDate;
+      updates.updatedAt = new Date().toISOString();
+
+      const userRef = doc(db, "users", editingUserId);
+      await updateDoc(userRef, updates);
+
+      // Reload users
+      const snap = await getDocs(collection(db, "users"));
+      const list: AdminUser[] = snap.docs.map((docSnap) => {
+        const data = docSnap.data() as Record<string, any>;
+        return {
+          id: docSnap.id,
+          name: data?.name || "User",
+          email: data?.email || "",
+          plan: String(data?.plan || "free").toLowerCase() === "pro" ? "Pro" : "Free",
+          wordLimit: data?.wordLimit,
+          credits: data?.credits,
+          subscriptionStatus: data?.subscriptionStatus,
+          updatedAt: data?.updatedAt,
+          createdAt: data?.createdAt,
+        };
+      });
+      setUsers(list);
+      setEditingUserId(null);
+    } catch (error) {
+      console.error("Failed to update user limits:", error);
+      alert("Failed to update user limits");
+    }
+  };
+
+  // Show login form if not authenticated
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5">
+        <div className="w-full max-w-md p-8">
+          <div className="bg-card border border-border rounded-2xl p-8 shadow-xl">
+            <div className="flex items-center justify-center mb-8">
+              <div className="flex items-center justify-center w-16 h-16 rounded-xl bg-primary/10">
+                <CheckCircle className="w-8 h-8 text-primary" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-center mb-2">Admin Login</h1>
+            <p className="text-center text-muted-foreground mb-8">
+              Sign in to access the admin panel
+            </p>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium mb-2">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="admin@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium mb-2">
+                  Password
+                </label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+
+              {loginError && (
+                <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
+                  {loginError}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loggingIn}
+              >
+                {loggingIn ? "Signing in..." : "Sign In"}
+              </Button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <Link
+                to="/"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ← Back to Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -160,7 +378,6 @@ const Admin = () => {
               {[
                 { id: "overview", icon: BarChart3, label: "Dashboard" },
                 { id: "users", icon: Users, label: "Users" },
-                { id: "logs", icon: Activity, label: "Activity Logs" },
                 { id: "suggestions", icon: MessageSquare, label: "Suggestions" },
                 { id: "billing", icon: CreditCard, label: "Billing & Plans" },
                 { id: "settings", icon: Settings, label: "Settings" },
@@ -178,7 +395,10 @@ const Admin = () => {
                   {item.label}
                 </button>
               ))}
-              <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+              <button 
+                onClick={() => auth.signOut()}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+              >
                 <LogOut className="w-5 h-5" />
                 Sign Out
               </button>
@@ -442,8 +662,12 @@ const Admin = () => {
                                 : "—"}
                             </td>
                             <td className="py-4 px-6 text-right">
-                              <Button variant="ghost" size="sm">
-                                View
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleEditUser(user.id, user)}
+                              >
+                                Manage Limits
                               </Button>
                             </td>
                           </tr>
@@ -452,100 +676,99 @@ const Admin = () => {
                     </table>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {activeTab === "logs" && (
-              <div className="space-y-6">
-                <div>
-                  <h1 className="text-2xl font-bold text-foreground mb-1">
-                    Activity Logs
-                  </h1>
-                  <p className="text-muted-foreground">
-                    Real-time platform activity monitoring
-                  </p>
-                </div>
+                {/* Edit User Limits Dialog */}
+                {editingUserId && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full shadow-2xl">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">
+                        Manage User Limits
+                      </h3>
 
-                <div className="bg-card rounded-xl border border-border p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-foreground">
-                      Recent Activity
-                    </h2>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        <Filter className="w-4 h-4 mr-2" />
-                        Filter
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Download className="w-4 h-4 mr-2" />
-                        Export
-                      </Button>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Limit Type</label>
+                          <select
+                            value={limitType}
+                            onChange={(e) => setLimitType(e.target.value as any)}
+                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground"
+                          >
+                            <option value="limited">Limited</option>
+                            <option value="unlimited">Unlimited</option>
+                            <option value="disabled">Disabled</option>
+                          </select>
+                        </div>
+
+                        {limitType === "limited" && (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Word Limit</label>
+                              <Input
+                                type="number"
+                                value={wordLimitValue}
+                                onChange={(e) => setWordLimitValue(e.target.value)}
+                                placeholder="2000"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Credits</label>
+                              <Input
+                                type="number"
+                                value={creditsValue}
+                                onChange={(e) => setCreditsValue(e.target.value)}
+                                placeholder="50000"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Start Date (Optional)</label>
+                              <Input
+                                type="date"
+                                value={limitStartDate}
+                                onChange={(e) => setLimitStartDate(e.target.value)}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">End Date (Optional)</label>
+                              <Input
+                                type="date"
+                                value={limitEndDate}
+                                onChange={(e) => setLimitEndDate(e.target.value)}
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        {limitType === "unlimited" && (
+                          <p className="text-sm text-muted-foreground">
+                            User will have unlimited word limit and credits
+                          </p>
+                        )}
+
+                        {limitType === "disabled" && (
+                          <p className="text-sm text-destructive">
+                            User will be unable to use the service
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3 mt-6">
+                        <Button onClick={handleSaveUserLimits} className="flex-1">
+                          Save Changes
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setEditingUserId(null)}
+                          className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="space-y-4">
-                    {[
-                      {
-                        action: "Check completed",
-                        user: "john@example.com",
-                        details: "1,250 words, 8 corrections",
-                        time: "2 min ago",
-                      },
-                      {
-                        action: "New signup",
-                        user: "newuser@gmail.com",
-                        details: "Free plan",
-                        time: "5 min ago",
-                      },
-                      {
-                        action: "Plan upgraded",
-                        user: "jane@example.com",
-                        details: "Free → Pro",
-                        time: "12 min ago",
-                      },
-                      {
-                        action: "Check completed",
-                        user: "mike@example.com",
-                        details: "890 words, 3 corrections",
-                        time: "15 min ago",
-                      },
-                      {
-                        action: "Check completed",
-                        user: "sarah@example.com",
-                        details: "2,000 words, 15 corrections",
-                        time: "18 min ago",
-                      },
-                    ].map((log, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between py-3 border-b border-border last:border-0"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              log.action === "New signup"
-                                ? "bg-green-500"
-                                : log.action === "Plan upgraded"
-                                ? "bg-blue-500"
-                                : "bg-accent"
-                            }`}
-                          />
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {log.action}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {log.user} · {log.details}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {log.time}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -676,32 +899,32 @@ const Admin = () => {
                       <span className="text-sm text-muted-foreground">MRR</span>
                       <CreditCard className="w-5 h-5 text-accent" />
                     </div>
-                    <p className="text-3xl font-bold text-foreground">₹8,420</p>
-                    <p className="text-sm text-green-500 mt-1">+6% MoM</p>
+                    <p className="text-3xl font-bold text-foreground">₹{monthlyRevenue.toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground mt-1">Based on active Pro users</p>
                   </div>
                   <div className="bg-card rounded-xl border border-border p-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-sm text-muted-foreground">Active Subscriptions</span>
                       <Users className="w-5 h-5 text-accent" />
                     </div>
-                    <p className="text-3xl font-bold text-foreground">842</p>
-                    <p className="text-sm text-muted-foreground mt-1">Free + Paid</p>
+                    <p className="text-3xl font-bold text-foreground">{proUsers.toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground mt-1">Active Pro plans</p>
                   </div>
                   <div className="bg-card rounded-xl border border-border p-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-sm text-muted-foreground">Churn</span>
                       <TrendingUp className="w-5 h-5 text-accent" />
                     </div>
-                    <p className="text-3xl font-bold text-foreground">2.1%</p>
-                    <p className="text-sm text-muted-foreground mt-1">Last 30 days</p>
+                    <p className="text-3xl font-bold text-foreground">{conversionRate}%</p>
+                    <p className="text-sm text-muted-foreground mt-1">Pro conversion</p>
                   </div>
                   <div className="bg-card rounded-xl border border-border p-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-sm text-muted-foreground">Refunds</span>
                       <FileText className="w-5 h-5 text-accent" />
                     </div>
-                    <p className="text-3xl font-bold text-foreground">₹320</p>
-                    <p className="text-sm text-muted-foreground mt-1">This month</p>
+                    <p className="text-3xl font-bold text-foreground">₹0</p>
+                    <p className="text-sm text-muted-foreground mt-1">No refunds tracked</p>
                   </div>
                 </div>
 
@@ -727,21 +950,27 @@ const Admin = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {[
-                          { name: "john@example.com", plan: "Pro", amount: "₹9", status: "Paid", date: "Jan 18" },
-                          { name: "sarah@example.com", plan: "Team", amount: "₹49", status: "Paid", date: "Jan 17" },
-                          { name: "alex@example.com", plan: "Pro", amount: "₹9", status: "Paid", date: "Jan 16" },
-                        ].map((payment) => (
-                          <tr key={`${payment.name}-${payment.date}`} className="border-b border-border last:border-0">
-                            <td className="py-3 text-sm text-foreground">{payment.name}</td>
-                            <td className="py-3 text-sm text-foreground">{payment.plan}</td>
-                            <td className="py-3 text-sm text-foreground">{payment.amount}</td>
-                            <td className="py-3 text-sm">
-                              <Badge variant="secondary">{payment.status}</Badge>
+                        {billingRows.length ? (
+                          billingRows.map((payment) => (
+                            <tr key={`${payment.name}-${payment.date}`} className="border-b border-border last:border-0">
+                              <td className="py-3 text-sm text-foreground">{payment.name}</td>
+                              <td className="py-3 text-sm text-foreground">{payment.plan}</td>
+                              <td className="py-3 text-sm text-foreground">{payment.amount}</td>
+                              <td className="py-3 text-sm">
+                                <Badge variant="secondary">{payment.status}</Badge>
+                              </td>
+                              <td className="py-3 text-sm text-muted-foreground">
+                                {new Date(payment.date).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td className="py-8 text-center text-sm text-muted-foreground" colSpan={5}>
+                              No billing activity yet.
                             </td>
-                            <td className="py-3 text-sm text-muted-foreground">{payment.date}</td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
                   </div>

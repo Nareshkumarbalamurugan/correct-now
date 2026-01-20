@@ -102,9 +102,33 @@ const Hero = ({ onGetStarted }: HeroProps) => {
             </div>
           </div>
 
-          {/* Right: live preview (adds “stunning” without gimmicks) */}
+          {/* Right: benefits + live preview */}
           <div className="relative space-y-6">
             <div className="absolute -inset-4 rounded-3xl bg-white/10 blur-2xl" />
+            <div className="relative rounded-2xl border border-white/40 bg-white/20 backdrop-blur-md p-5 text-white shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+              <div className="text-sm font-bold uppercase tracking-wide text-white/80 mb-3">
+                Why CorrectNow
+              </div>
+              <ul className="space-y-3 text-base font-semibold">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Correct all global languages
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Grammerly alternative
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  More to improve
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Trusted by professionals worldwide
+                </li>
+              </ul>
+            </div>
+
             <div className="relative rounded-2xl bg-white border border-white/30 shadow-elevated p-6 md:p-7">
               <div className="flex items-center justify-between gap-4 mb-5">
                 <div className="text-sm font-semibold text-foreground">Live preview</div>
@@ -144,30 +168,6 @@ const Hero = ({ onGetStarted }: HeroProps) => {
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="relative rounded-2xl border border-white/40 bg-white/20 backdrop-blur-md p-5 text-white shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-              <div className="text-sm font-bold uppercase tracking-wide text-white/80 mb-3">
-                Why CorrectNow
-              </div>
-              <ul className="space-y-3 text-base font-semibold">
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  Correct all global languages
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  Grammerly alternative
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  More to improve
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  Trusted by professionals worldwide
-                </li>
-              </ul>
             </div>
           </div>
         </div>
