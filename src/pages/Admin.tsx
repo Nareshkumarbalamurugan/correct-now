@@ -64,8 +64,6 @@ const Admin = () => {
   // User limit management
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [limitType, setLimitType] = useState<"unlimited" | "limited" | "disabled">("limited");
-  const [limitStartDate, setLimitStartDate] = useState("");
-  const [limitEndDate, setLimitEndDate] = useState("");
   const [wordLimitValue, setWordLimitValue] = useState("2000");
   const [creditsValue, setCreditsValue] = useState("50000");
 
@@ -229,8 +227,6 @@ const Admin = () => {
         updates.credits = isNaN(credits) ? 50000 : credits;
       }
 
-      if (limitStartDate) updates.limitStartDate = limitStartDate;
-      if (limitEndDate) updates.limitEndDate = limitEndDate;
       updates.updatedAt = new Date().toISOString();
 
       const userRef = doc(db, "users", editingUserId);
@@ -720,24 +716,6 @@ const Admin = () => {
                                 value={creditsValue}
                                 onChange={(e) => setCreditsValue(e.target.value)}
                                 placeholder="50000"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium mb-2">Start Date (Optional)</label>
-                              <Input
-                                type="date"
-                                value={limitStartDate}
-                                onChange={(e) => setLimitStartDate(e.target.value)}
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium mb-2">End Date (Optional)</label>
-                              <Input
-                                type="date"
-                                value={limitEndDate}
-                                onChange={(e) => setLimitEndDate(e.target.value)}
                               />
                             </div>
                           </>

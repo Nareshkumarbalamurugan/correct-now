@@ -27,11 +27,16 @@ const Payment = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
   const [subscriptionStatus, setSubscriptionStatus] = useState("");
+  const [selectedCreditPack, setSelectedCreditPack] = useState<"basic" | "saver">("basic");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";
   const isCreditPurchase = searchParams.get("mode") === "credits";
-  const creditPack = { credits: 10000, price: 1 };
+  const creditPacks = {
+    basic: { credits: 10000, price: 50, label: "Basic Pack" },
+    saver: { credits: 25000, price: 100, label: "Ultra Saver" }
+  };
+  const creditPack = creditPacks[selectedCreditPack];
   const canBuyCredits = currentPlan === "Pro" && String(subscriptionStatus).toLowerCase() === "active";
 
   useEffect(() => {
@@ -387,6 +392,31 @@ const Payment = () => {
                   </span>
                 </div>
               </div>
+
+              {isCreditPurchase && (
+                <div className="mb-6">
+                  <h3 className="font-medium text-foreground mb-3">Select Credit Pack</h3>
+                  <RadioGroup value={selectedCreditPack} onValueChange={(value: any) => setSelectedCreditPack(value)}>
+                    <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer">
+                      <RadioGroupItem value="basic" id="basic" />
+                      <Label htmlFor="basic" className="flex-1 cursor-pointer">
+                        <div className="font-medium text-foreground">Basic Pack - ₹50</div>
+                        <div className="text-sm text-muted-foreground">10,000 credits</div>
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer bg-accent/5">
+                      <RadioGroupItem value="saver" id="saver" />
+                      <Label htmlFor="saver" className="flex-1 cursor-pointer">
+                        <div className="font-medium text-foreground flex items-center gap-2">
+                          Ultra Saver - ₹100
+                          <span className="text-xs bg-accent text-accent-foreground px-2 py-0.5 rounded">Best Value</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">25,000 credits</div>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              )}
 
               <div className="bg-accent/10 rounded-lg p-4 mb-6">
                 <h3 className="font-medium text-foreground mb-2">
