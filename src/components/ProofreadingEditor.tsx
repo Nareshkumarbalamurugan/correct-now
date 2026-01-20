@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Copy, Check, RotateCcw, FileText, Bold, Italic, Underline, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import LanguageSelector from "./LanguageSelector";
 import WordCounter from "./WordCounter";
 import LoadingDots from "./LoadingDots";
@@ -11,7 +12,7 @@ import html2pdf from "html2pdf.js";
 import { upsertDoc } from "@/lib/docs";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc as firestoreDoc, getDoc } from "firebase/firestore";
+import { doc as firestoreDoc, onSnapshot, setDoc } from "firebase/firestore";
 import {
   Dialog,
   DialogContent,
@@ -124,14 +125,15 @@ const detectLanguageLocal = (text: string): string => {
   const hasMalay = /\b(terima kasih|anda|tidak|hari ini|esok|dan)\b/i.test(text);
   if (hasMalay) return "ms";
 
-  const hasTagalog = /\b(salamat|ikaw|hindi|ngayon|bukas|at)\b/i.test(text);
-  if (hasTagalog) return "tl";
+  const tagalogWords = (text.match(/\b(salamat|ikaw|hindi|ngayon|bukas|at|ako|tayo|kayo|sila|wala|meron)\b/gi) || []).length;
+  const englishWords = (text.match(/\b(the|and|is|are|was|were|this|that|I|you|we|they|to|for|of|in|on|with)\b/gi) || []).length;
+  if (tagalogWords >= 2 && tagalogWords > englishWords * 2) return "tl";
 
   const hasSwahili = /\b(asante|habari|siku|leo|kesho|na)\b/i.test(text);
   if (hasSwahili) return "sw";
 
   const hasEnglish = /[A-Za-z]/.test(text);
-  if (hasEnglish) return "en";
+  if (hasEnglish) return "auto";
 
   return "auto";
 };
@@ -198,6 +200,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [planName, setPlanName] = useState<"Free" | "Pro">("Free");
   const [wordLimit, setWordLimit] = useState(FREE_WORD_LIMIT);
   const [credits, setCredits] = useState(0);
+  const [creditsUsed, setCreditsUsed] = useState(0);
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
   const [inputText, setInputText] = useState("");
   const [baseText, setBaseText] = useState("");
   const [correctedText, setCorrectedText] = useState("");
@@ -249,22 +254,33 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         setPlanName("Free");
         setWordLimit(FREE_WORD_LIMIT);
         setCredits(0);
+        setCreditsUsed(0);
+        setUserName("");
+        setUserEmail("");
         return;
       }
+      setUserName(user.displayName || "");
+      setUserEmail(user.email || "");
       try {
         const ref = firestoreDoc(db, `users/${user.uid}`);
-        const snap = await getDoc(ref);
-        const data = snap.exists() ? snap.data() : {};
-        const plan = String(data?.plan || "free").toLowerCase() === "pro" ? "Pro" : "Free";
-        const limit = Number(data?.wordLimit || (plan === "Pro" ? PRO_WORD_LIMIT : FREE_WORD_LIMIT));
-        const creditValue = Number(data?.credits || (plan === "Pro" ? PRO_CREDITS : 0));
-        setPlanName(plan);
-        setWordLimit(Number.isFinite(limit) ? limit : FREE_WORD_LIMIT);
-        setCredits(Number.isFinite(creditValue) ? creditValue : 0);
+        onSnapshot(ref, (snap) => {
+          const data = snap.exists() ? snap.data() : {};
+          const entitlementPlan =
+            Number(data?.wordLimit) >= PRO_WORD_LIMIT || Number(data?.credits) >= PRO_CREDITS;
+          const plan = String(data?.plan || "").toLowerCase() === "pro" || entitlementPlan ? "Pro" : "Free";
+          const limit = Number(data?.wordLimit || (plan === "Pro" ? PRO_WORD_LIMIT : FREE_WORD_LIMIT));
+          const creditValue = Number(data?.credits || (plan === "Pro" ? PRO_CREDITS : 0));
+          const usedValue = Number(data?.creditsUsed || 0);
+          setPlanName(plan);
+          setWordLimit(Number.isFinite(limit) ? limit : FREE_WORD_LIMIT);
+          setCredits(Number.isFinite(creditValue) ? creditValue : 0);
+          setCreditsUsed(Number.isFinite(usedValue) ? usedValue : 0);
+        });
       } catch {
         setPlanName("Free");
         setWordLimit(FREE_WORD_LIMIT);
         setCredits(0);
+        setCreditsUsed(0);
       }
     });
 
@@ -317,7 +333,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > wordLimit;
   const pendingCount = changes.filter((change) => change.status !== "accepted" && change.status !== "ignored").length;
-  const accuracyScore = wordCount
+  const accuracyScore = hasResults && wordCount
     ? Math.max(0, Math.min(100, Math.round((1 - pendingCount / wordCount) * 100)))
     : 0;
 
@@ -454,6 +470,22 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         setChanges(nextChanges);
       }
       persistDoc(normalizedInput);
+      const auth = getFirebaseAuth();
+      const db = getFirebaseDb();
+      if (auth?.currentUser && db) {
+        const usedNext = creditsUsed + overrideWordCount;
+        setCreditsUsed(usedNext);
+        const ref = firestoreDoc(db, `users/${auth.currentUser.uid}`);
+        await setDoc(
+          ref,
+          {
+            creditsUsed: usedNext,
+            creditsTotal: credits || PRO_CREDITS,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
       setHasResults(true);
       toast.success("Text checked successfully!");
     } catch (error) {
@@ -680,6 +712,16 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setEditorDraft(target.innerText);
   };
 
+  const reorderSuggestions = (list: Change[]) => {
+    const pending = list.filter(
+      (change) => change.status !== "accepted" && change.status !== "ignored"
+    );
+    const done = list.filter(
+      (change) => change.status === "accepted" || change.status === "ignored"
+    );
+    return [...pending, ...done];
+  };
+
   const handleExportPdf = async () => {
     const target = modalEditorRef.current;
     if (!target) return;
@@ -697,7 +739,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const updated: Change[] = changes.map((change, idx) =>
       idx === index ? { ...change, status: "accepted" as const } : change
     );
-    setChanges(updated);
+    setChanges(reorderSuggestions(updated));
     // Use baseText as the source of truth for applying changes
     const source = baseText || inputText;
     const updatedText = applyAcceptedChanges(source, updated);
@@ -718,7 +760,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const updated: Change[] = changes.map((change, idx) =>
       idx === index ? { ...change, status: "ignored" as const } : change
     );
-    setChanges(updated);
+    setChanges(reorderSuggestions(updated));
   };
 
   const handleAcceptAll = () => {
@@ -765,7 +807,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
       // Fast local detection for scripts
       const local = detectLanguageLocal(trimmed);
-      if (local !== "auto") {
+      if (local !== "auto" && local !== "en") {
         setLanguage(local);
         return;
       }
@@ -781,6 +823,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         const data = await response.json();
         if (data?.code && data.code !== "auto") {
           setLanguage(data.code);
+        } else {
+          setLanguage("en");
         }
       } catch {
         // ignore
@@ -945,18 +989,19 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="border border-border rounded-lg p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
-                  <div className="text-sm text-muted-foreground">
-                    Accuracy score
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="px-3 py-1 rounded-full bg-success-muted text-success text-sm font-semibold">
-                      {accuracyScore}%
+                  <div className="flex flex-col gap-3 mb-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm text-muted-foreground">Accuracy score</div>
+                      <div className="flex items-center gap-3">
+                        <div className="px-3 py-1 rounded-full bg-success-muted text-success text-sm font-semibold">
+                          {accuracyScore}%
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {changes.length} change{changes.length === 1 ? "" : "s"}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {changes.length} change{changes.length === 1 ? "" : "s"}
-                    </div>
-                  </div>
+                    <Progress value={accuracyScore} />
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">

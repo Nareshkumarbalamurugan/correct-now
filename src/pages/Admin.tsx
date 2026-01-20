@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
+import { getFirebaseDb } from "@/lib/firebase";
+import { collection, collectionGroup, getDocs } from "firebase/firestore";
 import {
   fetchRemoteSuggestions,
   getSuggestions,
@@ -27,61 +29,17 @@ import {
   type SuggestionItem,
 } from "@/lib/suggestions";
 
-const mockUsers = [
-  {
-    id: 1,
-    name: "John Doe",
-    email: "john@example.com",
-    plan: "Pro",
-    checks: 45,
-    words: 52000,
-    joined: "2024-01-10",
-  },
-  {
-    id: 2,
-    name: "Jane Smith",
-    email: "jane@example.com",
-    plan: "Free",
-    checks: 12,
-    words: 8500,
-    joined: "2024-01-12",
-  },
-  {
-    id: 3,
-    name: "Mike Johnson",
-    email: "mike@example.com",
-    plan: "Pro",
-    checks: 89,
-    words: 125000,
-    joined: "2023-12-05",
-  },
-  {
-    id: 4,
-    name: "Sarah Wilson",
-    email: "sarah@example.com",
-    plan: "Team",
-    checks: 234,
-    words: 450000,
-    joined: "2023-11-20",
-  },
-  {
-    id: 5,
-    name: "Alex Brown",
-    email: "alex@example.com",
-    plan: "Free",
-    checks: 8,
-    words: 3200,
-    joined: "2024-01-15",
-  },
-];
-
-const mockDailyStats = [
-  { date: "Jan 15", checks: 245, words: 125000, users: 12 },
-  { date: "Jan 14", checks: 312, words: 168000, users: 8 },
-  { date: "Jan 13", checks: 198, words: 98000, users: 15 },
-  { date: "Jan 12", checks: 267, words: 142000, users: 10 },
-  { date: "Jan 11", checks: 289, words: 156000, users: 7 },
-];
+type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  plan: string;
+  wordLimit?: number;
+  credits?: number;
+  subscriptionStatus?: string;
+  updatedAt?: string;
+  createdAt?: string;
+};
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState<
@@ -90,17 +48,11 @@ const Admin = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [suggestionSearch, setSuggestionSearch] = useState("");
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [totalDocs, setTotalDocs] = useState(0);
+  const [totalWords, setTotalWords] = useState(0);
 
-  const stats = {
-    totalUsers: 1247,
-    activeToday: 156,
-    checksToday: 892,
-    wordsToday: 485000,
-    proUsers: 423,
-    revenue: 3807,
-  };
-
-  const filteredUsers = mockUsers.filter(
+  const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -117,6 +69,40 @@ const Admin = () => {
   }, [suggestions, suggestionSearch]);
 
   useEffect(() => {
+    const loadUsers = async () => {
+      const db = getFirebaseDb();
+      if (!db) return;
+      const snap = await getDocs(collection(db, "users"));
+      const list: AdminUser[] = snap.docs.map((docSnap) => {
+        const data = docSnap.data() as Record<string, any>;
+        return {
+          id: docSnap.id,
+          name: data?.name || "User",
+          email: data?.email || "",
+          plan: String(data?.plan || "free").toLowerCase() === "pro" ? "Pro" : "Free",
+          wordLimit: data?.wordLimit,
+          credits: data?.credits,
+          subscriptionStatus: data?.subscriptionStatus,
+          updatedAt: data?.updatedAt,
+          createdAt: data?.createdAt,
+        };
+      });
+      setUsers(list);
+
+      const docsSnap = await getDocs(collectionGroup(db, "docs"));
+      setTotalDocs(docsSnap.size);
+
+      let words = 0;
+      docsSnap.forEach((docSnap) => {
+        const data = docSnap.data() as Record<string, any>;
+        const text = typeof data?.text === "string" ? data.text : "";
+        words += text.trim().split(/\s+/).filter(Boolean).length;
+      });
+      setTotalWords(words);
+    };
+
+    loadUsers();
+
     const loadSuggestions = async () => {
       const local = getSuggestions();
       const remote = await fetchRemoteSuggestions();
@@ -128,6 +114,18 @@ const Admin = () => {
     window.addEventListener("correctnow:suggestions-updated", handleStorage);
     return () => window.removeEventListener("correctnow:suggestions-updated", handleStorage);
   }, []);
+
+  const proUsers = users.filter((user) => user.plan === "Pro").length;
+  const totalUsers = users.length;
+  const conversionRate = totalUsers ? Math.round((proUsers / totalUsers) * 100) : 0;
+  const monthlyRevenue = proUsers * 500;
+  const isToday = (iso?: string) => {
+    if (!iso) return false;
+    const date = new Date(iso);
+    const now = new Date();
+    return date.toDateString() === now.toDateString();
+  };
+  const newUsersToday = users.filter((user) => isToday(user.createdAt) || isToday(user.updatedAt)).length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -210,10 +208,10 @@ const Admin = () => {
                       <Users className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      {stats.totalUsers.toLocaleString()}
+                      {totalUsers.toLocaleString()}
                     </p>
-                    <p className="text-sm text-green-500 mt-1">
-                      +12% from last month
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Total registered users
                     </p>
                   </div>
 
@@ -225,11 +223,10 @@ const Admin = () => {
                       <Activity className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      {stats.activeToday}
+                      {proUsers}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {Math.round((stats.activeToday / stats.totalUsers) * 100)}%
-                      of total
+                      Pro subscribers
                     </p>
                   </div>
 
@@ -241,10 +238,10 @@ const Admin = () => {
                       <CheckCircle className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      {stats.checksToday}
+                      {totalDocs.toLocaleString()}
                     </p>
-                    <p className="text-sm text-green-500 mt-1">
-                      +8% from yesterday
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Total checks stored
                     </p>
                   </div>
 
@@ -256,7 +253,7 @@ const Admin = () => {
                       <FileText className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      {(stats.wordsToday / 1000).toFixed(0)}K
+                      {(totalWords / 1000).toFixed(0)}K
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">Today</p>
                   </div>
@@ -269,11 +266,10 @@ const Admin = () => {
                       <TrendingUp className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      {stats.proUsers}
+                      {proUsers}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {Math.round((stats.proUsers / stats.totalUsers) * 100)}%
-                      conversion
+                      {conversionRate}% conversion
                     </p>
                   </div>
 
@@ -285,10 +281,10 @@ const Admin = () => {
                       <TrendingUp className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-3xl font-bold text-foreground">
-                      ₹{stats.revenue.toLocaleString("en-IN")}
+                      ₹{monthlyRevenue.toLocaleString("en-IN")}
                     </p>
-                    <p className="text-sm text-green-500 mt-1">
-                      +15% from last month
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Based on active Pro users
                     </p>
                   </div>
                 </div>
@@ -323,25 +319,12 @@ const Admin = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {mockDailyStats.map((day) => (
-                          <tr
-                            key={day.date}
-                            className="border-b border-border last:border-0"
-                          >
-                            <td className="py-3 text-sm text-foreground">
-                              {day.date}
-                            </td>
-                            <td className="py-3 text-sm text-foreground">
-                              {day.checks}
-                            </td>
-                            <td className="py-3 text-sm text-foreground">
-                              {(day.words / 1000).toFixed(0)}K
-                            </td>
-                            <td className="py-3 text-sm text-foreground">
-                              +{day.users}
-                            </td>
-                          </tr>
-                        ))}
+                        <tr className="border-b border-border last:border-0">
+                          <td className="py-3 text-sm text-foreground">Today</td>
+                          <td className="py-3 text-sm text-foreground">{totalDocs}</td>
+                          <td className="py-3 text-sm text-foreground">{(totalWords / 1000).toFixed(0)}K</td>
+                          <td className="py-3 text-sm text-foreground">+{newUsersToday}</td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -396,10 +379,10 @@ const Admin = () => {
                             Plan
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
-                            Checks
+                            Credits
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
-                            Words
+                            Word Limit
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Joined
@@ -446,13 +429,17 @@ const Admin = () => {
                               </Badge>
                             </td>
                             <td className="py-4 px-6 text-sm text-foreground">
-                              {user.checks}
+                              {user.credits ? user.credits.toLocaleString() : "—"}
                             </td>
                             <td className="py-4 px-6 text-sm text-foreground">
-                              {(user.words / 1000).toFixed(1)}K
+                              {user.wordLimit ? user.wordLimit.toLocaleString() : "—"}
                             </td>
                             <td className="py-4 px-6 text-sm text-muted-foreground">
-                              {user.joined}
+                              {user.createdAt
+                                ? new Date(user.createdAt).toLocaleDateString()
+                                : user.updatedAt
+                                ? new Date(user.updatedAt).toLocaleDateString()
+                                : "—"}
                             </td>
                             <td className="py-4 px-6 text-right">
                               <Button variant="ghost" size="sm">

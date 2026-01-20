@@ -78,7 +78,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
                     Login
                   </Button>
                 </Link>
-                <Link to="/auth">
+                <Link to="/auth?mode=register">
                   <Button variant="accent" size="lg" className="h-12 text-base">
                     Register
                   </Button>

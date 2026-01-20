@@ -179,6 +179,8 @@ app.post("/api/detect-language", async (req, res) => {
   - Romanian includes: ă, â, î, ș, ț.
   - Hindi/Marathi share script; prefer Marathi for common Marathi words.
   - Urdu/Persian use Arabic script; use common Urdu/Persian words to distinguish.
+  - Only return Tagalog (tl) when multiple Tagalog words appear (e.g., "salamat", "ikaw", "hindi", "bukas", "ngayon").
+  - If text is generic Latin script without strong language-specific words, prefer "en".
   Text:\n"""${text}"""`;
 
     const response = await fetch(endpoint, {

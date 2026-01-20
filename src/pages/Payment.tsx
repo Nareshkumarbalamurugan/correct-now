@@ -82,6 +82,9 @@ const Payment = () => {
                 plan: "pro",
                 wordLimit: 2000,
                 credits: 50000,
+                subscriptionId: subscription?.id || "",
+                subscriptionStatus: "active",
+                subscriptionUpdatedAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               },
               { merge: true }
