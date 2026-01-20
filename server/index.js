@@ -489,8 +489,9 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       return res.status(400).json({ message: "User ID and email required" });
     }
 
-    const baseUrl = process.env.VITE_API_BASE_URL || "http://localhost:8787";
-    const clientUrl = baseUrl.replace(/:\d+$/, ":5173"); // Assume client on 5173
+    // Use the origin from the request or fallback to environment variable
+    const origin = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || process.env.CLIENT_URL || "http://localhost:5173";
+    const clientUrl = origin.includes('localhost') ? origin : origin;
 
     let sessionConfig = {
       payment_method_types: ["card"],
