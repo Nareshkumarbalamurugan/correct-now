@@ -1,6 +1,7 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
+import { getAuth, Auth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
+import { getStorage, FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -30,11 +31,21 @@ const getFirebaseApp = (): FirebaseApp | null => {
 export const getFirebaseAuth = (): Auth | null => {
   const app = getFirebaseApp();
   if (!app) return null;
-  return getAuth(app);
+  const auth = getAuth(app);
+  setPersistence(auth, browserLocalPersistence).catch(() => {
+    // ignore persistence errors
+  });
+  return auth;
 };
 
 export const getFirebaseDb = (): Firestore | null => {
   const app = getFirebaseApp();
   if (!app) return null;
   return getFirestore(app);
+};
+
+export const getFirebaseStorage = (): FirebaseStorage | null => {
+  const app = getFirebaseApp();
+  if (!app) return null;
+  return getStorage(app);
 };

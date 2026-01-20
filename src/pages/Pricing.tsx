@@ -1,4 +1,4 @@
-import { Check, Zap, Crown, Building2 } from "lucide-react";
+import { Check, Zap, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
@@ -13,8 +13,8 @@ const plans = [
     period: "forever",
     description: "Perfect for trying out CorrectNow",
     features: [
-      "500 words per check",
-      "10 checks per day",
+      "200 words per check",
+      "Limited daily checks",
       "Basic spelling correction",
       "Global languages supported",
       "Change log with explanations",
@@ -22,6 +22,7 @@ const plans = [
     limitations: [
       "No history saved",
       "Standard processing speed",
+      "Word checks beyond 200 words are Pro-only",
     ],
     cta: "Get Started",
     popular: false,
@@ -29,12 +30,12 @@ const plans = [
   {
     name: "Pro",
     icon: Crown,
-    price: "₹9",
+    price: "₹500",
     period: "per month",
     description: "For professionals who write daily",
     features: [
+      "Unlimited word checks",
       "2,000 words per check",
-      "Unlimited checks",
       "Advanced grammar fixes",
       "All languages supported",
       "Detailed explanations",
@@ -43,28 +44,8 @@ const plans = [
       "Export to Word/PDF",
     ],
     limitations: [],
-    cta: "Start Free Trial",
+    cta: "Go Pro",
     popular: true,
-  },
-  {
-    name: "Team",
-    icon: Building2,
-    price: "₹29",
-    period: "per month",
-    description: "For teams and organizations",
-    features: [
-      "Everything in Pro",
-      "5,000 words per check",
-      "Up to 10 team members",
-      "Team dashboard & analytics",
-      "Admin controls",
-      "Priority support",
-      "API access",
-      "Custom integrations",
-    ],
-    limitations: [],
-    cta: "Contact Sales",
-    popular: false,
   },
 ];
 
@@ -92,7 +73,7 @@ const Pricing = () => {
         {/* Pricing Cards */}
         <section className="pb-20 px-4">
           <div className="container max-w-6xl mx-auto">
-            <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid md:grid-cols-2 gap-8">
               {plans.map((plan) => (
                 <div
                   key={plan.name}
@@ -137,7 +118,7 @@ const Pricing = () => {
 
                   <p className="text-muted-foreground mb-6">{plan.description}</p>
 
-                  <Link to={plan.name === "Team" ? "/contact" : "/payment"}>
+                  <Link to={"/payment"}>
                     <Button
                       variant={plan.popular ? "accent" : "outline"}
                       className="w-full mb-6"

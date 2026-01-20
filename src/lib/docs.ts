@@ -58,6 +58,20 @@ export const upsertDoc = (text: string, id?: string): DocItem => {
   const auth = getFirebaseAuth();
   const db = getFirebaseDb();
   if (auth?.currentUser && db) {
+    const userRef = firestoreDoc(db, `users/${auth.currentUser.uid}`);
+    setDoc(
+      userRef,
+      {
+        uid: auth.currentUser.uid,
+        name: auth.currentUser.displayName || "",
+        email: auth.currentUser.email || "",
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    ).catch(() => {
+      // ignore user profile sync errors
+    });
+
     const ref = firestoreDoc(db, `users/${auth.currentUser.uid}/docs/${doc.id}`);
     setDoc(ref, doc, { merge: true }).catch(() => {
       // keep local fallback if network fails
@@ -103,6 +117,28 @@ export const initDocsSync = () => {
   onAuthStateChanged(auth, async (user) => {
     if (!user) return;
     try {
+      const userRef = firestoreDoc(db, `users/${user.uid}`);
+      await setDoc(
+        userRef,
+        {
+          uid: user.uid,
+          name: user.displayName || "",
+          email: user.email || "",
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      const localDocs = getDocs();
+      if (localDocs.length) {
+        await Promise.all(
+          localDocs.map((docItem) => {
+            const ref = firestoreDoc(db, `users/${user.uid}/docs/${docItem.id}`);
+            return setDoc(ref, docItem, { merge: true });
+          })
+        );
+      }
+
       const snap = await getFirestoreDocs(collection(db, `users/${user.uid}/docs`));
       const remote = snap.docs
         .map((docSnap) => ({

@@ -1,11 +1,26 @@
+import { useEffect, useState } from "react";
 import { ArrowRight, Check, Globe, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 
 interface HeroProps {
   onGetStarted: () => void;
 }
 
 const Hero = ({ onGetStarted }: HeroProps) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, (current) => {
+      setIsAuthenticated(Boolean(current));
+    });
+    return () => unsub();
+  }, []);
+
   const scrollToFeatures = () => {
     document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
   };
@@ -55,6 +70,21 @@ const Hero = ({ onGetStarted }: HeroProps) => {
                 See How It Works
               </Button>
             </div>
+
+            {!isAuthenticated && (
+              <div className="animate-fade-in mt-4 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+                <Link to="/auth">
+                  <Button variant="outline" size="lg" className="h-12 text-base bg-white/90 hover:bg-white">
+                    Login
+                  </Button>
+                </Link>
+                <Link to="/auth">
+                  <Button variant="accent" size="lg" className="h-12 text-base">
+                    Register
+                  </Button>
+                </Link>
+              </div>
+            )}
 
             <div className="animate-fade-in mt-7 flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center lg:justify-start text-white/85 text-sm">
               <div className="flex items-center gap-2">

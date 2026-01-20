@@ -12,7 +12,8 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { doc as firestoreDoc, setDoc } from "firebase/firestore";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -33,17 +34,46 @@ const Auth = () => {
       }
 
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        const db = getFirebaseDb();
+        if (db) {
+          const ref = firestoreDoc(db, `users/${result.user.uid}`);
+          await setDoc(
+            ref,
+            {
+              uid: result.user.uid,
+              name: result.user.displayName || "",
+              email: result.user.email || "",
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        }
         toast.success("Signed in successfully");
       } else {
         const result = await createUserWithEmailAndPassword(auth, email, password);
         if (name.trim()) {
           await updateProfile(result.user, { displayName: name.trim() });
         }
+        const db = getFirebaseDb();
+        if (db) {
+          const ref = firestoreDoc(db, `users/${result.user.uid}`);
+          await setDoc(
+            ref,
+            {
+              uid: result.user.uid,
+              name: name.trim() || result.user.displayName || "",
+              email: result.user.email || "",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        }
         toast.success("Account created successfully");
       }
 
-      navigate("/dashboard");
+      navigate("/");
     } catch (error: any) {
       toast.error(error?.message ?? "Authentication failed");
     } finally {
@@ -60,9 +90,23 @@ const Auth = () => {
         return;
       }
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const db = getFirebaseDb();
+      if (db) {
+        const ref = firestoreDoc(db, `users/${result.user.uid}`);
+        await setDoc(
+          ref,
+          {
+            uid: result.user.uid,
+            name: result.user.displayName || "",
+            email: result.user.email || "",
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
       toast.success("Signed in with Google");
-      navigate("/dashboard");
+      navigate("/");
     } catch (error: any) {
       toast.error(error?.message ?? "Google sign-in failed");
     } finally {

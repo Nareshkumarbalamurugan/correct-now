@@ -10,17 +10,98 @@ import {
   ArrowLeft,
   Smartphone,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { doc as firestoreDoc, setDoc } from "firebase/firestore";
+
+declare global {
+  interface Window {
+    Razorpay?: any;
+  }
+}
 
 const Payment = () => {
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [isProcessing, setIsProcessing] = useState(false);
+  const navigate = useNavigate();
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "";
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const loadRazorpay = () =>
+    new Promise<boolean>((resolve) => {
+      if (window.Razorpay) return resolve(true);
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
-    // Payment integration will be added here
-    setTimeout(() => setIsProcessing(false), 2000);
+    try {
+      const scriptLoaded = await loadRazorpay();
+      if (!scriptLoaded) {
+        throw new Error("Razorpay SDK failed to load");
+      }
+
+      const keyRes = await fetch(`${apiBase}/api/razorpay/key`);
+      if (!keyRes.ok) throw new Error("Unable to fetch payment key");
+      const { keyId } = await keyRes.json();
+
+      const subRes = await fetch(`${apiBase}/api/razorpay/subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ totalCount: 12 }),
+      });
+      if (!subRes.ok) throw new Error("Unable to create subscription");
+      const subscription = await subRes.json();
+
+      const auth = getFirebaseAuth();
+      const user = auth?.currentUser;
+
+      const options = {
+        key: keyId,
+        subscription_id: subscription.id,
+        name: "CorrectNow",
+        description: "Pro plan subscription",
+        image: "/Icon/correctnow logo final2.png",
+        prefill: {
+          name: user?.displayName || "",
+          email: user?.email || "",
+        },
+        theme: { color: "#2293fd" },
+        handler: async () => {
+          const db = getFirebaseDb();
+          if (user && db) {
+            const ref = firestoreDoc(db, `users/${user.uid}`);
+            await setDoc(
+              ref,
+              {
+                plan: "pro",
+                wordLimit: 2000,
+                credits: 50000,
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            );
+          }
+          toast.success("Payment successful");
+          navigate("/");
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (response: any) => {
+        toast.error(response?.error?.description || "Payment failed");
+      });
+      rzp.open();
+    } catch (error: any) {
+      toast.error(error?.message || "Payment failed");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -193,7 +274,7 @@ const Payment = () => {
                     Processing...
                   </span>
                 ) : (
-                  "Pay ₹9.00"
+                  "Pay ₹500"
                 )}
               </Button>
 
@@ -214,7 +295,7 @@ const Payment = () => {
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Pro Plan</span>
-                  <span className="text-foreground">₹9.00/month</span>
+                  <span className="text-foreground">₹500/month</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Billed monthly</span>
@@ -225,7 +306,7 @@ const Payment = () => {
               <div className="border-t border-border pt-4 mb-6">
                 <div className="flex justify-between text-lg font-semibold">
                   <span className="text-foreground">Total due today</span>
-                  <span className="text-foreground">₹9.00</span>
+                  <span className="text-foreground">₹500</span>
                 </div>
               </div>
 

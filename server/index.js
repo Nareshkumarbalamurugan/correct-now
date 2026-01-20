@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync } from "fs";
+import Razorpay from "razorpay";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -14,12 +16,112 @@ const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, "..", "dist");
 
 app.use(cors());
+
+app.post("/api/razorpay/webhook", express.raw({ type: "application/json" }), (req, res) => {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const signature = req.headers["x-razorpay-signature"];
+  if (!secret || !signature) {
+    return res.status(500).json({ message: "Webhook secret or signature missing" });
+  }
+
+  const expected = crypto.createHmac("sha256", secret).update(req.body).digest("hex");
+  if (expected !== signature) {
+    return res.status(400).json({ message: "Invalid webhook signature" });
+  }
+
+  try {
+    const event = JSON.parse(req.body.toString("utf8"));
+    console.log("Razorpay webhook:", event?.event || "unknown");
+  } catch {
+    return res.status(400).json({ message: "Invalid webhook payload" });
+  }
+
+  return res.status(200).json({ status: "ok" });
+});
+
 app.use(express.json({ limit: "1mb" }));
 
 const WORD_LIMIT = 2000;
 
+const getRazorpay = () => {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) return null;
+  return new Razorpay({ key_id: keyId, key_secret: keySecret });
+};
+
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
+});
+
+app.get("/api/razorpay/key", (_req, res) => {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  if (!keyId) {
+    return res.status(500).json({ message: "Missing RAZORPAY_KEY_ID" });
+  }
+  return res.json({ keyId });
+});
+
+app.post("/api/razorpay/order", async (req, res) => {
+  try {
+    const razorpay = getRazorpay();
+    if (!razorpay) {
+      return res.status(500).json({ message: "Razorpay is not configured" });
+    }
+
+    const amountInRupees = Number(req.body?.amount ?? 500);
+    const amount = Math.round(amountInRupees * 100);
+    const order = await razorpay.orders.create({
+      amount,
+      currency: "INR",
+      receipt: `rcpt_${Date.now()}`,
+      notes: { plan: "pro" },
+    });
+
+    return res.json(order);
+  } catch (err) {
+    console.error("Razorpay order error:", err);
+    return res.status(500).json({ message: "Failed to create order" });
+  }
+});
+
+app.post("/api/razorpay/subscription", async (req, res) => {
+  try {
+    const razorpay = getRazorpay();
+    if (!razorpay) {
+      return res.status(500).json({ message: "Razorpay is not configured" });
+    }
+
+    const requestedPlanId = req.body?.planId;
+    let planId = requestedPlanId || process.env.RAZORPAY_PLAN_ID;
+
+    if (!planId) {
+      const plan = await razorpay.plans.create({
+        period: "monthly",
+        interval: 1,
+        item: {
+          name: "CorrectNow Pro",
+          amount: 50000,
+          currency: "INR",
+          description: "Monthly subscription",
+        },
+      });
+      planId = plan.id;
+    }
+
+    const totalCount = Number(req.body?.totalCount ?? 12);
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: planId,
+      total_count: totalCount,
+      customer_notify: 1,
+      notes: { plan: "pro" },
+    });
+
+    return res.json(subscription);
+  } catch (err) {
+    console.error("Razorpay subscription error:", err);
+    return res.status(500).json({ message: "Failed to create subscription" });
+  }
 });
 
 app.get("/api/models", async (_req, res) => {

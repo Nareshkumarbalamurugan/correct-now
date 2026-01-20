@@ -9,6 +9,9 @@ import { Change } from "./ChangeLogTable";
 import { toast } from "sonner";
 import html2pdf from "html2pdf.js";
 import { upsertDoc } from "@/lib/docs";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc as firestoreDoc, getDoc } from "firebase/firestore";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +20,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-const WORD_LIMIT = 2000;
+const FREE_WORD_LIMIT = 200;
+const PRO_WORD_LIMIT = 2000;
+const PRO_CREDITS = 50000;
 const DETECT_DEBOUNCE_MS = 600;
 
 const detectLanguageLocal = (text: string): string => {
@@ -123,6 +128,9 @@ declare global {
 }
 
 const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: ProofreadingEditorProps) => {
+  const [planName, setPlanName] = useState<"Free" | "Pro">("Free");
+  const [wordLimit, setWordLimit] = useState(FREE_WORD_LIMIT);
+  const [credits, setCredits] = useState(0);
   const [inputText, setInputText] = useState("");
   const [baseText, setBaseText] = useState("");
   const [correctedText, setCorrectedText] = useState("");
@@ -160,6 +168,38 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         // ignore
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    const db = getFirebaseDb();
+    if (!auth || !db) return;
+
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setPlanName("Free");
+        setWordLimit(FREE_WORD_LIMIT);
+        setCredits(0);
+        return;
+      }
+      try {
+        const ref = firestoreDoc(db, `users/${user.uid}`);
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? snap.data() : {};
+        const plan = String(data?.plan || "free").toLowerCase() === "pro" ? "Pro" : "Free";
+        const limit = Number(data?.wordLimit || (plan === "Pro" ? PRO_WORD_LIMIT : FREE_WORD_LIMIT));
+        const creditValue = Number(data?.credits || (plan === "Pro" ? PRO_CREDITS : 0));
+        setPlanName(plan);
+        setWordLimit(Number.isFinite(limit) ? limit : FREE_WORD_LIMIT);
+        setCredits(Number.isFinite(creditValue) ? creditValue : 0);
+      } catch {
+        setPlanName("Free");
+        setWordLimit(FREE_WORD_LIMIT);
+        setCredits(0);
+      }
+    });
+
+    return () => unsub();
   }, []);
 
   useEffect(() => {
@@ -206,7 +246,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number | null>(null);
 
   const wordCount = countWords(inputText);
-  const isOverLimit = wordCount > WORD_LIMIT;
+  const isOverLimit = wordCount > wordLimit;
   const pendingCount = changes.filter((change) => change.status !== "accepted" && change.status !== "ignored").length;
   const accuracyScore = wordCount
     ? Math.max(0, Math.min(100, Math.round((1 - pendingCount / wordCount) * 100)))
@@ -286,8 +326,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     }
 
     const overrideWordCount = countWords(textToCheck);
-    if (overrideWordCount > WORD_LIMIT) {
-      toast.error(`Text exceeds ${WORD_LIMIT} word limit`);
+    if (overrideWordCount > wordLimit) {
+      toast.error(`Text exceeds ${wordLimit} word limit`);
       return;
     }
 
@@ -313,7 +353,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         body: JSON.stringify({
           text: textToCheck,
           language,
-          wordLimit: WORD_LIMIT,
+          wordLimit,
         }),
       });
 
@@ -675,7 +715,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         }}
                       />
                     </div>
-                    <WordCounter count={wordCount} limit={WORD_LIMIT} />
+                    <div className="flex flex-col items-start">
+                      <WordCounter count={wordCount} limit={wordLimit} />
+                      <span className="text-xs text-muted-foreground">
+                        Plan: {planName}
+                        {planName === "Pro" ? ` • ${PRO_WORD_LIMIT.toLocaleString()} words/check • ${credits.toLocaleString()} credits` : ` • ${FREE_WORD_LIMIT.toLocaleString()} words/check`}
+                      </span>
+                    </div>
                     <Button
                       variant="outline"
                       size="icon"

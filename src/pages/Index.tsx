@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { FileText, Search } from "lucide-react";
 import { formatUpdated, getDocs, sectionForDate } from "@/lib/docs";
+import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { addSuggestion } from "@/lib/suggestions";
 import { toast } from "sonner";
@@ -109,46 +110,30 @@ const Index = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-x-hidden">
-      <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container py-3 flex flex-col gap-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center rounded-lg bg-accent/10">
-                <img
-                  src="/Icon/correctnow logo final2.png"
-                  alt="CorrectNow"
-                  className="w-48 h-16 object-contain p-2"
-                  loading="eager"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="accent" onClick={() => navigate("/editor")}>New doc</Button>
-            </div>
+      <Header />
+      <div className="container pt-3 pb-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="relative w-full sm:max-w-md">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              className="pl-9"
+              placeholder="Search docs"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative w-full sm:max-w-md">
-              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-              <Input
-                className="pl-9"
-                placeholder="Search docs"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-          </div>
+          <Button variant="accent" size="sm" className="h-9" onClick={() => navigate("/editor")}>New doc</Button>
         </div>
       </div>
 
-      <main className="flex-1 py-10">
-        <section className="mb-10">
+      <main className="flex-1 pt-2 pb-0">
+        <section className="mb-0">
           <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_30px_80px_rgba(34,147,253,0.35)]">
             <div className="absolute inset-0 opacity-25">
               <div className="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-white/25 blur-3xl" />
               <div className="absolute -bottom-24 -left-16 h-80 w-80 rounded-full bg-white/20 blur-3xl" />
             </div>
-            <div className="container relative py-16 md:py-24">
+            <div className="container relative py-12 md:py-16">
               <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
                 <div className="max-w-2xl">
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide">
