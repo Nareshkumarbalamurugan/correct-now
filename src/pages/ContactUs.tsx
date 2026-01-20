@@ -79,10 +79,10 @@ const ContactUs = () => {
                       <span className="font-medium">Email:</span>
                     </div>
                     <a 
-                      href="mailto:info@correctnow.app" 
+                      href="mailto:support@correctnow.app" 
                       className="text-lg font-semibold text-accent hover:text-accent/80 transition-colors"
                     >
-                      info@correctnow.app
+                      support@correctnow.app
                     </a>
                   </div>
                 </CardContent>
@@ -124,10 +124,10 @@ const ContactUs = () => {
                       <span className="font-medium">Email:</span>
                     </div>
                     <a 
-                      href="mailto:billing@correctnow.app" 
+                      href="mailto:support@correctnow.app" 
                       className="text-lg font-semibold text-accent hover:text-accent/80 transition-colors"
                     >
-                      billing@correctnow.app
+                      support@correctnow.app
                     </a>
                   </div>
                 </CardContent>

@@ -224,7 +224,7 @@ const RefundPolicy = () => {
                 <div className="space-y-2 text-muted-foreground text-lg">
                   <div className="flex items-center gap-2">
                     <Mail className="w-5 h-5 text-accent" />
-                    <span>📧 billing@correctnow.app</span>
+                    <span>📧 support@correctnow.app</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Mail className="w-5 h-5 text-accent" />

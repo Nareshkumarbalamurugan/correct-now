@@ -29,9 +29,9 @@ const Footer = () => {
             <Link to="/disclaimer" className="hover:text-foreground transition-colors">
               Disclaimer
             </Link>
-            <a href="#" className="hover:text-foreground transition-colors">
+            <Link to="/terms" className="hover:text-foreground transition-colors">
               Terms
-            </a>
+            </Link>
             <Link to="/contact" className="hover:text-foreground transition-colors">
               Contact
             </Link>
