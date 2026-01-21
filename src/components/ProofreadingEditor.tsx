@@ -321,7 +321,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [correctedText, setCorrectedText] = useState("");
   const [changes, setChanges] = useState<Change[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [language, setLanguage] = useState("auto");
+  const [language, setLanguage] = useState("en");
   const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
   const [copied, setCopied] = useState(false);
   const [hasResults, setHasResults] = useState(false);
@@ -342,6 +342,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const speechFinalRef = useRef<string>("");
   const speechPulseRef = useRef<number | null>(null);
   const speechInterimRef = useRef<string>("");
+  const suggestionsRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
@@ -468,6 +469,11 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     Array<{ start: number; end: number; index: number }>
   >([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number | null>(null);
+  const [selectedWordDialog, setSelectedWordDialog] = useState<{
+    open: boolean;
+    suggestions: Array<{ change: Change; index: number }>;
+    original: string;
+  }>({ open: false, suggestions: [], original: "" });
 
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > wordLimit;
@@ -502,6 +508,24 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     );
     if (match) {
       scrollToSuggestion(match.index);
+      const clickedChange = changes[match.index];
+      if (clickedChange && clickedChange.status !== "accepted" && clickedChange.status !== "ignored") {
+        // Find all suggestions with the same original text
+        const allSuggestionsForWord = changes
+          .map((change, idx) => ({ change, index: idx }))
+          .filter(
+            ({ change }) =>
+              change.original === clickedChange.original &&
+              change.status !== "accepted" &&
+              change.status !== "ignored"
+          );
+        
+        setSelectedWordDialog({
+          open: true,
+          suggestions: allSuggestionsForWord,
+          original: clickedChange.original || "",
+        });
+      }
     }
   };
 
@@ -552,6 +576,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const textToCheck = (overrideText ?? inputText).trim();
     if (!textToCheck) {
       toast.error("Please enter some text to check");
+      return;
+    }
+
+    if (language === "auto") {
+      toast.error("Please select a language before checking");
+      setIsLanguageOpen(true);
       return;
     }
 
@@ -638,6 +668,11 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         );
       }
       setHasResults(true);
+      if (typeof window !== "undefined" && window.innerWidth < 768) {
+        window.setTimeout(() => {
+          suggestionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 120);
+      }
       toast.success("Text checked successfully!");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Something went wrong";
@@ -864,13 +899,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   };
 
   const reorderSuggestions = (list: Change[]) => {
-    const pending = list.filter(
+    // Filter out accepted and ignored suggestions to hide them
+    return list.filter(
       (change) => change.status !== "accepted" && change.status !== "ignored"
     );
-    const done = list.filter(
-      (change) => change.status === "accepted" || change.status === "ignored"
-    );
-    return [...pending, ...done];
   };
 
   const handleExportPdf = async () => {
@@ -887,9 +919,18 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   };
 
   const handleAccept = (index: number) => {
-    const updated: Change[] = changes.map((change, idx) =>
-      idx === index ? { ...change, status: "accepted" as const } : change
-    );
+    const acceptedChange = changes[index];
+    const updated: Change[] = changes.map((change, idx) => {
+      // Accept the selected suggestion
+      if (idx === index) {
+        return { ...change, status: "accepted" as const };
+      }
+      // Auto-ignore other suggestions with the same original text
+      if (change.original === acceptedChange.original && change.status === "pending") {
+        return { ...change, status: "ignored" as const };
+      }
+      return change;
+    });
     setChanges(reorderSuggestions(updated));
     // Use baseText as the source of truth for applying changes
     const source = baseText || inputText;
@@ -944,48 +985,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   }, [inputText]);
 
   useEffect(() => {
-    if (languageMode !== "auto") return;
-    const timeout = window.setTimeout(async () => {
-      const trimmed = inputText.trim();
-      if (!trimmed) {
-        setLanguage("auto");
-        setLastDetectText("");
-        return;
-      }
-
-      if (trimmed === lastDetectText) return;
-      setLastDetectText(trimmed);
-
-      // Fast local detection for scripts
-      const local = detectLanguageLocal(trimmed);
-      if (local !== "auto" && local !== "en") {
-        setLanguage(local);
-        return;
-      }
-
-      try {
-        const response = await fetch("/api/detect-language", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: trimmed }),
-        });
-
-        if (!response.ok) return;
-        const data = await response.json();
-        if (data?.code && data.code !== "auto") {
-          setLanguage(data.code);
-        } else {
-          setLanguage("en");
-        }
-      } catch {
-        // ignore
-      }
-    }, DETECT_DEBOUNCE_MS);
-
-    return () => window.clearTimeout(timeout);
-  }, [inputText, languageMode, lastDetectText]);
-
-  useEffect(() => {
     if (modalEditorRef.current) {
       modalEditorRef.current.innerHTML = editorHtml;
     }
@@ -996,9 +995,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       ref={editorRef}
       className="relative -mt-10 md:-mt-14 py-14 md:py-20 bg-gradient-to-b from-background to-secondary/40"
     >
-      <div className="container">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="container max-w-[1600px]">
+        <div className="w-full mx-auto">
+          <div className="grid gap-6 lg:grid-cols-[1.5fr_0.7fr]">
             {/* Input Section */}
             <Card className="shadow-elevated">
               <CardHeader className="pb-4 min-h-[72px] sm:min-h-[92px]">
@@ -1122,7 +1121,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-4">
                   <p className="text-sm text-muted-foreground">
                     {language === "auto"
-                      ? "Language will be auto-detected"
+                      ? "Please select a language to check"
                       : `Checking in ${language.toUpperCase()}`}
                   </p>
                   <div className="flex flex-wrap items-center gap-3">
@@ -1152,7 +1151,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
             </Card>
 
             {/* Suggestions Panel */}
-            <Card className="shadow-card">
+            <Card ref={suggestionsRef} className="shadow-card">
               <CardHeader className="pb-4 min-h-[72px] sm:min-h-[92px]">
                 <CardTitle className="text-xl">Suggestions</CardTitle>
               </CardHeader>
@@ -1243,6 +1242,80 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           </div>
         </div>
       </div>
+
+      <Dialog open={selectedWordDialog.open} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedWordDialog({ open: false, suggestions: [], original: "" });
+        }
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedWordDialog.suggestions.length > 1 ? "Suggestions" : "Suggestion"}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedWordDialog.suggestions.length > 0 && (
+            <div className="space-y-4">
+              <div className="mb-3">
+                <div className="text-xs font-semibold text-muted-foreground mb-1">Original</div>
+                <div className="text-base font-medium text-foreground">{selectedWordDialog.original}</div>
+              </div>
+              
+              <div className="space-y-3">
+                {selectedWordDialog.suggestions.map(({ change, index }, idx) => (
+                  <div key={idx} className="border border-border rounded-lg p-4 bg-card hover:shadow-md transition-shadow">
+                    <div className="mb-2">
+                      <div className="text-xs font-semibold text-muted-foreground mb-1">
+                        Option {idx + 1}
+                      </div>
+                      <div className="text-base font-medium text-success">{change.corrected}</div>
+                    </div>
+                    <div className="text-sm text-muted-foreground mb-3">
+                      {change.explanation}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="accent"
+                        onClick={() => {
+                          handleAccept(index);
+                          setSelectedWordDialog({ open: false, suggestions: [], original: "" });
+                        }}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          handleIgnore(index);
+                          setSelectedWordDialog({ open: false, suggestions: [], original: "" });
+                        }}
+                      >
+                        Ignore
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex justify-end pt-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    selectedWordDialog.suggestions.forEach(({ index }) => {
+                      handleIgnore(index);
+                    });
+                    setSelectedWordDialog({ open: false, suggestions: [], original: "" });
+                  }}
+                >
+                  Ignore All
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
         <DialogContent className="max-w-3xl">

@@ -20,9 +20,20 @@ const distPath = path.join(__dirname, "..", "dist");
 const initAdminDb = () => {
   try {
     if (!admin.apps.length) {
-      // Try to load from file first
-      const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
-      if (existsSync(serviceAccountPath)) {
+      // Try to load from explicit env path first
+      const envPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+      const resolvedEnvPath = envPath
+        ? path.isAbsolute(envPath)
+          ? envPath
+          : path.join(__dirname, "..", envPath)
+        : null;
+      const serviceAccountPath = path.join(__dirname, "serviceAccountKey.json");
+
+      if (resolvedEnvPath && existsSync(resolvedEnvPath)) {
+        admin.initializeApp({
+          credential: admin.credential.cert(resolvedEnvPath),
+        });
+      } else if (existsSync(serviceAccountPath)) {
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccountPath),
         });
@@ -533,7 +544,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
         
         const price = await stripe.prices.create({
           product: product.id,
-          unit_amount: 4900, // ₹1 in paise (for testing)
+          unit_amount: 100, // ₹1 in paise (for testing)
           currency: "inr",
           recurring: { interval: "month" },
         });
@@ -682,7 +693,7 @@ const buildPrompt = (text, language) => {
       ? `Language: ${language}.`
       : "Auto-detect language.";
 
-  return `You are a senior professional editor providing publication-ready proofreading.
+  return `You are a senior award-winning professional proofreader, language expert, and grammar expert.
 ${languageInstruction}
 Task: Produce a clean, formal, professional version with correct grammar, punctuation, and clarity.
 Rules:
@@ -691,6 +702,15 @@ Rules:
 - Enhance sentence structure and flow while keeping meaning and tone unchanged.
 - Do NOT add new facts, change names, or alter numbers.
 - Use a formal, professional tone across all languages.
+- Do NOT change meaning; keep the same content.
+- Provide Grammarly-level quality with native proficiency.
+- Aim for expert-level output (10/10 quality).
+- For misspelled English words in mixed-language text (e.g., "confushion" in Tamil/Hindi text):
+  * Create TWO SEPARATE change entries:
+    1. First entry: { "original": "confushion", "corrected": "confusion", "explanation": "Corrected English spelling." }
+    2. Second entry: { "original": "confushion", "corrected": "[Tamil/target language translation]", "explanation": "Translated English word to [language]." }
+  * Example for "office" (correct English) in Tamil text: Create ONE entry with Tamil translation
+  * Example for "alaram" (misspelled) in Tamil text: Create TWO entries - one with "alarm" and one with Tamil equivalent
 - For mixed language text (Tanglish): Keep code-switching natural but fix grammar around it.
 - List EVERY correction in the changes array, even minor punctuation.
 - Each changes.original must be an exact substring from the input text.

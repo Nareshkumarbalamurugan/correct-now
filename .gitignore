@@ -17,6 +17,7 @@ dist-ssr
 # Firebase service account keys
 *serviceAccountKey.json
 server/serviceAccountKey.json
+src/correctnow-36117-firebase-adminsdk-*.json
 
 # Editor directories and files
 .vscode/*

@@ -16,7 +16,6 @@ interface LanguageSelectorProps {
 }
 
 const languages = [
-  { code: "auto", name: "Auto-detect" },
   { code: "en", name: "English" },
   { code: "ur", name: "Urdu (اردو)" },
   { code: "hi", name: "Hindi (हिन्दी)" },

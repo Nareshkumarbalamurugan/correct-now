@@ -18,6 +18,7 @@ import Footer from "@/components/Footer";
 import { addSuggestion } from "@/lib/suggestions";
 import { toast } from "sonner";
 import { getFirebaseAuth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 const Index = () => {
   const [query, setQuery] = useState("");
@@ -30,11 +31,17 @@ const Index = () => {
       updated: formatUpdated(doc.updatedAt),
     }))
   );
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   const [suggestionText, setSuggestionText] = useState("");
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
 
   useEffect(() => {
+    const auth = getFirebaseAuth();
+    const unsub = auth
+      ? onAuthStateChanged(auth, (user) => setIsAuthenticated(Boolean(user)))
+      : undefined;
+
     const loadDocs = () =>
       setDocs(
         getDocs().map((doc) => ({
@@ -59,6 +66,7 @@ const Index = () => {
     window.addEventListener("correctnow:docs-updated", handleDocsUpdated);
 
     return () => {
+      if (unsub) unsub();
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("correctnow:docs-updated", handleDocsUpdated);
@@ -127,6 +135,7 @@ const Index = () => {
       </div>
 
       <main className="flex-1 pt-2 pb-0">
+        {!isAuthenticated && (
         <section className="mb-0">
           <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_30px_80px_rgba(37,99,235,0.35)]">
             <div className="absolute inset-0 opacity-25">
@@ -136,8 +145,11 @@ const Index = () => {
             <div className="container relative py-12 md:py-16">
               <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
                 <div className="max-w-2xl">
-                  <div className="inline-flex items-center gap-3 rounded-full border border-white/60 bg-white/90 text-primary px-6 py-3 text-sm md:text-base font-extrabold tracking-wide shadow-[0_12px_40px_rgba(255,255,255,0.5)]">
-                    ✓ Global languages grammar check • ✓ Grammarly alternative 
+                  <div className="flex justify-center sm:justify-start">
+                    <div className="inline-flex flex-col items-center sm:flex-row sm:items-center gap-1 sm:gap-3 rounded-full border border-white/60 bg-white/90 text-primary px-6 py-3 text-sm md:text-base font-extrabold tracking-wide shadow-[0_12px_40px_rgba(255,255,255,0.5)]">
+                      <span className="whitespace-nowrap">✓ Global languages grammar check</span>
+                      <span className="whitespace-nowrap">✓ Grammarly alternative</span>
+                    </div>
                   </div>
                   <h1 className="text-4xl md:text-6xl font-bold leading-tight mt-5 tracking-tight">
                     Write with confidence. Proofread instantly.
@@ -211,6 +223,7 @@ const Index = () => {
             </div>
           </div>
         </section>
+        )}
 
         <div className="container">
           <div className="flex items-center justify-between mb-6">
@@ -218,7 +231,6 @@ const Index = () => {
               <div className="text-sm font-semibold text-muted-foreground">Documents</div>
               <div className="text-2xl font-semibold text-foreground">Recent docs</div>
             </div>
-            <Button variant="outline" onClick={() => navigate("/editor")}>New doc</Button>
           </div>
           {filtered.length === 0 ? (
             <div className="text-center text-muted-foreground py-12">No documents found.</div>

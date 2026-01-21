@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc as firestoreDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
@@ -82,6 +82,7 @@ const Pricing = () => {
   const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
   const [subscriptionId, setSubscriptionId] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -263,14 +264,21 @@ const Pricing = () => {
                   <p className="text-muted-foreground mb-6">{plan.description}</p>
 
                   {canUpgrade ? (
-                    <Link to="/payment">
-                      <Button
-                        variant="accent"
-                        className="w-full mb-6"
-                      >
-                        {ctaLabel}
-                      </Button>
-                    </Link>
+                    <Button
+                      variant="accent"
+                      className="w-full mb-6"
+                      onClick={() => {
+                        const auth = getFirebaseAuth();
+                        if (!auth?.currentUser) {
+                          toast.error("Please log in or register to subscribe.");
+                          navigate("/auth?mode=login");
+                          return;
+                        }
+                        navigate("/payment");
+                      }}
+                    >
+                      {ctaLabel}
+                    </Button>
                   ) : isEnterprise ? (
                     <a href="mailto:support@correctnow.app?subject=Enterprise%20Plan%20Inquiry">
                       <Button
