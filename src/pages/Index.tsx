@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FileText, Search } from "lucide-react";
+import { FileText, Search, Star } from "lucide-react";
 import { formatUpdated, getDocs, sectionForDate } from "@/lib/docs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -32,6 +32,7 @@ const Index = () => {
     }))
   );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   const [suggestionText, setSuggestionText] = useState("");
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
@@ -39,8 +40,15 @@ const Index = () => {
   useEffect(() => {
     const auth = getFirebaseAuth();
     const unsub = auth
-      ? onAuthStateChanged(auth, (user) => setIsAuthenticated(Boolean(user)))
+      ? onAuthStateChanged(auth, (user) => {
+          setIsAuthenticated(Boolean(user));
+          setIsAuthLoading(false);
+        })
       : undefined;
+    
+    if (!auth) {
+      setIsAuthLoading(false);
+    }
 
     const loadDocs = () =>
       setDocs(
@@ -119,23 +127,33 @@ const Index = () => {
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-x-hidden">
       <Header />
-      <div className="container pt-3 pb-2">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-          <div className="relative w-full sm:max-w-md">
-            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-            <Input
-              className="pl-9"
-              placeholder="Search docs"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+      
+      {isAuthLoading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
           </div>
-          <Button variant="accent" size="sm" className="h-9" onClick={() => navigate("/editor")}>New doc</Button>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="container pt-3 pb-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+              <div className="relative w-full sm:max-w-md">
+                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search docs"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+              <Button variant="accent" size="sm" className="h-9" onClick={() => navigate("/editor")}>New doc</Button>
+            </div>
+          </div>
 
-      <main className="flex-1 pt-2 pb-0">
-        {!isAuthenticated && (
+          <main className="flex-1 pt-2 pb-0">
+            {!isAuthenticated && (
         <section className="mb-0">
           <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_30px_80px_rgba(37,99,235,0.35)]">
             <div className="absolute inset-0 opacity-25">
@@ -221,6 +239,160 @@ const Index = () => {
                 </Card>
               </div>
             </div>
+          </div>
+        </section>
+        )}
+
+        {/* Testimonials Section */}
+        {!isAuthenticated && (
+        <section className="container py-16 md:py-20">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              Trusted by Professionals Worldwide
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              See what our users say about CorrectNow
+            </p>
+          </div>
+          
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* Testimonial 1 */}
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-0.5 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-foreground mb-4 leading-relaxed">
+                  "CorrectNow helps me write without fear of mistakes. Very easy to use."
+                </p>
+                <div className="flex items-center gap-3 pt-3 border-t border-border">
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
+                    A
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">Arjun Kumar</div>
+                    <div className="text-sm text-muted-foreground">University Student</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Testimonial 2 */}
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-0.5 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-foreground mb-4 leading-relaxed">
+                  "Finally, a grammar checker that understands native languages properly."
+                </p>
+                <div className="flex items-center gap-3 pt-3 border-t border-border">
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
+                    M
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">Meera Nair</div>
+                    <div className="text-sm text-muted-foreground">Author & Blogger</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Testimonial 3 */}
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-0.5 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-foreground mb-4 leading-relaxed">
+                  "We save time and improve clarity across languages. Highly useful."
+                </p>
+                <div className="flex items-center gap-3 pt-3 border-t border-border">
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
+                    R
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">Rohit Menon</div>
+                    <div className="text-sm text-muted-foreground">Senior Editor, Metro News Desk</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Testimonial 4 */}
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-0.5 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-foreground mb-4 leading-relaxed">
+                  "My emails and reports sound more professional now."
+                </p>
+                <div className="flex items-center gap-3 pt-3 border-t border-border">
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
+                    A
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">Anita Sharma</div>
+                    <div className="text-sm text-muted-foreground">Operations Manager, NextWave Solutions</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Testimonial 5 */}
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-0.5 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-foreground mb-4 leading-relaxed">
+                  "Excellent accuracy for research writing. Rating: 10/10."
+                </p>
+                <div className="flex items-center gap-3 pt-3 border-t border-border">
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
+                    D
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">Dr. Lukas Schneider</div>
+                    <div className="text-sm text-muted-foreground">Research Fellow, Germany</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Testimonial 6 */}
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-0.5 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-foreground mb-4 leading-relaxed">
+                  "CorrectNow understands grammar and context perfectly. Powerful tool."
+                </p>
+                <div className="flex items-center gap-3 pt-3 border-t border-border">
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
+                    R
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">Ramesh Naidu</div>
+                    <div className="text-sm text-muted-foreground">Script Writer, Silver Screen Studios</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </section>
         )}
@@ -315,6 +487,8 @@ const Index = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
+      )}
 
       <Footer />
     </div>

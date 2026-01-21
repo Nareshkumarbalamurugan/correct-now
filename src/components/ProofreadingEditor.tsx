@@ -321,7 +321,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [correctedText, setCorrectedText] = useState("");
   const [changes, setChanges] = useState<Change[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState("");
   const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
   const [copied, setCopied] = useState(false);
   const [hasResults, setHasResults] = useState(false);
@@ -343,6 +343,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const speechPulseRef = useRef<number | null>(null);
   const speechInterimRef = useRef<string>("");
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    // Auto-open language selector on page load
+    if (!language) {
+      setIsLanguageOpen(true);
+    }
+  }, []);
   
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
@@ -579,7 +586,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       return;
     }
 
-    if (language === "auto") {
+    if (!language || language === "") {
       toast.error("Please select a language before checking");
       setIsLanguageOpen(true);
       return;
@@ -1120,7 +1127,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-4">
                   <p className="text-sm text-muted-foreground">
-                    {language === "auto"
+                    {!language || language === ""
                       ? "Please select a language to check"
                       : `Checking in ${language.toUpperCase()}`}
                   </p>

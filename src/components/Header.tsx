@@ -105,14 +105,12 @@ const Header = () => {
       <div className="container max-w-7xl flex flex-col gap-3 py-3 md:flex-row md:items-center">
         <div className="flex-1 flex items-center min-w-0">
           <Link to="/" className="flex items-center">
-            <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-accent/10">
-              <img
-                src="/Icon/correctnow logo final2.png"
-                alt="CorrectNow"
-                className="w-32 h-12 object-contain"
-                loading="eager"
-              />
-            </div>
+            <img
+              src="/Icon/correctnow logo final2.png"
+              alt="CorrectNow"
+              className="w-64 h-12 object-contain"
+              loading="eager"
+            />
           </Link>
         </div>
 

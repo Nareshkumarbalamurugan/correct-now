@@ -385,13 +385,13 @@ const Admin = () => {
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-accent">
-                <CheckCircle className="w-5 h-5 text-accent-foreground" />
-              </div>
-              <span className="text-xl font-semibold text-foreground">
-                CorrectNow
-              </span>
+            <Link to="/" className="flex items-center">
+              <img
+                src="/Icon/correctnow logo final2.png"
+                alt="CorrectNow"
+                className="w-64 h-12 object-contain"
+                loading="eager"
+              />
             </Link>
             <Badge variant="secondary">Admin</Badge>
           </div>
