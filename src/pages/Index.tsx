@@ -136,16 +136,8 @@ const Index = () => {
             <div className="container relative py-12 md:py-16">
               <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
                 <div className="max-w-2xl">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide">
-                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/90">
-                      <img
-                        src="/Icon/correctnow logo final2.png"
-                        alt="CorrectNow"
-                        className="w-5 h-5 object-contain"
-                        loading="eager"
-                      />
-                    </span>
-                    AI proofreading — clean, professional grammar
+                  <div className="inline-flex items-center gap-3 rounded-full border border-white/60 bg-white/90 text-primary px-6 py-3 text-sm md:text-base font-extrabold tracking-wide shadow-[0_12px_40px_rgba(255,255,255,0.5)]">
+                    ✓ Global languages grammar check • ✓ Grammarly alternative 
                   </div>
                   <h1 className="text-4xl md:text-6xl font-bold leading-tight mt-5 tracking-tight">
                     Write with confidence. Proofread instantly.
@@ -170,9 +162,9 @@ const Index = () => {
                     </Button>
                   </div>
                   <div className="flex flex-wrap gap-6 mt-7 text-sm text-white/85">
-                    <span className="inline-flex items-center gap-2">✓ No rewriting</span>
-                    <span className="inline-flex items-center gap-2">✓ 2,000-word checks</span>
-                    <span className="inline-flex items-center gap-2">✓ Global languages</span>
+                    <span className="inline-flex items-center gap-2">✓ AI-powered</span>
+                    <span className="inline-flex items-center gap-2">✓ Professional proofreading</span>
+                    
                   </div>
                 </div>
 

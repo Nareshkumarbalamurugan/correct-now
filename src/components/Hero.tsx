@@ -33,13 +33,20 @@ const Hero = ({ onGetStarted }: HeroProps) => {
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-primary/10" />
 
       <div className="container relative z-10 py-28 md:py-36 lg:py-40">
+        <div className="flex justify-center lg:justify-start mb-8">
+            <div className="inline-flex items-center gap-3 rounded-full bg-white text-primary px-6 py-3 text-sm sm:text-base font-bold shadow-[0_12px_40px_rgba(255,255,255,0.45)] border border-white/60">
+              <Sparkles className="w-4 h-4" />
+              <span>✓ Global languages grammar check</span>
+              <span className="text-primary/40">•</span>
+              <span>✓ Grammarly alternative</span>
+              <span className="text-primary/40">•</span>
+              <span>✓ AI-powered</span>
+            </div>
+        </div>
+
         <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
           {/* Left: copy + CTAs */}
           <div className="text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 text-white px-4 py-2 text-sm font-medium backdrop-blur-sm border border-white/15 mb-6">
-              <Sparkles className="w-4 h-4" />
-              AI proofreading — clean, professional grammar
-            </div>
 
             <h1 className="animate-slide-up text-5xl sm:text-6xl md:text-7xl font-extrabold leading-[1.06] tracking-tight text-white">
               Write with confidence.
@@ -86,20 +93,6 @@ const Hero = ({ onGetStarted }: HeroProps) => {
               </div>
             )}
 
-            <div className="animate-fade-in mt-8 flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center lg:justify-start text-white text-base font-semibold drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
-              <div className="flex items-center gap-2">
-                <Check className="w-4 h-4" />
-                No rewriting
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="w-4 h-4" />
-                2,000-word checks
-              </div>
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4" />
-                Global languages
-              </div>
-            </div>
           </div>
 
           {/* Right: benefits + live preview */}
@@ -127,6 +120,25 @@ const Hero = ({ onGetStarted }: HeroProps) => {
                   Trusted by professionals worldwide
                 </li>
               </ul>
+            </div>
+
+            <div className="flex justify-end">
+              <div className="inline-flex flex-wrap items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-xs md:text-sm font-semibold text-foreground shadow-sm ring-1 ring-primary/20">
+                <span className="inline-flex items-center gap-2">
+                  <Globe className="w-4 h-4" />
+                  Global languages grammar check
+                </span>
+                <span className="text-muted-foreground">•</span>
+                <span className="inline-flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Grammarly alternative
+                </span>
+                <span className="text-muted-foreground">•</span>
+                <span className="inline-flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  AI-powered
+                </span>
+              </div>
             </div>
 
             <div className="relative rounded-2xl bg-white border border-white/30 shadow-elevated p-6 md:p-7">

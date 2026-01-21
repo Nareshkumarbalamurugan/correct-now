@@ -38,6 +38,7 @@ type AdminUser = {
   plan: string;
   wordLimit?: number;
   credits?: number;
+  creditsUsed?: number;
   subscriptionStatus?: string;
   updatedAt?: string;
   createdAt?: string;
@@ -140,6 +141,7 @@ const Admin = () => {
           plan: String(data?.plan || "free").toLowerCase() === "pro" ? "Pro" : "Free",
           wordLimit: data?.wordLimit,
           credits: data?.credits,
+          creditsUsed: data?.creditsUsed,
           subscriptionStatus: data?.subscriptionStatus,
           updatedAt: data?.updatedAt,
           createdAt: data?.createdAt,
@@ -268,6 +270,7 @@ const Admin = () => {
           plan: String(data?.plan || "free").toLowerCase() === "pro" ? "Pro" : "Free",
           wordLimit: data?.wordLimit,
           credits: data?.credits,
+          creditsUsed: data?.creditsUsed,
           subscriptionStatus: data?.subscriptionStatus,
           updatedAt: data?.updatedAt,
           createdAt: data?.createdAt,
@@ -633,6 +636,9 @@ const Admin = () => {
                             Credits
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Usage
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Word Limit
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
@@ -681,6 +687,11 @@ const Admin = () => {
                             </td>
                             <td className="py-4 px-6 text-sm text-foreground">
                               {user.credits ? user.credits.toLocaleString() : "—"}
+                            </td>
+                            <td className="py-4 px-6 text-sm text-foreground">
+                              {user.credits
+                                ? `${(user.creditsUsed || 0).toLocaleString()} / ${user.credits.toLocaleString()}`
+                                : "—"}
                             </td>
                             <td className="py-4 px-6 text-sm text-foreground">
                               {user.wordLimit ? user.wordLimit.toLocaleString() : "—"}

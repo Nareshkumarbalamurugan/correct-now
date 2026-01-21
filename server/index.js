@@ -754,7 +754,7 @@ app.post("/api/proofread", async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Gemini API error:", errorText);
-      return res.status(500).json({ message: "Gemini API error", details: errorText });
+      return res.status(500).json({ message: "API error" });
     }
 
     const data = await response.json();
