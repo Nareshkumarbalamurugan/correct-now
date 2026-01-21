@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,15 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
-import { doc as firestoreDoc, setDoc } from "firebase/firestore";
+import { doc as firestoreDoc, setDoc, getDoc } from "firebase/firestore";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -22,8 +30,10 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [awaitingVerification, setAwaitingVerification] = useState(false);
-  const [pendingProfile, setPendingProfile] = useState<{ uid: string; name: string; email: string } | null>(null);
+
+  const [showGoogleNameDialog, setShowGoogleNameDialog] = useState(false);
+  const [googleName, setGoogleName] = useState("");
+  const [googleUserData, setGoogleUserData] = useState<any>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,43 +42,6 @@ const Auth = () => {
     const mode = params.get("mode");
     setIsLogin(mode !== "register");
   }, [location.search]);
-
-  useEffect(() => {
-    if (!awaitingVerification) return;
-    const auth = getFirebaseAuth();
-    if (!auth) return;
-    const interval = window.setInterval(async () => {
-      try {
-        if (!auth.currentUser) return;
-        await auth.currentUser.reload();
-        if (auth.currentUser.emailVerified) {
-          const db = getFirebaseDb();
-          if (db) {
-            const ref = firestoreDoc(db, `users/${auth.currentUser.uid}`);
-            await setDoc(
-              ref,
-              {
-                uid: auth.currentUser.uid,
-                name: auth.currentUser.displayName || pendingProfile?.name || "",
-                email: auth.currentUser.email || pendingProfile?.email || "",
-                updatedAt: new Date().toISOString(),
-                createdAt: pendingProfile?.uid ? new Date().toISOString() : undefined,
-              },
-              { merge: true }
-            );
-          }
-          setAwaitingVerification(false);
-          setPendingProfile(null);
-          toast.success("Email verified. You are now signed in.");
-          navigate("/");
-        }
-      } catch {
-        // ignore
-      }
-    }, 4000);
-
-    return () => window.clearInterval(interval);
-  }, [awaitingVerification, pendingProfile, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,14 +56,8 @@ const Auth = () => {
       if (isLogin) {
         const result = await signInWithEmailAndPassword(auth, email, password);
         if (!result.user.emailVerified) {
-          await sendEmailVerification(result.user);
-          setAwaitingVerification(true);
-          setPendingProfile({
-            uid: result.user.uid,
-            name: result.user.displayName || "",
-            email: result.user.email || "",
-          });
-          toast.error("Please verify your email. We sent you a verification link.");
+          await auth.signOut();
+          toast.error("Please verify your email before signing in. Check your inbox for the verification link.");
           return;
         }
         const db = getFirebaseDb();
@@ -114,13 +81,19 @@ const Auth = () => {
           await updateProfile(result.user, { displayName: name.trim() });
         }
         await sendEmailVerification(result.user);
-        setAwaitingVerification(true);
-        setPendingProfile({
-          uid: result.user.uid,
-          name: name.trim() || result.user.displayName || "",
-          email: result.user.email || "",
-        });
-        toast.success("Account created. Please verify your email to continue.");
+        
+        // Sign out the user to prevent auto-login before verification
+        await auth.signOut();
+        
+        // Show dialog to inform user about email verification
+        alert("Account created successfully! Please check your email to verify your account before signing in.");
+        
+        // Reset form and redirect to login
+        setEmail("");
+        setPassword("");
+        setName("");
+        setIsLogin(true);
+        navigate("/auth?mode=login");
         return;
       }
 
@@ -143,13 +116,27 @@ const Auth = () => {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const db = getFirebaseDb();
+      
       if (db) {
         const ref = firestoreDoc(db, `users/${result.user.uid}`);
+        const userDoc = await getDoc(ref);
+        
+        // Check if user exists and has a name
+        if (!userDoc.exists() || !userDoc.data()?.name) {
+          // New user or user without name - prompt for name
+          setGoogleUserData(result.user);
+          setGoogleName(result.user.displayName || "");
+          setShowGoogleNameDialog(true);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Existing user with name - just update timestamp
         await setDoc(
           ref,
           {
             uid: result.user.uid,
-            name: result.user.displayName || "",
+            name: userDoc.data()?.name || result.user.displayName || "",
             email: result.user.email || "",
             updatedAt: new Date().toISOString(),
           },
@@ -160,6 +147,43 @@ const Auth = () => {
       navigate("/");
     } catch (error: any) {
       toast.error(error?.message ?? "Google sign-in failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveGoogleName = async () => {
+    if (!googleName.trim()) {
+      toast.error("Please enter your name");
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const db = getFirebaseDb();
+      if (db && googleUserData) {
+        const ref = firestoreDoc(db, `users/${googleUserData.uid}`);
+        await setDoc(
+          ref,
+          {
+            uid: googleUserData.uid,
+            name: googleName.trim(),
+            email: googleUserData.email || "",
+            updatedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        
+        // Update Firebase Auth profile
+        await updateProfile(googleUserData, { displayName: googleName.trim() });
+      }
+      
+      setShowGoogleNameDialog(false);
+      toast.success("Signed in with Google");
+      navigate("/");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Failed to save name");
     } finally {
       setIsLoading(false);
     }
@@ -203,7 +227,7 @@ const Auth = () => {
         </div>
 
         <p className="text-accent-foreground/60 text-sm">
-          © 2024 CorrectNow. All rights reserved.
+          Â© 2024 CorrectNow. All rights reserved.
         </p>
       </div>
 
@@ -227,47 +251,6 @@ const Auth = () => {
                 : "Start your journey to perfect writing"}
             </p>
           </div>
-
-          {awaitingVerification && (
-            <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-              <div className="font-medium text-foreground mb-2">Verify your email</div>
-              We sent a verification link to your email. Once verified, you’ll be signed in automatically.
-              <div className="mt-3 flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={async () => {
-                    const auth = getFirebaseAuth();
-                    if (auth?.currentUser) {
-                      await auth.currentUser.reload();
-                      if (auth.currentUser.emailVerified) {
-                        setAwaitingVerification(false);
-                        toast.success("Email verified. You are now signed in.");
-                        navigate("/");
-                      } else {
-                        toast.info("Not verified yet. Please check your inbox.");
-                      }
-                    }
-                  }}
-                >
-                  I’ve verified
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={async () => {
-                    const auth = getFirebaseAuth();
-                    if (auth?.currentUser) {
-                      await sendEmailVerification(auth.currentUser);
-                      toast.success("Verification email resent.");
-                    }
-                  }}
-                >
-                  Resend email
-                </Button>
-              </div>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {!isLogin && (
@@ -321,7 +304,7 @@ const Auth = () => {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10"
@@ -395,6 +378,43 @@ const Auth = () => {
           </p>
         </div>
       </div>
+
+      {/* Google Name Dialog */}
+      <Dialog open={showGoogleNameDialog} onOpenChange={setShowGoogleNameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Welcome to CorrectNow!</DialogTitle>
+            <DialogDescription>
+              Please tell us your name to complete your profile.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="google-name">Full Name</Label>
+              <Input
+                id="google-name"
+                type="text"
+                placeholder="Enter your name"
+                value={googleName}
+                onChange={(e) => setGoogleName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && googleName.trim()) {
+                    handleSaveGoogleName();
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleSaveGoogleName}
+              disabled={isLoading || !googleName.trim()}
+            >
+              {isLoading ? "Saving..." : "Continue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

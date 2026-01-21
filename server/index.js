@@ -433,7 +433,7 @@ app.post("/api/razorpay/subscription", async (req, res) => {
         interval,
         item: {
           name: "CorrectNow Pro",
-          amount: 50000, // ₹500 in paise
+          amount: 100, // ₹500 in paise
           currency: "INR",
           description: "Monthly Pro subscription - 2000 word limit, 50,000 credits",
         },
@@ -684,14 +684,13 @@ const buildPrompt = (text, language) => {
 
   return `You are a senior professional editor providing publication-ready proofreading.
 ${languageInstruction}
-Task: Produce a clean, professional version with correct grammar, punctuation, and clarity.
+Task: Produce a clean, formal, professional version with correct grammar, punctuation, and clarity.
 Rules:
 - Fix ALL errors: spelling, grammar, punctuation, verb tenses, articles, prepositions, subject-verb agreement.
 - Improve awkward phrasing and non-native expressions for natural fluency.
 - Enhance sentence structure and flow while keeping meaning and tone unchanged.
 - Do NOT add new facts, change names, or alter numbers.
-- Keep the original voice (formal/informal) and avoid unnecessary rewriting.
-- For Tamil: Keep natural spoken style; do NOT translate to formal literary Tamil.
+- Use a formal, professional tone across all languages.
 - For mixed language text (Tanglish): Keep code-switching natural but fix grammar around it.
 - List EVERY correction in the changes array, even minor punctuation.
 - Each changes.original must be an exact substring from the input text.

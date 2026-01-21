@@ -49,7 +49,7 @@ const Header = () => {
           const data = snap.exists() ? snap.data() : {};
           const planField = String(data?.plan || "").toLowerCase();
           const entitlementPlan =
-            Number(data?.wordLimit) >= 2000 || planField === "pro";
+            Number(data?.wordLimit) >= 5000 || planField === "pro";
           const status = String(data?.subscriptionStatus || "").toLowerCase();
           const hasStatus = Boolean(status);
           const updatedAt = data?.subscriptionUpdatedAt
@@ -62,20 +62,30 @@ const Header = () => {
           const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
           setPlanName(plan);
           setCredits(Number(data?.credits || (plan === "Pro" ? 50000 : 0)));
-          setWordLimit(Number(data?.wordLimit || (plan === "Pro" ? 2000 : 200)));
+          setWordLimit(Number(data?.wordLimit || (plan === "Pro" ? 5000 : 200)));
           setSubscriptionStatus(String(data?.subscriptionStatus || ""));
           
           // Check if credits should reset (monthly billing cycle)
-          const lastResetDate = data?.creditsResetDate ? new Date(String(data.creditsResetDate)) : null;
+          const lastResetDate = data?.creditsResetDate
+            ? new Date(String(data.creditsResetDate))
+            : data?.subscriptionUpdatedAt
+            ? new Date(String(data.subscriptionUpdatedAt))
+            : data?.creditsUpdatedAt
+            ? new Date(String(data.creditsUpdatedAt))
+            : null;
           const now = new Date();
-          const shouldReset = plan === "Pro" && isActive && (!lastResetDate || 
-            (now.getTime() - lastResetDate.getTime() > 30 * 24 * 60 * 60 * 1000)); // 30 days
-          
+          const shouldReset =
+            plan === "Pro" &&
+            isActive &&
+            Boolean(lastResetDate) &&
+            now.getTime() - lastResetDate.getTime() > 30 * 24 * 60 * 60 * 1000;
+
           if (shouldReset) {
             // Reset usage for new billing cycle
             setCreditsUsed(0);
           } else {
-            setCreditsUsed(Number(data?.creditsUsed || 0));
+            const usedValue = Number(data?.creditsUsed || 0);
+            setCreditsUsed(usedValue);
           }
         });
       }

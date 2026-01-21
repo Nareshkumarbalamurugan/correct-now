@@ -395,11 +395,20 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           const creditValue = Number(data?.credits || (plan === "Pro" ? PRO_CREDITS : 0));
           
           // Check if credits should reset (monthly billing cycle)
-          const lastResetDate = data?.creditsResetDate ? new Date(String(data.creditsResetDate)) : null;
+          const lastResetDate = data?.creditsResetDate
+            ? new Date(String(data.creditsResetDate))
+            : data?.subscriptionUpdatedAt
+            ? new Date(String(data.subscriptionUpdatedAt))
+            : data?.creditsUpdatedAt
+            ? new Date(String(data.creditsUpdatedAt))
+            : null;
           const now = new Date();
-          const shouldReset = plan === "Pro" && isActive && (!lastResetDate || 
-            (now.getTime() - lastResetDate.getTime() > 30 * 24 * 60 * 60 * 1000)); // 30 days
-          
+          const shouldReset =
+            plan === "Pro" &&
+            isActive &&
+            Boolean(lastResetDate) &&
+            now.getTime() - lastResetDate.getTime() > 30 * 24 * 60 * 60 * 1000;
+
           const usedValue = shouldReset ? 0 : Number(data?.creditsUsed || 0);
           setPlanName(plan);
           setWordLimit(Number.isFinite(limit) ? limit : FREE_WORD_LIMIT);
@@ -622,6 +631,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           {
             creditsUsed: usedNext,
             creditsTotal: credits || PRO_CREDITS,
+            creditsUpdatedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
           { merge: true }
@@ -1015,6 +1025,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                       {creditsLimitEnabled && (
                         <div className="text-xs text-muted-foreground">
                           Credits left: {creditsRemaining?.toLocaleString()}
+                          <span className="ml-1 text-muted-foreground/80">(1 word = 1 credit)</span>
                         </div>
                       )}
                       {isOutOfCredits && (
