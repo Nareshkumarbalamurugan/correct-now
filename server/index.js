@@ -142,57 +142,90 @@ app.post("/api/razorpay/webhook", express.raw({ type: "application/json" }), asy
 });
 
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  console.log("=== STRIPE WEBHOOK RECEIVED ===");
+  console.log("Timestamp:", new Date().toISOString());
+  
   const sig = req.headers["stripe-signature"];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   
+  console.log("Has signature:", !!sig);
+  console.log("Has webhook secret:", !!webhookSecret);
+  
   if (!sig || !webhookSecret) {
+    console.error("ERROR: Missing signature or webhook secret");
+    console.log("Signature present:", !!sig);
+    console.log("Webhook secret present:", !!webhookSecret);
     return res.status(400).json({ error: "Missing signature or webhook secret" });
   }
 
   const stripe = getStripe();
   if (!stripe) {
+    console.error("ERROR: Stripe not configured");
     return res.status(500).json({ error: "Stripe not configured" });
   }
 
   let event;
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    console.log("✓ Webhook signature verified successfully");
   } catch (err) {
-    console.error("Stripe webhook signature verification failed:", err.message);
+    console.error("ERROR: Stripe webhook signature verification failed:", err.message);
     return res.status(400).json({ error: `Webhook Error: ${err.message}` });
   }
 
-  console.log("Stripe webhook event:", event.type);
+  console.log("Event type:", event.type);
+  console.log("Event ID:", event.id);
 
   try {
     const nowIso = new Date().toISOString();
     
     switch (event.type) {
       case "checkout.session.completed": {
+        console.log("--- Processing checkout.session.completed ---");
         const session = event.data.object;
         const customerId = session.customer;
         const subscriptionId = session.subscription;
         const metadata = session.metadata || {};
         const userId = metadata.userId;
         
-        if (!userId || !adminDb) break;
+        console.log("Customer ID:", customerId);
+        console.log("Subscription ID:", subscriptionId);
+        console.log("User ID from metadata:", userId);
+        console.log("Metadata type:", metadata.type);
+        console.log("AdminDb available:", !!adminDb);
+        
+        if (!userId) {
+          console.error("ERROR: No userId in metadata");
+          break;
+        }
+        
+        if (!adminDb) {
+          console.error("ERROR: AdminDb not initialized");
+          break;
+        }
         
         const userRef = adminDb.collection("users").doc(userId);
+        console.log("User reference path:", `users/${userId}`);
         
         if (metadata.type === "credits") {
-          // Credit purchase
+          console.log("Processing CREDIT purchase");
           const credits = Number(metadata.credits || 0);
+          console.log("Credits to add:", credits);
+          
           const userSnap = await userRef.get();
           const currentCredits = userSnap.exists ? Number(userSnap.data()?.credits || 0) : 0;
+          console.log("Current credits:", currentCredits);
+          console.log("New total credits:", currentCredits + credits);
           
           await userRef.set({
             credits: currentCredits + credits,
             creditsUpdatedAt: nowIso,
             updatedAt: nowIso,
           }, { merge: true });
+          console.log("✓ Credits updated successfully");
         } else {
-          // Subscription purchase
-          await userRef.set({
+          console.log("Processing SUBSCRIPTION purchase");
+          const updateData = {
             plan: "pro",
             wordLimit: 5000,
             credits: 50000,
@@ -203,25 +236,50 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
             subscriptionStatus: "active",
             subscriptionUpdatedAt: nowIso,
             updatedAt: nowIso,
-          }, { merge: true });
+          };
+          console.log("Update data:", JSON.stringify(updateData, null, 2));
+          
+          await userRef.set(updateData, { merge: true });
+          console.log("✓ Subscription updated successfully");
+          
+          // Verify the update
+          const verifySnap = await userRef.get();
+          if (verifySnap.exists) {
+            console.log("✓ Verification - User document exists");
+            console.log("Updated user data:", JSON.stringify(verifySnap.data(), null, 2));
+          } else {
+            console.error("ERROR: User document not found after update");
+          }
         }
         break;
       }
       
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
+        console.log("--- Processing subscription update/delete ---");
         const subscription = event.data.object;
         const subscriptionId = subscription.id;
         const status = subscription.status;
         
-        if (!adminDb || !subscriptionId) break;
+        console.log("Subscription ID:", subscriptionId);
+        console.log("Subscription status:", status);
+        
+        if (!adminDb || !subscriptionId) {
+          console.error("ERROR: No adminDb or subscriptionId");
+          break;
+        }
         
         const snapshot = await adminDb
           .collection("users")
           .where("stripeSubscriptionId", "==", subscriptionId)
           .get();
+        
+        console.log("Found users with this subscription:", snapshot.size);
           
-        if (snapshot.empty) break;
+        if (snapshot.empty) {
+          console.error("ERROR: No users found with subscription ID:", subscriptionId);
+          break;
+        }
         
         const batch = adminDb.batch();
         const updates = {};
@@ -246,29 +304,45 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
         updates.subscriptionUpdatedAt = nowIso;
         updates.updatedAt = nowIso;
         
+        console.log("Updates to apply:", JSON.stringify(updates, null, 2));
+        
         snapshot.forEach((doc) => {
+          console.log("Updating user:", doc.id);
           batch.set(doc.ref, updates, { merge: true });
         });
         
         await batch.commit();
+        console.log("✓ Batch update completed");
         break;
       }
       
       case "invoice.payment_succeeded": {
+        console.log("--- Processing invoice.payment_succeeded ---");
         const invoice = event.data.object;
         const subscriptionId = invoice.subscription;
         
-        if (!adminDb || !subscriptionId) break;
+        console.log("Subscription ID:", subscriptionId);
+        
+        if (!adminDb || !subscriptionId) {
+          console.error("ERROR: No adminDb or subscriptionId");
+          break;
+        }
         
         const snapshot = await adminDb
           .collection("users")
           .where("stripeSubscriptionId", "==", subscriptionId)
           .get();
+        
+        console.log("Found users:", snapshot.size);
           
-        if (snapshot.empty) break;
+        if (snapshot.empty) {
+          console.error("ERROR: No users found with subscription ID:", subscriptionId);
+          break;
+        }
         
         const batch = adminDb.batch();
         snapshot.forEach((doc) => {
+          console.log("Updating user:", doc.id);
           batch.set(doc.ref, {
             plan: "pro",
             wordLimit: 5000,
@@ -282,24 +356,37 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
         });
         
         await batch.commit();
+        console.log("✓ Batch update completed");
         break;
       }
       
       case "invoice.payment_failed": {
+        console.log("--- Processing invoice.payment_failed ---");
         const invoice = event.data.object;
         const subscriptionId = invoice.subscription;
         
-        if (!adminDb || !subscriptionId) break;
+        console.log("Subscription ID:", subscriptionId);
+        
+        if (!adminDb || !subscriptionId) {
+          console.error("ERROR: No adminDb or subscriptionId");
+          break;
+        }
         
         const snapshot = await adminDb
           .collection("users")
           .where("stripeSubscriptionId", "==", subscriptionId)
           .get();
+        
+        console.log("Found users:", snapshot.size);
           
-        if (snapshot.empty) break;
+        if (snapshot.empty) {
+          console.error("ERROR: No users found with subscription ID:", subscriptionId);
+          break;
+        }
         
         const batch = adminDb.batch();
         snapshot.forEach((doc) => {
+          console.log("Updating user:", doc.id);
           batch.set(doc.ref, {
             subscriptionStatus: "past_due",
             subscriptionUpdatedAt: nowIso,
@@ -308,13 +395,20 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
         });
         
         await batch.commit();
+        console.log("✓ Batch update completed");
         break;
       }
+      
+      default:
+        console.log("Unhandled event type:", event.type);
     }
     
+    console.log("=== WEBHOOK PROCESSING COMPLETED SUCCESSFULLY ===");
     res.json({ received: true });
   } catch (error) {
-    console.error("Stripe webhook error:", error);
+    console.error("=== WEBHOOK ERROR ===");
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
     res.status(500).json({ error: "Webhook processing failed" });
   }
 });

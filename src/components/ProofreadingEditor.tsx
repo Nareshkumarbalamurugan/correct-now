@@ -868,10 +868,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       return;
     }
 
-    if (language === "auto") {
+    if (!language || language === "") {
       setPendingRecording(true);
       setIsLanguageOpen(true);
-      toast.info("Select a language to start voice input.");
+      toast.info("Please select a language to start voice input");
       return;
     }
 
@@ -880,7 +880,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
   useEffect(() => {
     if (!pendingRecording) return;
-    if (language !== "auto") {
+    if (language && language !== "") {
       setPendingRecording(false);
       startRecording();
     }
