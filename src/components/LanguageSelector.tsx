@@ -105,15 +105,19 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = f
     onOpenChange?.(false);
   };
 
-  const preventCloseOnInteraction = (e: React.MouseEvent | React.TouchEvent) => {
+  const preventCloseOnInteraction = (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault();
     e.stopPropagation();
     setQuery(e.target.value);
+  };
+
+  const handleSearchClick = (e: React.MouseEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   const selector = (
@@ -130,23 +134,30 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = f
         ref={contentRef}
         className="max-h-[300px]"
         onPointerDownOutside={(e) => {
-          // Prevent closing when clicking on the search input
-          if (contentRef.current?.contains(e.target as Node)) {
+          // Prevent closing when clicking on the search input or its container
+          const target = e.target as HTMLElement;
+          if (
+            contentRef.current?.contains(target) ||
+            target.closest('[data-language-search]')
+          ) {
             e.preventDefault();
           }
         }}
       >
         <div 
+          data-language-search
           className="sticky top-0 z-10 bg-popover p-2 border-b"
           onPointerDown={preventCloseOnInteraction}
           onMouseDown={preventCloseOnInteraction}
           onTouchStart={preventCloseOnInteraction}
+          onTouchEnd={preventCloseOnInteraction}
           onClick={preventCloseOnInteraction}
         >
           <Input
             ref={searchInputRef}
             value={query}
             onChange={handleSearchChange}
+            onClick={handleSearchClick}
             placeholder="Type to search..."
             className="h-9"
             onKeyDown={(e) => {
@@ -159,6 +170,8 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = f
             onPointerDown={preventCloseOnInteraction}
             onMouseDown={preventCloseOnInteraction}
             onTouchStart={preventCloseOnInteraction}
+            onTouchEnd={preventCloseOnInteraction}
+            onFocus={(e) => e.stopPropagation()}
           />
         </div>
         <div className="max-h-[240px] overflow-y-auto">
