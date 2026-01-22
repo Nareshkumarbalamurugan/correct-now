@@ -131,56 +131,7 @@ const Header = () => {
 
 
         <div className="flex flex-wrap items-center gap-2 flex-1 justify-end">
-          {isAuthenticated ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="h-9 w-9 rounded-full bg-accent text-accent-foreground text-sm font-semibold">
-                  {(userName || "U").charAt(0).toUpperCase()}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Account</DropdownMenuLabel>
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                  <div className="font-medium text-foreground truncate">{userName || "User"}</div>
-                  <div className="truncate">{userEmail}</div>
-                </div>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5 text-xs text-muted-foreground space-y-1">
-                  <div>Plan: <span className="text-foreground font-medium">{planName}</span></div>
-                  <div>Word limit: <span className="text-foreground font-medium">{wordLimit.toLocaleString()}</span></div>
-                  {planName === "Pro" && (
-                    <div>Credits: <span className="text-foreground font-medium">{credits.toLocaleString()}</span></div>
-                  )}
-                  {subscriptionStatus && (
-                    <div>Status: <span className="text-foreground font-medium">{subscriptionStatus}</span></div>
-                  )}
-                </div>
-                <div className="px-2 pb-2">
-                  {planName === "Pro" && (
-                    <>
-                      <div className="text-xs text-muted-foreground mb-1">
-                        Usage: {creditsUsed.toLocaleString()} / {credits.toLocaleString() || "0"}
-                      </div>
-                      <Progress value={credits ? Math.min(100, (creditsUsed / credits) * 100) : 0} />
-                    </>
-                  )}
-                  {planName === "Pro" && creditsUsed >= credits && String(subscriptionStatus).toLowerCase() === "active" && (
-                    <Button
-                      variant="accent"
-                      size="sm"
-                      className="w-full mt-2 text-xs h-7"
-                      onClick={() => navigate("/payment?mode=credits")}
-                    >
-                      Buy More Credits
-                    </Button>
-                  )}
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/pricing")}>Manage Plan</DropdownMenuItem>
-                <DropdownMenuItem onClick={handleSignOut}>Sign Out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
+          {!isAuthenticated && (
             <>
               <Link to="/auth">
                 <Button variant="ghost" size="sm" className="h-9 px-3">

@@ -11,14 +11,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FileText, Search, Star } from "lucide-react";
+import { FileText, Search, Star, LogOut, User } from "lucide-react";
 import { formatUpdated, getDocs, sectionForDate } from "@/lib/docs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { addSuggestion } from "@/lib/suggestions";
 import { toast } from "sonner";
-import { getFirebaseAuth } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
 const Index = () => {
   const [query, setQuery] = useState("");
@@ -36,12 +37,65 @@ const Index = () => {
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   const [suggestionText, setSuggestionText] = useState("");
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  const [sidebarView, setSidebarView] = useState<"docs" | "account">("docs");
+  const [userProfile, setUserProfile] = useState<{
+    plan: string;
+    wordLimit: number;
+    creditsUsed: number;
+    subscriptionStatus: string;
+  } | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
     const unsub = auth
-      ? onAuthStateChanged(auth, (user) => {
+      ? onAuthStateChanged(auth, async (user) => {
           setIsAuthenticated(Boolean(user));
+          setUserEmail(user?.email || "");
+          
+          // Fetch user profile from Firestore
+          if (user) {
+            setIsLoadingProfile(true);
+            const db = getFirebaseDb();
+            if (db) {
+              try {
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (userDoc.exists()) {
+                  const data = userDoc.data();
+                  setUserProfile({
+                    plan: data.plan || "free",
+                    wordLimit: data.wordLimit || 1000,
+                    creditsUsed: data.creditsUsed || 0,
+                    subscriptionStatus: data.subscriptionStatus || "inactive",
+                  });
+                } else {
+                  // User document doesn't exist, set defaults
+                  console.log("User document not found, using defaults");
+                  setUserProfile({
+                    plan: "free",
+                    wordLimit: 1000,
+                    creditsUsed: 0,
+                    subscriptionStatus: "inactive",
+                  });
+                }
+              } catch (error) {
+                console.error("Error fetching user profile:", error);
+                // Set defaults on error
+                setUserProfile({
+                  plan: "free",
+                  wordLimit: 1000,
+                  creditsUsed: 0,
+                  subscriptionStatus: "inactive",
+                });
+              } finally {
+                setIsLoadingProfile(false);
+              }
+            }
+          } else {
+            setUserProfile(null);
+          }
+          
           setIsAuthLoading(false);
         })
       : undefined;
@@ -124,6 +178,19 @@ const Index = () => {
     }
   };
 
+  const handleSignOut = async () => {
+    const auth = getFirebaseAuth();
+    if (auth) {
+      try {
+        await signOut(auth);
+        toast.success("Signed out successfully");
+        navigate("/");
+      } catch (error) {
+        toast.error("Failed to sign out");
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-x-hidden">
       <Header />
@@ -137,22 +204,219 @@ const Index = () => {
         </div>
       ) : (
         <>
-          <div className="container pt-3 pb-2">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-              <div className="relative w-full sm:max-w-md">
-                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                <Input
-                  className="pl-9"
-                  placeholder="Search docs"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-              <Button variant="accent" size="sm" className="h-9" onClick={() => navigate("/editor")}>New doc</Button>
-            </div>
-          </div>
+          {isAuthenticated ? (
+            // Authenticated Layout with Left Sidebar
+            <div className="flex-1 flex overflow-hidden">
+              {/* Left Sidebar */}
+              <div className="w-56 border-r border-border bg-background flex flex-col">
+                {/* Sidebar Navigation */}
+                <div className="py-4">
+                  <nav className="space-y-1 px-3">
+                    <button
+                      onClick={() => setSidebarView("docs")}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        sidebarView === "docs"
+                          ? "bg-secondary text-foreground"
+                          : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                      }`}
+                    >
+                      <FileText className="w-4 h-4" />
+                      Docs
+                    </button>
+                    
+                    <button
+                      onClick={() => setSidebarView("account")}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        sidebarView === "account"
+                          ? "bg-secondary text-foreground"
+                          : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                      }`}
+                    >
+                      <User className="w-4 h-4" />
+                      Account
+                    </button>
 
-          <main className="flex-1 pt-2 pb-0">
+                    <div className="h-4" />
+
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign out
+                    </button>
+
+                    <div className="mt-2 px-3">
+                      <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
+                    </div>
+                  </nav>
+                </div>
+
+                {/* Spacer */}
+                <div className="flex-1" />
+              </div>
+
+              {/* Main Content Area */}
+              <div className="flex-1 overflow-auto">
+                {sidebarView === "docs" && (
+                  <>
+                    <div className="container pt-3 pb-2">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                        <h1 className="text-2xl font-semibold text-foreground">Docs</h1>
+                        <div className="flex items-center gap-2">
+                          <Button variant="accent" size="sm" className="h-9" onClick={() => navigate("/editor")}>
+                            <FileText className="w-4 h-4 mr-2" />
+                            New doc
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="relative w-full sm:max-w-md mt-3">
+                        <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input
+                          className="pl-9"
+                          placeholder="Search docs"
+                          value={query}
+                          onChange={(e) => setQuery(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <main className="pt-2 pb-8">
+                      <div className="container">
+                        {filtered.length === 0 ? (
+                          <div className="text-center text-muted-foreground py-12">No documents found.</div>
+                        ) : (
+                          sections.map((section) => (
+                            <div key={section} className="mb-8">
+                              <div className="text-sm font-semibold text-muted-foreground mb-3">{section}</div>
+                              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                {filtered
+                                  .filter((doc) => doc.section === section)
+                                  .map((doc) => (
+                                    <Card key={doc.id} className="hover:shadow-card transition-shadow cursor-pointer" onClick={() => openDoc(doc.id)}>
+                                      <CardContent className="p-5 min-h-[140px]">
+                                        <div className="flex items-start gap-3">
+                                          <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                                            <FileText className="w-5 h-5 text-primary" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-base font-semibold text-foreground hover:text-primary transition-colors line-clamp-1">
+                                              {doc.title}
+                                            </p>
+                                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                              {doc.preview}
+                                            </p>
+                                            <div className="text-xs text-muted-foreground mt-2">{doc.updated}</div>
+                                          </div>
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  ))}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </main>
+                  </>
+                )}
+
+                {sidebarView === "account" && (
+                  <div className="container pt-6">
+                    <h1 className="text-2xl font-semibold text-foreground mb-6">Account</h1>
+                    {isLoadingProfile ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : (
+                      <div className="max-w-2xl space-y-6">
+                        <Card>
+                          <CardContent className="p-6">
+                            <h3 className="text-base font-semibold text-foreground mb-4">Profile Information</h3>
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Email</span>
+                                <span className="text-sm font-medium text-foreground">{userEmail}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Plan</span>
+                                <span className="text-sm font-medium text-foreground capitalize">{userProfile?.plan || "free"}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Status</span>
+                                <span className="text-sm font-medium text-foreground capitalize">{userProfile?.subscriptionStatus || "inactive"}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardContent className="p-6">
+                            <h3 className="text-base font-semibold text-foreground mb-4">Usage Statistics</h3>
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Word Limit</span>
+                                <span className="text-sm font-medium text-foreground">{userProfile?.wordLimit?.toLocaleString() || "1,000"}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Credits Used</span>
+                                <span className="text-sm font-medium text-foreground">{userProfile?.creditsUsed?.toLocaleString() || "0"}</span>
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm text-muted-foreground">Usage</span>
+                                  <span className="text-sm font-medium text-foreground">
+                                    {Math.min(100, ((userProfile?.creditsUsed || 0) / (userProfile?.wordLimit || 1000)) * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                                <div className="w-full bg-secondary rounded-full h-2">
+                                  <div 
+                                    className="bg-primary h-2 rounded-full transition-all" 
+                                    style={{ 
+                                      width: `${Math.min(100, ((userProfile?.creditsUsed || 0) / (userProfile?.wordLimit || 1000)) * 100)}%` 
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {userProfile?.plan === "free" && (
+                          <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+                            <CardContent className="p-6">
+                              <h4 className="text-base font-semibold text-foreground mb-2">Upgrade to Pro</h4>
+                              <p className="text-sm text-muted-foreground mb-4">Get unlimited checks and advanced features</p>
+                              <Button onClick={() => navigate("/pricing")}>View Plans</Button>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              </div>
+            </div>
+          ) : (
+            // Non-authenticated Layout (Hero + Recent Docs)
+            <>
+              <div className="container pt-3 pb-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                  <div className="relative w-full sm:max-w-md">
+                    <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Input
+                      className="pl-9"
+                      placeholder="Search docs"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </div>
+                  <Button variant="accent" size="sm" className="h-9" onClick={() => navigate("/editor")}>New doc</Button>
+                </div>
+              </div>
+
+              <main className="flex-1 pt-2 pb-0">
             {!isAuthenticated && (
         <section className="mb-0">
           <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_30px_80px_rgba(37,99,235,0.35)]">
@@ -465,6 +729,10 @@ const Index = () => {
           </div>
         </div>
       </main>
+            </>
+          )}
+        </>
+      )}
 
       <Dialog open={isSuggestionOpen} onOpenChange={setIsSuggestionOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -487,8 +755,6 @@ const Index = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      </>
-      )}
 
       <Footer />
     </div>
