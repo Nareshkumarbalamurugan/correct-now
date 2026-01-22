@@ -11,7 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FileText, Search, Star, LogOut, User } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { FileText, Search, Star, LogOut, User, Menu } from "lucide-react";
 import { formatUpdated, getDocs, sectionForDate } from "@/lib/docs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -46,6 +51,7 @@ const Index = () => {
     subscriptionStatus: string;
   } | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -191,6 +197,65 @@ const Index = () => {
     }
   };
 
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      {/* Sidebar Navigation */}
+      <div className="py-4">
+        <nav className="space-y-1 px-3">
+          <button
+            onClick={() => {
+              setSidebarView("docs");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              sidebarView === "docs"
+                ? "bg-secondary text-foreground"
+                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Docs
+          </button>
+          
+          <button
+            onClick={() => {
+              setSidebarView("account");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              sidebarView === "account"
+                ? "bg-secondary text-foreground"
+                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+            }`}
+          >
+            <User className="w-4 h-4" />
+            Account
+          </button>
+
+          <div className="h-4" />
+
+          <button
+            onClick={() => {
+              handleSignOut();
+              setIsMobileSidebarOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
+
+          <div className="mt-2 px-3">
+            <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
+          </div>
+        </nav>
+      </div>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-x-hidden">
       <Header />
@@ -207,57 +272,30 @@ const Index = () => {
           {isAuthenticated ? (
             // Authenticated Layout with Left Sidebar
             <div className="flex-1 flex overflow-hidden">
-              {/* Left Sidebar */}
-              <div className="w-56 border-r border-border bg-background flex flex-col">
-                {/* Sidebar Navigation */}
-                <div className="py-4">
-                  <nav className="space-y-1 px-3">
-                    <button
-                      onClick={() => setSidebarView("docs")}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        sidebarView === "docs"
-                          ? "bg-secondary text-foreground"
-                          : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-                      }`}
-                    >
-                      <FileText className="w-4 h-4" />
-                      Docs
-                    </button>
-                    
-                    <button
-                      onClick={() => setSidebarView("account")}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        sidebarView === "account"
-                          ? "bg-secondary text-foreground"
-                          : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-                      }`}
-                    >
-                      <User className="w-4 h-4" />
-                      Account
-                    </button>
-
-                    <div className="h-4" />
-
-                    <button
-                      onClick={handleSignOut}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Sign out
-                    </button>
-
-                    <div className="mt-2 px-3">
-                      <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
-                    </div>
-                  </nav>
-                </div>
-
-                {/* Spacer */}
-                <div className="flex-1" />
+              {/* Desktop Left Sidebar - Hidden on mobile */}
+              <div className="hidden md:flex w-56 border-r border-border bg-background flex-col">
+                <SidebarContent />
               </div>
 
               {/* Main Content Area */}
               <div className="flex-1 overflow-auto">
+                {/* Mobile Header with Hamburger */}
+                <div className="md:hidden border-b border-border bg-background p-3 flex items-center gap-3">
+                  <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+                    <SheetTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-9 w-9 p-0">
+                        <Menu className="w-5 h-5" />
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="w-64 p-0">
+                      <SidebarContent />
+                    </SheetContent>
+                  </Sheet>
+                  <h1 className="text-lg font-semibold text-foreground">
+                    {sidebarView === "docs" ? "Docs" : "Account"}
+                  </h1>
+                </div>
+
                 {sidebarView === "docs" && (
                   <>
                     <div className="container pt-3 pb-2">
@@ -382,6 +420,19 @@ const Index = () => {
                           </CardContent>
                         </Card>
 
+                        <Card>
+                          <CardContent className="p-6">
+                            <h3 className="text-base font-semibold text-foreground mb-4">Subscription</h3>
+                            <Button 
+                              variant="outline" 
+                              className="w-full"
+                              onClick={() => navigate("/pricing")}
+                            >
+                              Manage Plan
+                            </Button>
+                          </CardContent>
+                        </Card>
+
                         {userProfile?.plan === "free" && (
                           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
                             <CardContent className="p-6">
@@ -434,31 +485,34 @@ const Index = () => {
                     </div>
                   </div>
                   <h1 className="text-4xl md:text-6xl font-bold leading-tight mt-5 tracking-tight">
-                    Write with confidence. Proofread instantly.
+                    CorrectNow – The only AI proofreader and grammar checker for ALL languages.
                   </h1>
                   <p className="text-white/90 text-lg md:text-xl mt-4 leading-relaxed">
-                    CorrectNow fixes spelling mistakes and grammar issues across global
-                    languages — without rewriting your tone.
+                    Correct grammar, spelling, and punctuation errors instantly with CorrectNow. 
+                    Professional AI-powered writing assistant for flawless content in 50+ languages.
                   </p>
                   <div className="flex flex-wrap gap-3 mt-7">
                     <Button
                       className="rounded-full bg-white text-primary px-7 py-5 text-base font-semibold shadow-[0_12px_30px_rgba(255,255,255,0.25)] hover:bg-white/95"
                       onClick={() => navigate("/editor")}
                     >
-                      Start Free Check
+                      Check My Text Now - Free
                     </Button>
                     <Button
                       variant="outline"
                       className="rounded-full border-white/50 bg-transparent text-white px-7 py-5 text-base font-semibold hover:bg-white/10"
-                      onClick={() => navigate("/editor")}
+                      onClick={() => navigate("/features")}
                     >
                       See How It Works
                     </Button>
                   </div>
                   <div className="flex flex-wrap gap-6 mt-7 text-sm text-white/85">
-                    <span className="inline-flex items-center gap-2">✓ AI-powered</span>
-                    <span className="inline-flex items-center gap-2">✓ Professional proofreading</span>
-                    
+                    <span className="inline-flex items-center gap-2">✓ Free forever</span>
+                    <span className="inline-flex items-center gap-2">✓ Instant results</span>
+                    <span className="inline-flex items-center gap-2">✓ No sign-up required</span>
+                  </div>
+                  <div className="mt-5 text-xs text-white/75 italic">
+                    🔒 Your privacy matters: We don't store or share your text
                   </div>
                 </div>
 
@@ -503,6 +557,118 @@ const Index = () => {
                 </Card>
               </div>
             </div>
+          </div>
+        </section>
+        )}
+
+        {/* Features Section with SEO Content */}
+        {!isAuthenticated && (
+        <section className="container py-16 md:py-20">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              Why Choose CorrectNow Grammar Checker?
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              The best free alternative to Grammarly for instant grammar and spelling corrections
+            </p>
+          </div>
+          
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 mb-12">
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Instant Grammar Check</h3>
+                <p className="text-muted-foreground">
+                  Get real-time grammar, spelling, and punctuation corrections as you type. Fix errors instantly with AI-powered suggestions.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">50+ Languages Supported</h3>
+                <p className="text-muted-foreground">
+                  Check grammar in English, Spanish, French, German, Tamil, Hindi, and 45+ more languages. Perfect for multilingual content.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">100% Private & Secure</h3>
+                <p className="text-muted-foreground">
+                  Your text is never stored or shared. We respect your privacy and ensure complete data security.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Free Forever</h3>
+                <p className="text-muted-foreground">
+                  No credit card required. Start checking your grammar, spelling, and punctuation for free. Upgrade anytime for advanced features.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Smart AI Assistant</h3>
+                <p className="text-muted-foreground">
+                  Powered by advanced AI to catch complex grammar mistakes, improve sentence structure, and enhance your writing quality.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-card hover:shadow-elevated transition-shadow">
+              <CardContent className="p-6">
+                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Works Everywhere</h3>
+                <p className="text-muted-foreground">
+                  Use on desktop, mobile, or tablet. Check emails, essays, social media posts, and professional documents anywhere.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="text-center">
+            <h3 className="text-2xl font-bold text-foreground mb-3">Ready to Write Error-Free Content?</h3>
+            <p className="text-muted-foreground mb-6">Join thousands of users who trust CorrectNow for professional writing</p>
+            <Button 
+              variant="accent" 
+              size="lg"
+              onClick={() => navigate("/editor")}
+            >
+              Try Free Grammar Checker Now
+            </Button>
           </div>
         </section>
         )}

@@ -57,7 +57,7 @@ const plans = [
     icon: Building2,
     price: "Custom",
     period: "contact us",
-    description: "Tailored solutions for teams and organizations",
+    description: "For teams and organizations",
     features: [
       "Everything in Pro",
       "Unlimited team members",
@@ -263,50 +263,52 @@ const Pricing = () => {
 
                   <p className="text-muted-foreground mb-6">{plan.description}</p>
 
-                  {canUpgrade ? (
-                    <Button
-                      variant="accent"
-                      className="w-full mb-6"
-                      onClick={() => {
-                        const auth = getFirebaseAuth();
-                        if (!auth?.currentUser) {
-                          toast.error("Please log in or register to subscribe.");
-                          navigate("/auth?mode=login");
-                          return;
-                        }
-                        navigate("/payment");
-                      }}
-                    >
-                      {ctaLabel}
-                    </Button>
-                  ) : isEnterprise ? (
-                    <a href="mailto:support@correctnow.app?subject=Enterprise%20Plan%20Inquiry">
+                  <div className="h-12 mb-6">
+                    {canUpgrade ? (
                       <Button
                         variant="accent"
-                        className="w-full mb-6 flex items-center gap-2"
+                        className="w-full h-full"
+                        onClick={() => {
+                          const auth = getFirebaseAuth();
+                          if (!auth?.currentUser) {
+                            toast.error("Please log in or register to subscribe.");
+                            navigate("/auth?mode=login");
+                            return;
+                          }
+                          navigate("/payment");
+                        }}
                       >
-                        <Mail className="w-4 h-4" />
                         {ctaLabel}
                       </Button>
-                    </a>
-                  ) : canDowngrade ? (
-                    <Button
-                      variant="destructive"
-                      className="w-full mb-6"
-                      onClick={handleDowngrade}
-                      disabled={isCancelling}
-                    >
-                      {isCancelling ? "Cancelling..." : "Downgrade to Free"}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant={isCurrent ? "accent" : "outline"}
-                      className="w-full mb-6"
-                      disabled
-                    >
-                      {ctaLabel}
-                    </Button>
-                  )}
+                    ) : isEnterprise ? (
+                      <a href="mailto:support@correctnow.app?subject=Enterprise%20Plan%20Inquiry" className="block h-full">
+                        <Button
+                          variant="accent"
+                          className="w-full h-full flex items-center justify-center gap-2"
+                        >
+                          <Mail className="w-4 h-4" />
+                          {ctaLabel}
+                        </Button>
+                      </a>
+                    ) : canDowngrade ? (
+                      <Button
+                        variant="destructive"
+                        className="w-full h-full"
+                        onClick={handleDowngrade}
+                        disabled={isCancelling}
+                      >
+                        {isCancelling ? "Cancelling..." : "Downgrade to Free"}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant={isCurrent ? "accent" : "outline"}
+                        className="w-full h-full"
+                        disabled
+                      >
+                        {ctaLabel}
+                      </Button>
+                    )}
+                  </div>
 
                   {isEnterprise && (
                     <p className="text-sm text-muted-foreground text-center mb-6">
