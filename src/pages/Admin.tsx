@@ -17,12 +17,25 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
-import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
-import { collection, collectionGroup, getDocs, doc, updateDoc } from "firebase/firestore";
+import { getFirebaseAuth, getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
+import {
+  collection,
+  collectionGroup,
+  getDocs,
+  doc,
+  updateDoc,
+  setDoc,
+  deleteDoc,
+  orderBy,
+  query,
+} from "firebase/firestore";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useAuthState } from "react-firebase-hooks/auth";
+import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
+import { toast } from "sonner";
 import {
   fetchRemoteSuggestions,
   getSuggestions,
@@ -45,6 +58,17 @@ type AdminUser = {
   status?: string;
 };
 
+type BlogPost = {
+  id: string;
+  title: string;
+  content: string;
+  imageUrl?: string;
+  imagePath?: string;
+  publishedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 const Admin = () => {
   const auth = getFirebaseAuth();
   const [user, loading] = useAuthState(auth);
@@ -54,7 +78,7 @@ const Admin = () => {
   const [loggingIn, setLoggingIn] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
-    "overview" | "users" | "suggestions" | "billing" | "settings"
+    "overview" | "users" | "suggestions" | "billing" | "blog" | "settings"
   >("overview");
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
@@ -64,6 +88,16 @@ const Admin = () => {
   const [totalWords, setTotalWords] = useState(0);
   const [checksToday, setChecksToday] = useState(0);
   const [wordsToday, setWordsToday] = useState(0);
+
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
+  const [blogLoading, setBlogLoading] = useState(false);
+  const [blogSaving, setBlogSaving] = useState(false);
+  const [blogEditingId, setBlogEditingId] = useState<string | null>(null);
+  const [blogTitle, setBlogTitle] = useState("");
+  const [blogContent, setBlogContent] = useState("");
+  const [blogDateTime, setBlogDateTime] = useState("");
+  const [blogImageFile, setBlogImageFile] = useState<File | null>(null);
+  const [blogImagePreview, setBlogImagePreview] = useState<string>("");
 
   // User limit management
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -126,6 +160,29 @@ const Admin = () => {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10);
   }, [users]);
+
+  const toLocalInputValue = (iso?: string) => {
+    if (!iso) return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const yyyy = date.getFullYear();
+    const mm = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  };
+
+  const resetBlogForm = () => {
+    const nowIso = new Date().toISOString();
+    setBlogEditingId(null);
+    setBlogTitle("");
+    setBlogContent("");
+    setBlogDateTime(toLocalInputValue(nowIso));
+    setBlogImageFile(null);
+    setBlogImagePreview("");
+  };
 
   const handleReactivateUser = async (userId: string) => {
     const db = getFirebaseDb();
@@ -223,6 +280,36 @@ const Admin = () => {
     };
     loadSuggestions();
 
+    const loadBlogs = async () => {
+      const db = getFirebaseDb();
+      if (!db) return;
+      setBlogLoading(true);
+      try {
+        const blogQuery = query(
+          collection(db, "blogs"),
+          orderBy("publishedAt", "desc")
+        );
+        const snap = await getDocs(blogQuery);
+        const list: BlogPost[] = snap.docs.map((docSnap) => {
+          const data = docSnap.data() as Record<string, any>;
+          return {
+            id: docSnap.id,
+            title: data?.title || "",
+            content: data?.content || "",
+            imageUrl: data?.imageUrl || "",
+            imagePath: data?.imagePath || "",
+            publishedAt: data?.publishedAt,
+            createdAt: data?.createdAt,
+            updatedAt: data?.updatedAt,
+          };
+        });
+        setBlogPosts(list);
+      } finally {
+        setBlogLoading(false);
+      }
+    };
+    loadBlogs();
+
     const handleStorage = () => loadSuggestions();
     window.addEventListener("correctnow:suggestions-updated", handleStorage);
     return () => window.removeEventListener("correctnow:suggestions-updated", handleStorage);
@@ -305,6 +392,129 @@ const Admin = () => {
     } catch (error) {
       console.error("Failed to update user limits:", error);
       alert("Failed to update user limits");
+    }
+  };
+
+  const handleBlogImageChange = (file?: File | null) => {
+    if (!file) {
+      setBlogImageFile(null);
+      setBlogImagePreview("");
+      return;
+    }
+    setBlogImageFile(file);
+    const preview = URL.createObjectURL(file);
+    setBlogImagePreview(preview);
+  };
+
+  const handleEditBlog = (post: BlogPost) => {
+    setBlogEditingId(post.id);
+    setBlogTitle(post.title || "");
+    setBlogContent(post.content || "");
+    setBlogDateTime(toLocalInputValue(post.publishedAt));
+    setBlogImageFile(null);
+    setBlogImagePreview(post.imageUrl || "");
+  };
+
+  const handleSaveBlog = async () => {
+    const db = getFirebaseDb();
+    if (!db) return;
+    if (!blogTitle.trim() || !blogContent.trim()) {
+      toast.error("Title and content are required");
+      return;
+    }
+
+    setBlogSaving(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const publishedAtIso = blogDateTime
+        ? new Date(blogDateTime).toISOString()
+        : nowIso;
+
+      const existing = blogEditingId
+        ? blogPosts.find((post) => post.id === blogEditingId)
+        : null;
+
+      const docRef = blogEditingId
+        ? doc(db, "blogs", blogEditingId)
+        : doc(collection(db, "blogs"));
+
+      let imageUrl = existing?.imageUrl || "";
+      let imagePath = existing?.imagePath || "";
+
+      if (blogImageFile) {
+        const storage = getFirebaseStorage();
+        if (storage) {
+          const path = `blog-images/${docRef.id}/${Date.now()}-${blogImageFile.name}`;
+          const fileRef = storageRef(storage, path);
+          await uploadBytes(fileRef, blogImageFile);
+          imageUrl = await getDownloadURL(fileRef);
+          imagePath = path;
+
+          if (existing?.imagePath && existing.imagePath !== path) {
+            try {
+              await deleteObject(storageRef(storage, existing.imagePath));
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+
+      const payload: BlogPost = {
+        id: docRef.id,
+        title: blogTitle.trim(),
+        content: blogContent.trim(),
+        imageUrl,
+        imagePath,
+        publishedAt: publishedAtIso,
+        updatedAt: nowIso,
+        createdAt: existing?.createdAt || nowIso,
+      };
+
+      await setDoc(docRef, payload, { merge: true });
+
+      setBlogPosts((prev) => {
+        const next = blogEditingId
+          ? prev.map((post) => (post.id === docRef.id ? payload : post))
+          : [payload, ...prev];
+        return [...next].sort((a, b) =>
+          new Date(b.publishedAt || b.createdAt || 0).getTime() -
+          new Date(a.publishedAt || a.createdAt || 0).getTime()
+        );
+      });
+
+      toast.success(blogEditingId ? "Blog post updated" : "Blog post created");
+      resetBlogForm();
+    } finally {
+      setBlogSaving(false);
+    }
+  };
+
+  const handleDeleteBlog = async (post: BlogPost) => {
+    const db = getFirebaseDb();
+    if (!db) return;
+    const confirmed = window.confirm("Delete this blog post? This cannot be undone.");
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "blogs", post.id));
+      if (post.imagePath) {
+        const storage = getFirebaseStorage();
+        if (storage) {
+          try {
+            await deleteObject(storageRef(storage, post.imagePath));
+          } catch {
+            // ignore
+          }
+        }
+      }
+      setBlogPosts((prev) => prev.filter((item) => item.id !== post.id));
+      toast.success("Blog post deleted");
+      if (blogEditingId === post.id) {
+        resetBlogForm();
+      }
+    } catch {
+      toast.error("Failed to delete blog post");
     }
   };
 
@@ -437,6 +647,7 @@ const Admin = () => {
                 { id: "overview", icon: BarChart3, label: "Dashboard" },
                 { id: "users", icon: Users, label: "Users" },
                 { id: "suggestions", icon: MessageSquare, label: "Suggestions" },
+                { id: "blog", icon: FileText, label: "Blog" },
                 { id: "billing", icon: CreditCard, label: "Billing & Plans" },
                 { id: "settings", icon: Settings, label: "Settings" },
               ].map((item) => (
@@ -955,6 +1166,139 @@ const Admin = () => {
                         )}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "blog" && (
+              <div className="space-y-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-bold text-foreground mb-1">
+                      Blog
+                    </h1>
+                    <p className="text-muted-foreground">
+                      Create, edit, and publish blog posts
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline" onClick={resetBlogForm}>
+                      New Post
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid lg:grid-cols-5 gap-6">
+                  <div className="lg:col-span-2 bg-card rounded-xl border border-border p-6 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Title</label>
+                      <Input
+                        value={blogTitle}
+                        onChange={(e) => setBlogTitle(e.target.value)}
+                        placeholder="Blog post title"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Content</label>
+                      <Textarea
+                        value={blogContent}
+                        onChange={(e) => setBlogContent(e.target.value)}
+                        placeholder="Write your blog content here..."
+                        className="min-h-[200px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Publish date & time</label>
+                      <Input
+                        type="datetime-local"
+                        value={blogDateTime}
+                        onChange={(e) => setBlogDateTime(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Image</label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleBlogImageChange(e.target.files?.[0])}
+                      />
+                      {blogImagePreview && (
+                        <img
+                          src={blogImagePreview}
+                          alt="Blog preview"
+                          className="mt-3 w-full h-40 object-cover rounded-lg border border-border"
+                        />
+                      )}
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button onClick={handleSaveBlog} disabled={blogSaving}>
+                        {blogSaving
+                          ? "Saving..."
+                          : blogEditingId
+                            ? "Update Post"
+                            : "Publish Post"}
+                      </Button>
+                      {blogEditingId && (
+                        <Button variant="outline" onClick={resetBlogForm}>
+                          Cancel Edit
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-3 bg-card rounded-xl border border-border p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-semibold text-foreground">All Posts</h2>
+                      <span className="text-sm text-muted-foreground">
+                        {blogPosts.length} total
+                      </span>
+                    </div>
+                    {blogLoading ? (
+                      <p className="text-sm text-muted-foreground">Loading posts...</p>
+                    ) : blogPosts.length ? (
+                      <div className="space-y-4">
+                        {blogPosts.map((post) => (
+                          <div
+                            key={post.id}
+                            className="flex flex-col sm:flex-row gap-4 p-4 rounded-lg border border-border"
+                          >
+                            {post.imageUrl && (
+                              <img
+                                src={post.imageUrl}
+                                alt={post.title}
+                                className="w-full sm:w-32 h-24 object-cover rounded-md border border-border"
+                              />
+                            )}
+                            <div className="flex-1 space-y-2">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <h3 className="font-semibold text-foreground">
+                                  {post.title}
+                                </h3>
+                                <span className="text-xs text-muted-foreground">
+                                  {post.publishedAt
+                                    ? new Date(post.publishedAt).toLocaleString()
+                                    : "Unscheduled"}
+                                </span>
+                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {post.content}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Button variant="outline" size="sm" onClick={() => handleEditBlog(post)}>
+                                  Edit
+                                </Button>
+                                <Button variant="destructive" size="sm" onClick={() => handleDeleteBlog(post)}>
+                                  Delete
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No blog posts yet.</p>
+                    )}
                   </div>
                 </div>
               </div>

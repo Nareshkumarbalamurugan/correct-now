@@ -20,6 +20,7 @@ import RefundPolicy from "./pages/RefundPolicy";
 import FeaturesPage from "./pages/FeaturesPage";
 import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
+import Blog from "./pages/Blog";
 import { initDocsSync } from "@/lib/docs";
 import { startSessionEnforcement } from "@/lib/session";
 
@@ -69,6 +70,7 @@ const App = () => {
             <Route path="/disclaimer" element={<Disclaimer />} />
             <Route path="/refund-policy" element={<RefundPolicy />} />
             <Route path="/features" element={<FeaturesPage />} />
+            <Route path="/blog" element={<Blog />} />
             <Route path="/terms" element={<Terms />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
