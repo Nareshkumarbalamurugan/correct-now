@@ -1128,6 +1128,11 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     ref={textareaRef}
                     value={inputText}
                     onChange={(e) => {
+                      // Skip manual updates during voice recording to prevent duplication
+                      if (isRecording) {
+                        return;
+                      }
+
                       const newText = e.target.value;
                       setInputText(newText);
 
