@@ -1,18 +1,26 @@
+import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { useMemo, useState, useRef, useEffect } from "react";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronDown } from "lucide-react";
+import { useState } from "react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface LanguageSelectorProps {
   value: string;
@@ -68,134 +76,65 @@ const languages = [
 ];
 
 const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = false }: LanguageSelectorProps) => {
-  const [query, setQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = open ?? internalOpen;
+  const selectedLanguage = languages.find((lang) => lang.code === value);
 
-  // Reset query when dropdown closes
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!isControlled) {
+      setInternalOpen(nextOpen);
     }
-  }, [open]);
+    onOpenChange?.(nextOpen);
+  };
 
-  // Auto-focus search input when dropdown opens (with delay for mobile)
-  useEffect(() => {
-    if (open && searchInputRef.current) {
-      const timer = setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [open]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return languages;
-    return languages.filter(
-      (lang) =>
-        lang.name.toLowerCase().includes(q) ||
-        lang.code.toLowerCase().includes(q)
-    );
-  }, [query]);
-
-  const handleItemSelect = (selectedValue: string) => {
+  const handleSelect = (selectedValue: string) => {
     onChange(selectedValue);
-    setQuery("");
-    onOpenChange?.(false);
-  };
-
-  const preventCloseOnInteraction = (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    setQuery(e.target.value);
-  };
-
-  const handleSearchClick = (e: React.MouseEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
+    handleOpenChange(false);
   };
 
   const selector = (
-    <Select 
-      value={value} 
-      onValueChange={handleItemSelect} 
-      open={open} 
-      onOpenChange={onOpenChange}
-    >
-      <SelectTrigger className="w-full sm:w-[180px] bg-card">
-        <SelectValue placeholder="Select language" />
-      </SelectTrigger>
-      <SelectContent 
-        ref={contentRef}
-        className="max-h-[300px]"
-        onPointerDownOutside={(e) => {
-          // Prevent closing when clicking on the search input or its container
-          const target = e.target as HTMLElement;
-          if (
-            contentRef.current?.contains(target) ||
-            target.closest('[data-language-search]')
-          ) {
-            e.preventDefault();
-          }
-        }}
-      >
-        <div 
-          data-language-search
-          className="sticky top-0 z-10 bg-popover p-2 border-b"
-          onPointerDown={preventCloseOnInteraction}
-          onMouseDown={preventCloseOnInteraction}
-          onTouchStart={preventCloseOnInteraction}
-          onTouchEnd={preventCloseOnInteraction}
-          onClick={preventCloseOnInteraction}
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={isOpen}
+          className="w-full sm:w-[180px] justify-between bg-card"
         >
-          <Input
-            ref={searchInputRef}
-            value={query}
-            onChange={handleSearchChange}
-            onClick={handleSearchClick}
-            placeholder="Type to search..."
-            className="h-9"
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              // Keep dropdown open while typing
-              if (e.key === "Escape") {
-                onOpenChange?.(false);
-              }
-            }}
-            onPointerDown={preventCloseOnInteraction}
-            onMouseDown={preventCloseOnInteraction}
-            onTouchStart={preventCloseOnInteraction}
-            onTouchEnd={preventCloseOnInteraction}
-            onFocus={(e) => e.stopPropagation()}
-          />
-        </div>
-        <div className="max-h-[240px] overflow-y-auto">
-          {filtered.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-              No languages found matching "{query}"
-            </div>
-          ) : (
-            filtered.map((lang) => (
-              <SelectItem 
-                key={lang.code} 
-                value={lang.code}
-                onPointerDown={(e) => {
-                  // Allow selection on mobile
-                  e.stopPropagation();
-                }}
-              >
-                {lang.name}
-              </SelectItem>
-            ))
-          )}
-        </div>
-      </SelectContent>
-    </Select>
+          <span className="truncate">
+            {selectedLanguage ? selectedLanguage.name : "Select language"}
+          </span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[280px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Type to search..." autoFocus />
+          <CommandList>
+            <CommandEmpty>No languages found.</CommandEmpty>
+            <CommandGroup>
+              {languages.map((lang) => (
+                <CommandItem
+                  key={lang.code}
+                  value={`${lang.name} ${lang.code}`}
+                  onSelect={() => handleSelect(lang.code)}
+                  className="cursor-pointer"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === lang.code ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {lang.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 
   // Show tooltip when language is not selected and user should select one
