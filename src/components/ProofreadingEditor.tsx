@@ -354,6 +354,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const shouldContinueRef = useRef(false);
   const speechBaseRef = useRef<string>("");
   const speechFinalRef = useRef<string>("");
+  const speechFinalIndexRef = useRef<number>(-1);
+  const speechFinalTextRef = useRef<string>("");
   const speechPulseRef = useRef<number | null>(null);
   const speechInterimRef = useRef<string>("");
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -818,6 +820,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
     speechBaseRef.current = inputText.trim();
     speechFinalRef.current = "";
+    speechFinalIndexRef.current = -1;
+    speechFinalTextRef.current = "";
 
     recognition.onresult = (event: any) => {
       let interim = "";
@@ -826,6 +830,17 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const chunk = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
+          if (i <= speechFinalIndexRef.current) {
+            continue;
+          }
+          speechFinalIndexRef.current = i;
+          const trimmedChunk = chunk.trim();
+          if (trimmedChunk && trimmedChunk === speechFinalTextRef.current) {
+            continue;
+          }
+          if (trimmedChunk) {
+            speechFinalTextRef.current = trimmedChunk;
+          }
           finalChunk += `${chunk} `;
         } else {
           interim += chunk;
