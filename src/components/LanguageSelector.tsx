@@ -6,13 +6,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface LanguageSelectorProps {
   value: string;
   onChange: (value: string) => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  showTooltip?: boolean;
 }
 
 const languages = [
@@ -60,8 +67,27 @@ const languages = [
   { code: "ar", name: "Arabic" },
 ];
 
-const LanguageSelector = ({ value, onChange, open, onOpenChange }: LanguageSelectorProps) => {
+const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = false }: LanguageSelectorProps) => {
   const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Reset query when dropdown closes
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+    }
+  }, [open]);
+
+  // Auto-focus search input when dropdown opens (with delay for mobile)
+  useEffect(() => {
+    if (open && searchInputRef.current) {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -73,36 +99,109 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange }: LanguageSelec
     );
   }, [query]);
 
-  return (
-    <Select value={value} onValueChange={onChange} open={open} onOpenChange={onOpenChange}>
+  const handleItemSelect = (selectedValue: string) => {
+    onChange(selectedValue);
+    setQuery("");
+    onOpenChange?.(false);
+  };
+
+  const preventCloseOnInteraction = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setQuery(e.target.value);
+  };
+
+  const selector = (
+    <Select 
+      value={value} 
+      onValueChange={handleItemSelect} 
+      open={open} 
+      onOpenChange={onOpenChange}
+    >
       <SelectTrigger className="w-full sm:w-[180px] bg-card">
         <SelectValue placeholder="Select language" />
       </SelectTrigger>
-      <SelectContent onKeyDown={(e) => e.stopPropagation()}>
-        <div className="p-2" onClick={(e) => e.stopPropagation()}>
+      <SelectContent 
+        ref={contentRef}
+        className="max-h-[300px]"
+        onPointerDownOutside={(e) => {
+          // Prevent closing when clicking on the search input
+          if (contentRef.current?.contains(e.target as Node)) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <div 
+          className="sticky top-0 z-10 bg-popover p-2 border-b"
+          onPointerDown={preventCloseOnInteraction}
+          onMouseDown={preventCloseOnInteraction}
+          onTouchStart={preventCloseOnInteraction}
+          onClick={preventCloseOnInteraction}
+        >
           <Input
+            ref={searchInputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search language"
-            autoFocus
-            onKeyDownCapture={(e) => e.stopPropagation()}
-            onKeyUpCapture={(e) => e.stopPropagation()}
+            onChange={handleSearchChange}
+            placeholder="Type to search..."
+            className="h-9"
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              // Keep dropdown open while typing
+              if (e.key === "Escape") {
+                onOpenChange?.(false);
+              }
+            }}
+            onPointerDown={preventCloseOnInteraction}
+            onMouseDown={preventCloseOnInteraction}
+            onTouchStart={preventCloseOnInteraction}
           />
         </div>
-        {filtered.length === 0 ? (
-          <div className="px-3 py-2 text-sm text-muted-foreground">
-            No matches
-          </div>
-        ) : (
-          filtered.map((lang) => (
-            <SelectItem key={lang.code} value={lang.code}>
-              {lang.name}
-            </SelectItem>
-          ))
-        )}
+        <div className="max-h-[240px] overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+              No languages found matching "{query}"
+            </div>
+          ) : (
+            filtered.map((lang) => (
+              <SelectItem 
+                key={lang.code} 
+                value={lang.code}
+                onPointerDown={(e) => {
+                  // Allow selection on mobile
+                  e.stopPropagation();
+                }}
+              >
+                {lang.name}
+              </SelectItem>
+            ))
+          )}
+        </div>
       </SelectContent>
     </Select>
   );
+
+  // Show tooltip when language is not selected and user should select one
+  if (showTooltip && !value) {
+    return (
+      <TooltipProvider>
+        <Tooltip open={showTooltip}>
+          <TooltipTrigger asChild>
+            {selector}
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="bg-accent text-accent-foreground">
+            <p className="font-medium">Please select a language first</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return selector;
 };
 
 export default LanguageSelector;

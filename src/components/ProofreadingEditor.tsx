@@ -333,6 +333,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
+  const [showLanguageTooltip, setShowLanguageTooltip] = useState(false);
   const [pendingRecording, setPendingRecording] = useState(false);
   const [docId, setDocId] = useState<string | undefined>(initialDocId);
   const initializedRef = useRef(false);
@@ -1019,10 +1020,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         value={language}
                         open={isLanguageOpen}
                         onOpenChange={setIsLanguageOpen}
+                        showTooltip={showLanguageTooltip}
                         onChange={(value) => {
                           setLanguage(value);
                           setLanguageMode(value === "auto" ? "auto" : "manual");
                           setIsLanguageOpen(false);
+                          setShowLanguageTooltip(false);
                         }}
                       />
                     </div>
@@ -1103,7 +1106,18 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                   <textarea
                     ref={textareaRef}
                     value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
+                    onChange={(e) => {
+                      const newText = e.target.value;
+                      setInputText(newText);
+                      
+                      // Show tooltip if user types without selecting a language
+                      if (newText.trim().length > 0 && !language) {
+                        setShowLanguageTooltip(true);
+                        setIsLanguageOpen(true);
+                      } else {
+                        setShowLanguageTooltip(false);
+                      }
+                    }}
                     spellCheck={false}
                     onPaste={() => {
                       window.setTimeout(() => {
