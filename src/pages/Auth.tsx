@@ -14,6 +14,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { writeSessionId } from "@/lib/session";
 import { doc as firestoreDoc, setDoc, getDoc } from "firebase/firestore";
 import {
   Dialog,
@@ -63,16 +64,24 @@ const Auth = () => {
         const db = getFirebaseDb();
         if (db) {
           const ref = firestoreDoc(db, `users/${result.user.uid}`);
+          const existing = await getDoc(ref);
+          if (existing.exists() && existing.data()?.status === "deactivated") {
+            await auth.signOut();
+            toast.error("Your account is deactivated. Contact support to reactivate.");
+            return;
+          }
           await setDoc(
             ref,
             {
               uid: result.user.uid,
               name: result.user.displayName || "",
               email: result.user.email || "",
+              status: "active",
               updatedAt: new Date().toISOString(),
             },
             { merge: true }
           );
+          await writeSessionId(result.user, true);
         }
         toast.success("Signed in successfully");
       } else {
@@ -120,6 +129,12 @@ const Auth = () => {
       if (db) {
         const ref = firestoreDoc(db, `users/${result.user.uid}`);
         const userDoc = await getDoc(ref);
+
+        if (userDoc.exists() && userDoc.data()?.status === "deactivated") {
+          await auth.signOut();
+          toast.error("Your account is deactivated. Contact support to reactivate.");
+          return;
+        }
         
         // Check if user exists and has a name
         if (!userDoc.exists() || !userDoc.data()?.name) {
@@ -138,10 +153,12 @@ const Auth = () => {
             uid: result.user.uid,
             name: userDoc.data()?.name || result.user.displayName || "",
             email: result.user.email || "",
+            status: "active",
             updatedAt: new Date().toISOString(),
           },
           { merge: true }
         );
+        await writeSessionId(result.user, true);
       }
       toast.success("Signed in with Google");
       navigate("/");
@@ -169,6 +186,7 @@ const Auth = () => {
             uid: googleUserData.uid,
             name: googleName.trim(),
             email: googleUserData.email || "",
+            status: "active",
             updatedAt: new Date().toISOString(),
             createdAt: new Date().toISOString(),
           },
@@ -180,6 +198,7 @@ const Auth = () => {
       }
       
       setShowGoogleNameDialog(false);
+      await writeSessionId(googleUserData, true);
       toast.success("Signed in with Google");
       navigate("/");
     } catch (error: any) {

@@ -42,6 +42,7 @@ type AdminUser = {
   subscriptionStatus?: string;
   updatedAt?: string;
   createdAt?: string;
+  status?: string;
 };
 
 const Admin = () => {
@@ -69,6 +70,7 @@ const Admin = () => {
   const [limitType, setLimitType] = useState<"unlimited" | "limited" | "disabled">("limited");
   const [wordLimitValue, setWordLimitValue] = useState("2000");
   const [creditsValue, setCreditsValue] = useState("50000");
+  const [reactivatingUserId, setReactivatingUserId] = useState<string | null>(null);
 
   // All hooks must be called before any conditional returns
   const filteredUsers = users.filter(
@@ -125,6 +127,27 @@ const Admin = () => {
       .slice(0, 10);
   }, [users]);
 
+  const handleReactivateUser = async (userId: string) => {
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    setReactivatingUserId(userId);
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        status: "active",
+        sessionId: "",
+        sessionUpdatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, status: "active" } : u))
+      );
+    } finally {
+      setReactivatingUserId(null);
+    }
+  };
+
   useEffect(() => {
     if (!user) return; // Don't load data if not logged in
     
@@ -145,6 +168,7 @@ const Admin = () => {
           subscriptionStatus: data?.subscriptionStatus,
           updatedAt: data?.updatedAt,
           createdAt: data?.createdAt,
+          status: data?.status || "active",
         };
       });
       setUsers(list);
@@ -641,6 +665,9 @@ const Admin = () => {
                             Plan
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Status
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Credits
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
@@ -693,6 +720,13 @@ const Admin = () => {
                                 {user.plan}
                               </Badge>
                             </td>
+                            <td className="py-4 px-6">
+                              <Badge
+                                variant={user.status === "deactivated" ? "destructive" : "outline"}
+                              >
+                                {user.status === "deactivated" ? "Deactivated" : "Active"}
+                              </Badge>
+                            </td>
                             <td className="py-4 px-6 text-sm text-foreground">
                               {user.credits ? user.credits.toLocaleString() : "—"}
                             </td>
@@ -712,13 +746,25 @@ const Admin = () => {
                                 : "—"}
                             </td>
                             <td className="py-4 px-6 text-right">
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => handleEditUser(user.id, user)}
-                              >
-                                Manage Limits
-                              </Button>
+                              <div className="flex items-center justify-end gap-2">
+                                {user.status === "deactivated" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleReactivateUser(user.id)}
+                                    disabled={reactivatingUserId === user.id}
+                                  >
+                                    {reactivatingUserId === user.id ? "Reactivating..." : "Reactivate"}
+                                  </Button>
+                                )}
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleEditUser(user.id, user)}
+                                >
+                                  Manage Limits
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}

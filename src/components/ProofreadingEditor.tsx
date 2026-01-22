@@ -257,6 +257,18 @@ const countWords = (text: string): number => {
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const buildLooseRegex = (value: string) => {
+  const chars = value.split("");
+  const parts = chars.map((char, index) => {
+    if (/\s/.test(char)) return "\\s+";
+    const isLast = index === chars.length - 1;
+    return isLast
+      ? escapeRegExp(char)
+      : `${escapeRegExp(char)}[^\\p{L}\\p{N}]*`;
+  });
+  return new RegExp(parts.join(""), "giu");
+};
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, "&amp;")
@@ -337,6 +349,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [pendingRecording, setPendingRecording] = useState(false);
   const [docId, setDocId] = useState<string | undefined>(initialDocId);
   const initializedRef = useRef(false);
+  const languagePromptedRef = useRef(false);
   const speechRef = useRef<any>(null);
   const shouldContinueRef = useRef(false);
   const speechBaseRef = useRef<string>("");
@@ -351,6 +364,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       setIsLanguageOpen(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (language) {
+      languagePromptedRef.current = false;
+      setShowLanguageTooltip(false);
+    }
+  }, [language]);
   
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
@@ -569,7 +589,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       .filter((change) => change.status === "accepted")
       .reduce((current, change) => {
         if (!change.original || !change.corrected) return current;
-        const regex = new RegExp(escapeRegExp(change.original), "g");
+        const regex = buildLooseRegex(change.original);
         return current.replace(regex, change.corrected);
       }, text);
   };
@@ -945,7 +965,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const updatedText = applyAcceptedChanges(source, updated);
     // Update all text states to reflect the accepted change
     setInputText(updatedText);
-    setBaseText(source); // Keep baseText as the original for remaining changes
+    setBaseText(updatedText); // Keep baseText in sync with latest accepted text
     setCorrectedText(updatedText);
     if (updated.filter((change) => change.status !== "accepted" && change.status !== "ignored").length === 0) {
       setAcceptedTexts((prev) => {
@@ -967,10 +987,11 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const updated: Change[] = changes.map((change) => ({ ...change, status: "accepted" as const }));
     const base = baseText || inputText;
     const updatedText = applyAcceptedChanges(base, updated);
-    setChanges(updated);
+    setChanges(reorderSuggestions(updated));
     setInputText(updatedText);
     setBaseText(updatedText);
     setCorrectedText(updatedText);
+    setSelectedWordDialog({ open: false, suggestions: [], original: "" });
     setAcceptedTexts((prev) => {
       const next = prev.filter((text) => text.trim() !== updatedText.trim());
       return [...next, updatedText].slice(-50);
@@ -1109,13 +1130,19 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     onChange={(e) => {
                       const newText = e.target.value;
                       setInputText(newText);
-                      
-                      // Show tooltip if user types without selecting a language
-                      if (newText.trim().length > 0 && !language) {
+
+                      if (!newText.trim()) {
+                        languagePromptedRef.current = false;
+                        setShowLanguageTooltip(false);
+                        return;
+                      }
+
+                      // Prompt only once until user selects a language
+                      if (!language && !languagePromptedRef.current) {
+                        languagePromptedRef.current = true;
                         setShowLanguageTooltip(true);
                         setIsLanguageOpen(true);
-                      } else {
-                        setShowLanguageTooltip(false);
+                        return;
                       }
                     }}
                     spellCheck={false}

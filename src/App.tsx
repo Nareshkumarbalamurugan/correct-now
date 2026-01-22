@@ -21,6 +21,7 @@ import FeaturesPage from "./pages/FeaturesPage";
 import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 import { initDocsSync } from "@/lib/docs";
+import { startSessionEnforcement } from "@/lib/session";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,8 @@ const ScrollToTop = () => {
 const App = () => {
   useEffect(() => {
     initDocsSync();
+    const stop = startSessionEnforcement();
+    return () => stop();
   }, []);
 
   return (

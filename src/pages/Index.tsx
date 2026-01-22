@@ -23,8 +23,9 @@ import Footer from "@/components/Footer";
 import { addSuggestion } from "@/lib/suggestions";
 import { toast } from "sonner";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { deleteUser, onAuthStateChanged, signOut } from "firebase/auth";
+import { collection, deleteDoc, doc, getDoc, getDocs as getFirestoreDocs, setDoc } from "firebase/firestore";
+import { clearSessionId } from "@/lib/session";
 
 const Index = () => {
   const [query, setQuery] = useState("");
@@ -52,6 +53,8 @@ const Index = () => {
   } | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -194,6 +197,41 @@ const Index = () => {
       } catch (error) {
         toast.error("Failed to sign out");
       }
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const auth = getFirebaseAuth();
+    const db = getFirebaseDb();
+    if (!auth?.currentUser || !db) {
+      toast.error("Unable to delete account.");
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const uid = auth.currentUser.uid;
+      const userRef = doc(db, "users", uid);
+
+      const docsSnap = await getFirestoreDocs(collection(db, `users/${uid}/docs`));
+      await Promise.all(docsSnap.docs.map((docSnap) => deleteDoc(docSnap.ref)));
+
+      await deleteDoc(userRef);
+      window.localStorage.removeItem("correctnow:docs");
+
+      await deleteUser(auth.currentUser);
+      clearSessionId();
+      toast.success("Your account was permanently deleted.");
+      navigate("/");
+    } catch (error: any) {
+      if (error?.code === "auth/requires-recent-login") {
+        toast.error("Please log in again to delete your account.");
+      } else {
+        toast.error("Failed to delete account.");
+      }
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteOpen(false);
     }
   };
 
@@ -433,6 +471,21 @@ const Index = () => {
                           </CardContent>
                         </Card>
 
+                        <Card>
+                          <CardContent className="p-6">
+                            <h3 className="text-base font-semibold text-foreground mb-4">Account Security</h3>
+                            <div className="space-y-3">
+                              <Button
+                                variant="destructive"
+                                className="w-full"
+                                onClick={() => setIsDeleteOpen(true)}
+                              >
+                                Delete Account Permanently
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+
                         {userProfile?.plan === "free" && (
                           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
                             <CardContent className="p-6">
@@ -442,6 +495,33 @@ const Index = () => {
                             </CardContent>
                           </Card>
                         )}
+
+                        <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Delete account permanently?</DialogTitle>
+                            </DialogHeader>
+                            <div className="text-sm text-muted-foreground">
+                              This will permanently erase your account and all data. This action cannot be undone.
+                            </div>
+                            <DialogFooter>
+                              <Button
+                                variant="outline"
+                                onClick={() => setIsDeleteOpen(false)}
+                                disabled={isDeleting}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                onClick={handleDeleteAccount}
+                                disabled={isDeleting}
+                              >
+                                {isDeleting ? "Deleting..." : "Delete Permanently"}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </div>
                     )}
                   </div>
