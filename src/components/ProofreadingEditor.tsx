@@ -257,6 +257,8 @@ const countWords = (text: string): number => {
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const normalizeText = (value: string) => value.trim().normalize("NFC");
+
 const buildLooseRegex = (value: string) => {
   const chars = value.split("");
   const parts = chars.map((char, index) => {
@@ -674,7 +676,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       } else {
         setCorrectedText(normalizedCorrected);
         const nextChanges: Change[] = Array.isArray(data.changes)
-          ? data.changes.map((change: Change) => ({ ...change, status: "pending" as const }))
+          ? data.changes
+              .map((change: Change) => ({ ...change, status: "pending" as const }))
+              .filter((change) => {
+                if (!change.original || !change.corrected) return false;
+                return normalizeText(change.original) !== normalizeText(change.corrected);
+              })
           : [];
         setBaseText(normalizedInput);
         setChanges(nextChanges);
@@ -1093,13 +1100,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     <Button
                       variant="outline"
                       size="icon"
-                      className={
+                      className={`hidden md:inline-flex ${
                         isRecording
                           ? isSpeaking
                             ? "border-accent text-accent bg-accent/10 ring-4 ring-accent/40 shadow-[0_0_0_8px_rgba(37,99,235,0.5)] animate-pulse scale-105 transition-transform"
                             : "border-accent text-accent bg-accent/5"
                           : ""
-                      }
+                      }`}
                       onClick={toggleRecording}
                       title={isRecording ? "Stop recording" : "Voice input"}
                     >
@@ -1171,7 +1178,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         const next = textareaRef.current?.value || "";
                         if (!next.trim()) return;
                         setInputText(next);
-                        handleCheck(next);
                       }, 0);
                     }}
                     onClick={handleTextareaClick}

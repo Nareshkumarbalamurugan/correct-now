@@ -6,14 +6,12 @@ const Footer = () => {
       <div className="container max-w-7xl">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div className="flex items-center">
-            <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-accent/10">
-              <img
-                src="/Icon/correctnow logo final2.png"
-                alt="CorrectNow"
-                className="w-32 h-12 object-contain"
-                loading="lazy"
-              />
-            </div>
+            <img
+              src="/Icon/correctnow logo final2.png"
+              alt="CorrectNow"
+              className="h-16 w-auto object-contain"
+              loading="lazy"
+            />
           </div>
 
           <nav className="flex flex-wrap items-center justify-center md:justify-start gap-x-6 gap-y-3 text-sm text-muted-foreground">
