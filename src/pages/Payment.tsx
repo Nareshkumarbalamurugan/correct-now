@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { doc as firestoreDoc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { detectCountryCode, formatPrice, resolvePricing, type RegionalPricing } from "@/lib/pricing";
 
 declare global {
   interface Window {
@@ -27,17 +28,42 @@ const Payment = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
   const [subscriptionStatus, setSubscriptionStatus] = useState("");
-  const [selectedCreditPack, setSelectedCreditPack] = useState<"basic" | "saver">("basic");
+  const [selectedCreditPack, setSelectedCreditPack] = useState<"basic" | "saver" | "ultra">("basic");
+  const [regionalPricing, setRegionalPricing] = useState<RegionalPricing>(() =>
+    resolvePricing("")
+  );
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";
   const isCreditPurchase = searchParams.get("mode") === "credits";
   const creditPacks = {
-    basic: { credits: 10000, price: 50, label: "Basic Pack" },
-    saver: { credits: 25000, price: 100, label: "Ultra Saver" }
+    basic: { credits: 10000, price: 200, label: "Basic Pack" },
+    saver: { credits: 25000, price: 300, label: "Super Saver" },
+    ultra: { credits: 50000, price: 500, label: "Ultra Saver" }
   };
   const creditPack = creditPacks[selectedCreditPack];
   const canBuyCredits = currentPlan === "Pro" && String(subscriptionStatus).toLowerCase() === "active";
+
+  useEffect(() => {
+    const loadRegion = async () => {
+      const code = await detectCountryCode();
+      const pricing = resolvePricing(code);
+      setRegionalPricing(pricing);
+      if (pricing.useRazorpay) {
+        setPaymentMethod("card");
+        setCardProvider("razorpay");
+      } else {
+        setPaymentMethod("card");
+        setCardProvider("stripe");
+      }
+    };
+    loadRegion();
+  }, []);
+
+  const proPriceLabel = useMemo(
+    () => formatPrice(regionalPricing.currency, regionalPricing.amount),
+    [regionalPricing]
+  );
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -111,7 +137,9 @@ const Payment = () => {
             userEmail: user.email,
             type: isCreditPurchase ? "credits" : "subscription",
             credits: isCreditPurchase ? creditPack.credits : undefined,
-            amount: isCreditPurchase ? creditPack.price : 500,
+            amount: isCreditPurchase ? creditPack.price : regionalPricing.amount,
+            priceId: !isCreditPurchase ? regionalPricing.stripePriceId : undefined,
+            currency: regionalPricing.currency,
           }),
         });
         
@@ -251,7 +279,7 @@ const Payment = () => {
             <img 
               src="/Icon/correctnow logo final2.png" 
               alt="CorrectNow"
-              className="w-32 h-20 object-contain"
+              className="h-24 w-auto object-contain"
             />
           </Link>
         </div>
@@ -310,18 +338,20 @@ const Payment = () => {
                     <CreditCard className="w-5 h-5 text-muted-foreground" />
                     <span>Credit/Debit Card</span>
                   </Label>
-                  <Label
-                    htmlFor="upi"
-                    className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                      paymentMethod === "upi"
-                        ? "border-accent bg-accent/5"
-                        : "border-border hover:border-accent/50"
-                    }`}
-                  >
-                    <RadioGroupItem value="upi" id="upi" />
-                    <Smartphone className="w-5 h-5 text-muted-foreground" />
-                    <span>UPI</span>
-                  </Label>
+                  {regionalPricing.useRazorpay && (
+                    <Label
+                      htmlFor="upi"
+                      className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                        paymentMethod === "upi"
+                          ? "border-accent bg-accent/5"
+                          : "border-border hover:border-accent/50"
+                      }`}
+                    >
+                      <RadioGroupItem value="upi" id="upi" />
+                      <Smartphone className="w-5 h-5 text-muted-foreground" />
+                      <span>UPI</span>
+                    </Label>
+                  )}
                 </RadioGroup>
               </div>
 
@@ -333,30 +363,34 @@ const Payment = () => {
                     onValueChange={setCardProvider}
                     className="grid grid-cols-2 gap-4"
                   >
-                    <Label
-                      htmlFor="stripe"
-                      className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                        cardProvider === "stripe"
-                          ? "border-accent bg-accent/5"
-                          : "border-border hover:border-accent/50"
-                      }`}
-                    >
-                      <RadioGroupItem value="stripe" id="stripe" />
-                      <CreditCard className="w-5 h-5 text-muted-foreground" />
-                      <span>Stripe</span>
-                    </Label>
-                    <Label
-                      htmlFor="razorpay"
-                      className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                        cardProvider === "razorpay"
-                          ? "border-accent bg-accent/5"
-                          : "border-border hover:border-accent/50"
-                      }`}
-                    >
-                      <RadioGroupItem value="razorpay" id="razorpay" />
-                      <CreditCard className="w-5 h-5 text-muted-foreground" />
-                      <span>Razorpay</span>
-                    </Label>
+                    {!regionalPricing.useRazorpay && (
+                      <Label
+                        htmlFor="stripe"
+                        className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                          cardProvider === "stripe"
+                            ? "border-accent bg-accent/5"
+                            : "border-border hover:border-accent/50"
+                        }`}
+                      >
+                        <RadioGroupItem value="stripe" id="stripe" />
+                        <CreditCard className="w-5 h-5 text-muted-foreground" />
+                        <span>Stripe</span>
+                      </Label>
+                    )}
+                    {regionalPricing.useRazorpay && (
+                      <Label
+                        htmlFor="razorpay"
+                        className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                          cardProvider === "razorpay"
+                            ? "border-accent bg-accent/5"
+                            : "border-border hover:border-accent/50"
+                        }`}
+                      >
+                        <RadioGroupItem value="razorpay" id="razorpay" />
+                        <CreditCard className="w-5 h-5 text-muted-foreground" />
+                        <span>Razorpay</span>
+                      </Label>
+                    )}
                   </RadioGroup>
                 </div>
               ) : null}
@@ -376,7 +410,9 @@ const Payment = () => {
                     Processing...
                   </span>
                 ) : (
-                  `Pay ₹${isCreditPurchase ? creditPack.price : 1}`
+                  isCreditPurchase
+                    ? `Pay ₹${creditPack.price}`
+                    : `Pay ${proPriceLabel}`
                 )}
               </Button>
 
@@ -397,7 +433,7 @@ const Payment = () => {
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Pro Plan</span>
-                  <span className="text-foreground">₹1/month</span>
+                  <span className="text-foreground">{proPriceLabel}/month</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Billed monthly</span>
@@ -409,7 +445,7 @@ const Payment = () => {
                 <div className="flex justify-between text-lg font-semibold">
                   <span className="text-foreground">Total due today</span>
                   <span className="text-foreground">
-                    ₹{isCreditPurchase ? creditPack.price : 1}
+                    {isCreditPurchase ? `₹${creditPack.price}` : proPriceLabel}
                   </span>
                 </div>
               </div>
@@ -421,18 +457,25 @@ const Payment = () => {
                     <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer">
                       <RadioGroupItem value="basic" id="basic" />
                       <Label htmlFor="basic" className="flex-1 cursor-pointer">
-                        <div className="font-medium text-foreground">Basic Pack - ₹50</div>
+                        <div className="font-medium text-foreground">Basic Pack - ₹200</div>
                         <div className="text-sm text-muted-foreground">10,000 credits</div>
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer bg-accent/5">
+                    <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer">
                       <RadioGroupItem value="saver" id="saver" />
                       <Label htmlFor="saver" className="flex-1 cursor-pointer">
+                        <div className="font-medium text-foreground">Super Saver - ₹300</div>
+                        <div className="text-sm text-muted-foreground">25,000 credits</div>
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer bg-accent/5">
+                      <RadioGroupItem value="ultra" id="ultra" />
+                      <Label htmlFor="ultra" className="flex-1 cursor-pointer">
                         <div className="font-medium text-foreground flex items-center gap-2">
-                          Ultra Saver - ₹100
+                          Ultra Saver - ₹500
                           <span className="text-xs bg-accent text-accent-foreground px-2 py-0.5 rounded">Best Value</span>
                         </div>
-                        <div className="text-sm text-muted-foreground">25,000 credits</div>
+                        <div className="text-sm text-muted-foreground">50,000 credits</div>
                       </Label>
                     </div>
                   </RadioGroup>

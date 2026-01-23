@@ -108,7 +108,7 @@ const Header = () => {
             <img
               src="/Icon/correctnow logo final2.png"
               alt="CorrectNow"
-              className="h-16 w-auto object-contain"
+              className="h-24 w-auto object-contain"
               loading="eager"
             />
           </Link>

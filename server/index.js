@@ -867,7 +867,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       return res.status(500).json({ message: "Stripe is not configured" });
     }
 
-    const { userId, userEmail, type, credits, amount } = req.body;
+    const { userId, userEmail, type, credits, amount, priceId, currency } = req.body;
     
     if (!userId || !userEmail) {
       return res.status(400).json({ message: "User ID and email required" });
@@ -893,7 +893,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       const creditAmount = Number(amount || 50);
       sessionConfig.line_items = [{
         price_data: {
-          currency: "inr",
+          currency: String(currency || "inr").toLowerCase(),
           product_data: {
             name: `${credits || 10000} Credits Pack`,
             description: "Credits for extra checks",
@@ -906,9 +906,9 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       sessionConfig.metadata.credits = String(credits || 10000);
     } else {
       // Subscription
-      let priceId = process.env.STRIPE_PRICE_ID;
+      let resolvedPriceId = priceId || process.env.STRIPE_PRICE_ID;
       
-      if (!priceId) {
+      if (!resolvedPriceId) {
         // Create a price if not configured
         const product = await stripe.products.create({
           name: "CorrectNow Pro",
@@ -917,16 +917,16 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
         
         const price = await stripe.prices.create({
           product: product.id,
-          unit_amount: 100, // ₹1 in paise (for testing)
-          currency: "inr",
+          unit_amount: Math.round(Number(amount || 1) * 100),
+          currency: String(currency || "inr").toLowerCase(),
           recurring: { interval: "month" },
         });
         
-        priceId = price.id;
+        resolvedPriceId = price.id;
       }
       
       sessionConfig.line_items = [{
-        price: priceId,
+        price: resolvedPriceId,
         quantity: 1,
       }];
       sessionConfig.metadata.type = "subscription";

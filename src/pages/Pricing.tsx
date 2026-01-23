@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Zap, Crown, Building2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc as firestoreDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { toast } from "sonner";
+import { detectCountryCode, formatPrice, resolvePricing, type RegionalPricing } from "@/lib/pricing";
 
 const plans = [
   {
@@ -82,6 +83,9 @@ const Pricing = () => {
   const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
   const [subscriptionId, setSubscriptionId] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
+  const [regionalPricing, setRegionalPricing] = useState<RegionalPricing>(() =>
+    resolvePricing("")
+  );
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -126,6 +130,24 @@ const Pricing = () => {
       unsub();
     };
   }, []);
+
+  useEffect(() => {
+    const loadRegion = async () => {
+      const code = await detectCountryCode();
+      setRegionalPricing(resolvePricing(code));
+    };
+    loadRegion();
+  }, []);
+
+  const displayPlans = useMemo(() => {
+    return plans.map((plan) => {
+      if (plan.name !== "Pro") return plan;
+      return {
+        ...plan,
+        price: formatPrice(regionalPricing.currency, regionalPricing.amount),
+      };
+    });
+  }, [regionalPricing]);
 
   const handleDowngrade = async () => {
     if (!subscriptionId) {
@@ -197,7 +219,7 @@ const Pricing = () => {
         <section className="pb-20 px-4">
           <div className="container max-w-6xl mx-auto">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {plans.map((plan) => {
+              {displayPlans.map((plan) => {
                 const isCurrent = plan.name === currentPlan;
                 const canUpgrade = plan.name === "Pro" && currentPlan !== "Pro";
                 const canDowngrade = plan.name === "Free" && currentPlan === "Pro";
@@ -322,6 +344,11 @@ const Pricing = () => {
                     </p>
                   )}
 
+                  {plan.name === "Pro" && (
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Regional pricing applied ({regionalPricing.regionLabel})
+                    </p>
+                  )}
                   <div className="space-y-3 flex-1">
                     {plan.features.map((feature) => (
                       <div key={feature} className="flex items-start gap-3">
