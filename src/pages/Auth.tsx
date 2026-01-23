@@ -217,7 +217,7 @@ const Auth = () => {
             <img 
               src="/Icon/correctnow logo final2.png" 
               alt="CorrectNow"
-              className="w-32 h-20 object-contain"
+              className="h-24 w-auto object-contain"
             />
           </Link>
         </div>

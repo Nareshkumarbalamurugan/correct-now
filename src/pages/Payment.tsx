@@ -274,8 +274,8 @@ const Payment = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-background/95 backdrop-blur">
-        <div className="container flex h-16 items-center">
-          <Link to="/" className="flex items-center gap-2">
+        <div className="container flex items-center py-3">
+          <Link to="/" className="flex items-center">
             <img 
               src="/Icon/correctnow logo final2.png" 
               alt="CorrectNow"
