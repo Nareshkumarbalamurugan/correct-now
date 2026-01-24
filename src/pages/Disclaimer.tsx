@@ -240,7 +240,7 @@ const Disclaimer = () => {
                 <p className="text-muted-foreground text-lg">If you have questions about this Disclaimer, contact us at:</p>
                 <div className="flex items-center gap-2 text-lg font-semibold text-foreground">
                   <Mail className="w-5 h-5 text-accent" />
-                  <span>📧 support@correctnow.app</span>
+                  <span>📧 info@correctnow.app</span>
                 </div>
               </CardContent>
             </Card>

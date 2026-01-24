@@ -347,11 +347,11 @@ const PrivacyPolicy = () => {
               <CardContent className="p-8 md:p-10 space-y-4">
                 <h2 className="text-2xl font-bold text-foreground">Contact Information</h2>
                 <p className="text-muted-foreground text-lg">If you have questions about this Privacy Policy or your data, contact us at:</p>
-                <p className="text-muted-foreground text-lg">Email: support@correctnow.app</p>
+                <p className="text-muted-foreground text-lg">Email: info@correctnow.app</p>
                 <p className="text-muted-foreground text-lg">Company: CorrectNow Technologies</p>
                 <div className="flex items-center gap-2 text-lg font-semibold text-foreground pt-2">
                   <Mail className="w-5 h-5 text-accent" />
-                  <span>support@correctnow.app</span>
+                  <span>info@correctnow.app</span>
                 </div>
               </CardContent>
             </Card>

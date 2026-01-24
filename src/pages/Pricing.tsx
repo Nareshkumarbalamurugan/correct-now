@@ -300,7 +300,7 @@ const Pricing = () => {
                         {ctaLabel}
                       </Button>
                     ) : isEnterprise ? (
-                      <a href="mailto:support@correctnow.app?subject=Enterprise%20Plan%20Inquiry" className="block h-full">
+                      <a href="mailto:info@correctnow.app?subject=Enterprise%20Plan%20Inquiry" className="block h-full">
                         <Button
                           variant="accent"
                           className="w-full h-full flex items-center justify-center gap-2"
@@ -333,10 +333,10 @@ const Pricing = () => {
                     <p className="text-sm text-muted-foreground text-center mb-6">
                       Contact us at{" "}
                       <a 
-                        href="mailto:support@correctnow.app" 
+                        href="mailto:info@correctnow.app" 
                         className="text-accent hover:underline"
                       >
-                        support@correctnow.app
+                        info@correctnow.app
                       </a>
                     </p>
                   )}

@@ -116,7 +116,7 @@ const Terms = () => {
                 <div className="flex items-start gap-3 text-muted-foreground text-lg">
                   <Mail className="w-5 h-5 text-accent shrink-0 mt-1" />
                   <div>
-                    <div>support@correctnow.app</div>
+                    <div>info@correctnow.app</div>
                   </div>
                 </div>
               </CardContent>
