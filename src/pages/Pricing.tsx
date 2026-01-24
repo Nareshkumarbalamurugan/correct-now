@@ -198,24 +198,24 @@ const Pricing = () => {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="py-20 px-4">
+        <section className="py-12 sm:py-16 md:py-20 px-3 sm:px-4">
           <div className="container max-w-6xl mx-auto text-center">
-            <Badge variant="secondary" className="mb-4">
+            <Badge variant="secondary" className="mb-3 sm:mb-4 text-xs sm:text-sm">
               Simple, transparent pricing
             </Badge>
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-3 sm:mb-4">
               Choose your plan
             </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto px-4">
               Start free and upgrade as you grow. No hidden fees, cancel anytime.
             </p>
           </div>
         </section>
 
         {/* Pricing Cards */}
-        <section className="pb-20 px-4">
+        <section className="pb-12 sm:pb-16 md:pb-20 px-3 sm:px-4">
           <div className="container max-w-6xl mx-auto">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
               {displayPlans.map((plan) => {
                 const isCurrent = plan.name === currentPlan;
                 const canUpgrade = plan.name === "Pro" && currentPlan !== "Pro";
@@ -232,13 +232,13 @@ const Pricing = () => {
                 return (
                 <div
                   key={plan.name}
-                  className={`relative rounded-2xl border ${
+                  className={`relative rounded-xl sm:rounded-2xl border ${
                     isCurrent
                       ? "border-accent bg-accent/10 shadow-lg shadow-accent/20"
                       : plan.popular
                         ? "border-accent bg-accent/5 shadow-lg shadow-accent/10"
                         : "border-border bg-card"
-                  } p-8 flex flex-col`}
+                  } p-5 sm:p-6 md:p-8 flex flex-col`}
                 >
                   {isCurrent ? (
                     <Badge

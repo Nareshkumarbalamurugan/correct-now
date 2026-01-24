@@ -211,22 +211,22 @@ const Auth = () => {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-accent via-accent/90 to-primary/20 p-12 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-accent via-accent/90 to-primary/20 p-8 xl:p-12 flex-col justify-between">
         <div>
           <Link to="/" className="flex items-center gap-2 text-accent-foreground">
             <img 
               src="/Icon/correctnow logo final2.png" 
               alt="CorrectNow"
-              className="h-24 w-auto object-contain"
+              className="h-16 lg:h-20 xl:h-24 w-auto object-contain"
             />
           </Link>
         </div>
         
-        <div className="space-y-6">
-          <h1 className="text-4xl font-bold text-accent-foreground">
+        <div className="space-y-4 lg:space-y-6">
+          <h1 className="text-2xl lg:text-3xl xl:text-4xl font-bold text-accent-foreground">
             Perfect your writing with AI-powered proofreading
           </h1>
-          <p className="text-accent-foreground/80 text-lg">
+          <p className="text-accent-foreground/80 text-base lg:text-lg">
             Join thousands of writers who trust CorrectNow for fast, accurate spelling and grammar corrections.
           </p>
           <div className="space-y-4">
@@ -251,27 +251,27 @@ const Auth = () => {
       </div>
 
       {/* Right Panel - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-        <div className="w-full max-w-md space-y-8">
-          <div className="lg:hidden flex flex-col items-center gap-4">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-6 md:p-8">
+        <div className="w-full max-w-md space-y-6 sm:space-y-8">
+          <div className="lg:hidden flex flex-col items-center gap-3 sm:gap-4">
             <Link to="/" className="flex items-center">
               <img 
                 src="/Icon/correctnow logo final2.png" 
                 alt="CorrectNow"
-                className="h-24 w-auto object-contain"
+                className="h-16 sm:h-20 md:h-24 w-auto object-contain"
               />
             </Link>
-            <Link to="/" className="flex items-center gap-2 text-foreground text-sm">
-              <ArrowLeft className="w-4 h-4" />
+            <Link to="/" className="flex items-center gap-2 text-foreground text-xs sm:text-sm">
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span>Back to home</span>
             </Link>
           </div>
 
           <div className="text-center lg:text-left">
-            <h2 className="text-3xl font-bold text-foreground">
+            <h2 className="text-2xl sm:text-3xl font-bold text-foreground">
               {isLogin ? "Welcome back" : "Create an account"}
             </h2>
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-2 text-sm sm:text-base text-muted-foreground">
               {isLogin
                 ? "Enter your credentials to access your account"
                 : "Start your journey to perfect writing"}

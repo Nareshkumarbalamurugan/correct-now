@@ -605,43 +605,43 @@ const Index = () => {
               <main className="flex-1 pt-2 pb-0">
             {!isAuthenticated && (
         <section className="mb-0">
-          <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_30px_80px_rgba(37,99,235,0.35)]">
-            <div className="absolute inset-0 opacity-25">
-              <div className="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-white/25 blur-3xl" />
-              <div className="absolute -bottom-24 -left-16 h-80 w-80 rounded-full bg-white/20 blur-3xl" />
+          <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-white shadow-[0_20px_60px_rgba(37,99,235,0.3)] md:shadow-[0_30px_80px_rgba(37,99,235,0.35)]">
+            <div className="absolute inset-0 opacity-20 md:opacity-25">
+              <div className="absolute -top-16 sm:-top-24 -right-12 sm:-right-20 h-48 sm:h-72 w-48 sm:w-72 rounded-full bg-white/25 blur-3xl" />
+              <div className="absolute -bottom-16 sm:-bottom-24 -left-10 sm:-left-16 h-56 sm:h-80 w-56 sm:w-80 rounded-full bg-white/20 blur-3xl" />
             </div>
-            <div className="container relative py-12 md:py-16">
-              <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
+            <div className="container relative py-8 sm:py-12 md:py-16 px-4 sm:px-6">
+              <div className="grid gap-6 sm:gap-8 md:gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center">
                 <div className="max-w-2xl">
                   <div className="flex justify-center sm:justify-start">
-                    <div className="inline-flex flex-col items-center sm:flex-row sm:items-center gap-1 sm:gap-3 rounded-full border border-white/60 bg-white/90 text-primary px-6 py-3 text-sm md:text-base font-extrabold tracking-wide shadow-[0_12px_40px_rgba(255,255,255,0.5)]">
+                    <div className="inline-flex flex-col items-center sm:flex-row sm:items-center gap-1 sm:gap-2 md:gap-3 rounded-full border border-white/60 bg-white/90 text-primary px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm md:text-base font-bold sm:font-extrabold tracking-wide shadow-[0_8px_30px_rgba(255,255,255,0.4)] sm:shadow-[0_12px_40px_rgba(255,255,255,0.5)]">
                       <span className="whitespace-nowrap">✓ Global languages grammar check</span>
                       <span className="whitespace-nowrap">✓ Grammarly alternative</span>
                     </div>
                   </div>
-                  <h1 className="text-4xl md:text-6xl font-bold leading-tight mt-5 tracking-tight">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight mt-4 sm:mt-5 tracking-tight px-2 sm:px-0">
                     CorrectNow – The only AI proofreader and grammar checker for ALL languages.
                   </h1>
-                  <p className="text-white/90 text-lg md:text-xl mt-4 leading-relaxed">
+                  <p className="text-white/90 text-sm sm:text-base md:text-lg lg:text-xl mt-3 sm:mt-4 leading-relaxed px-2 sm:px-0">
                     Correct grammar, spelling, and punctuation errors instantly with CorrectNow. 
                     Professional AI-powered writing assistant for flawless content in 50+ languages.
                   </p>
-                  <div className="flex flex-wrap gap-3 mt-7">
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-3 mt-5 sm:mt-7 px-2 sm:px-0">
                     <Button
-                      className="rounded-full bg-white text-primary px-7 py-5 text-base font-semibold shadow-[0_12px_30px_rgba(255,255,255,0.25)] hover:bg-white/95"
+                      className="rounded-full bg-white text-primary px-5 sm:px-6 md:px-7 py-4 sm:py-4.5 md:py-5 text-sm sm:text-base font-semibold shadow-[0_8px_20px_rgba(255,255,255,0.2)] sm:shadow-[0_12px_30px_rgba(255,255,255,0.25)] hover:bg-white/95 w-full sm:w-auto"
                       onClick={() => navigate("/editor")}
                     >
                       Check My Text Now - Free
                     </Button>
                     <Button
                       variant="outline"
-                      className="rounded-full border-white/50 bg-transparent text-white px-7 py-5 text-base font-semibold hover:bg-white/10"
+                      className="rounded-full border-white/50 bg-transparent text-white px-5 sm:px-6 md:px-7 py-4 sm:py-4.5 md:py-5 text-sm sm:text-base font-semibold hover:bg-white/10 w-full sm:w-auto"
                       onClick={() => navigate("/features")}
                     >
                       See How It Works
                     </Button>
                   </div>
-                  <div className="flex flex-wrap gap-6 mt-7 text-sm text-white/85">
+                  <div className="flex flex-wrap gap-4 sm:gap-6 mt-5 sm:mt-7 text-xs sm:text-sm text-white/85 justify-center sm:justify-start px-2 sm:px-0">
                     <span className="inline-flex items-center gap-2">✓ Free forever</span>
                     <span className="inline-flex items-center gap-2">✓ Instant results</span>
                     <span className="inline-flex items-center gap-2">✓ No sign-up required</span>

@@ -1244,23 +1244,23 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   return (
     <section
       ref={editorRef}
-      className="relative -mt-10 md:-mt-14 py-14 md:py-20 bg-gradient-to-b from-background to-secondary/40"
+      className="relative -mt-10 md:-mt-14 py-8 md:py-14 lg:py-20 bg-gradient-to-b from-background to-secondary/40"
     >
-      <div className="container max-w-[1700px] lg:pr-0">
+      <div className="container max-w-[1700px] px-3 sm:px-4 md:px-6 lg:pr-0">
         <div className="w-full mx-auto">
-          <div className="grid gap-6 lg:grid-cols-[3fr_1fr]">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[3fr_1fr]">
             {/* Input Section */}
             <Card className="shadow-elevated">
-              <CardHeader className="pb-4 min-h-[72px] sm:min-h-[92px]">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-accent" />
+              <CardHeader className="pb-3 sm:pb-4 min-h-[72px] sm:min-h-[92px] px-3 sm:px-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                  <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
+                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
                     Your Text
                   </CardTitle>
-                  <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <div className="relative w-full sm:w-auto">
                       {showLanguageTooltip && !language && (
-                        <div className="absolute -top-12 left-0 z-20 rounded-lg border border-destructive/60 bg-destructive px-4 py-2 text-xs font-semibold text-destructive-foreground shadow-xl ring-4 ring-destructive/20 animate-pulse">
+                        <div className="absolute -top-12 left-0 right-0 sm:right-auto z-20 rounded-lg border border-destructive/60 bg-destructive px-3 sm:px-4 py-1.5 sm:py-2 text-xs font-semibold text-destructive-foreground shadow-xl ring-4 ring-destructive/20 animate-pulse">
                           Please select a language first
                           <span className="absolute -bottom-1.5 left-4 h-3 w-3 rotate-45 border-b border-r border-destructive/60 bg-destructive" />
                         </div>
@@ -1283,16 +1283,16 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         }}
                       />
                     </div>
-                    <div className="flex flex-col items-start gap-1">
+                    <div className="flex flex-col items-start gap-0.5 sm:gap-1 w-full sm:w-auto">
                       <WordCounter count={wordCount} limit={wordLimit} />
                       {creditsLimitEnabled && (
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">
                           Credits left: {creditsRemaining?.toLocaleString()}
                           <span className="ml-1 text-muted-foreground/80">(1 word = 1 credit)</span>
                         </div>
                       )}
                       {isOutOfCredits && (
-                        <div className="text-xs text-destructive font-semibold flex items-center gap-2">
+                        <div className="text-[10px] sm:text-xs text-destructive font-semibold flex items-center gap-2">
                           Credits exhausted!
                           <Link to="/payment?mode=credits" className="text-accent hover:underline font-medium">
                             Buy more
@@ -1300,7 +1300,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         </div>
                       )}
                       {isOverCredits && !isOutOfCredits && (
-                        <div className="text-xs text-destructive flex items-center gap-2">
+                        <div className="text-[10px] sm:text-xs text-destructive flex items-center gap-2">
                           Not enough credits.
                           <Link to="/payment?mode=credits" className="text-accent hover:underline">
                             Buy credits
@@ -1311,7 +1311,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     <Button
                       variant="outline"
                       size="icon"
-                      className={`hidden md:inline-flex ${
+                      className={`inline-flex sm:hidden md:inline-flex ${
                         isRecording
                           ? isSpeaking
                             ? "border-accent text-accent bg-accent/10 ring-4 ring-accent/40 shadow-[0_0_0_8px_rgba(37,99,235,0.5)] animate-pulse scale-105 transition-transform"
@@ -1321,12 +1321,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                       onClick={toggleRecording}
                       title={isRecording ? "Stop recording" : "Voice input"}
                     >
-                      {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      {isRecording ? <MicOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                     </Button>
                     <Button
                       variant="accent"
                       size="sm"
-                      className={`w-full sm:w-auto${isLoading ? " is-checking" : ""}`}
+                      className={`w-full sm:w-auto text-sm${isLoading ? " is-checking" : ""}`}
                       onClick={() => handleCheck()}
                       disabled={isLoading || !inputText.trim() || isOverLimit || isOverCredits || isOutOfCredits}
                     >
@@ -1337,7 +1337,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         </>
                       ) : (
                         <>
-                          <Send className="w-4 h-4" />
+                          <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Check Text
                         </>
                       )}
@@ -1345,7 +1345,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-3 sm:px-6 pb-4 sm:pb-6">
                 <div className="editor-overlay">
                   <div
                     ref={highlightRef}
