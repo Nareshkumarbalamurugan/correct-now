@@ -26,6 +26,7 @@ import {
   Undo,
   Redo,
   X,
+  Coins,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,8 @@ type AdminUser = {
   wordLimit?: number;
   credits?: number;
   creditsUsed?: number;
+  addonCredits?: number;
+  addonCreditsExpiryAt?: string;
   subscriptionStatus?: string;
   subscriptionUpdatedAt?: string;
   updatedAt?: string;
@@ -139,6 +142,12 @@ const Admin = () => {
   const [wordLimitValue, setWordLimitValue] = useState("2000");
   const [creditsValue, setCreditsValue] = useState("50000");
   const [reactivatingUserId, setReactivatingUserId] = useState<string | null>(null);
+  
+  // Addon credits management
+  const [addingCreditsUserId, setAddingCreditsUserId] = useState<string | null>(null);
+  const [addonCreditsAmount, setAddonCreditsAmount] = useState("");
+  const [addonCreditsExpiry, setAddonCreditsExpiry] = useState("");
+  const [savingAddonCredits, setSavingAddonCredits] = useState(false);
 
   // All hooks must be called before any conditional returns
   const filteredUsers = users.filter(
@@ -272,6 +281,8 @@ const Admin = () => {
           wordLimit: data?.wordLimit,
           credits: data?.credits,
           creditsUsed: data?.creditsUsed,
+          addonCredits: data?.addonCredits,
+          addonCreditsExpiryAt: data?.addonCreditsExpiryAt,
           subscriptionStatus: data?.subscriptionStatus,
           subscriptionUpdatedAt: data?.subscriptionUpdatedAt,
           updatedAt: data?.updatedAt,
@@ -489,6 +500,86 @@ const Admin = () => {
       setLimitType("disabled");
     } else {
       setLimitType("limited");
+    }
+  };
+
+  const handleAddAddonCredits = (userId: string, userData: AdminUser) => {
+    setAddingCreditsUserId(userId);
+    setAddonCreditsAmount("");
+    // Default expiry to 30 days from now
+    const defaultExpiry = new Date();
+    defaultExpiry.setDate(defaultExpiry.getDate() + 30);
+    setAddonCreditsExpiry(defaultExpiry.toISOString().slice(0, 16));
+  };
+
+  const handleSaveAddonCredits = async () => {
+    if (!addingCreditsUserId) return;
+    
+    const db = getFirebaseDb();
+    if (!db) {
+      toast.error("Database not available");
+      return;
+    }
+
+    const amount = parseInt(addonCreditsAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Please enter a valid credits amount");
+      return;
+    }
+
+    if (!addonCreditsExpiry) {
+      toast.error("Please select an expiry date");
+      return;
+    }
+
+    setSavingAddonCredits(true);
+    try {
+      const userRef = doc(db, "users", addingCreditsUserId);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.exists() ? userSnap.data() : {};
+      
+      // Get current addon credits
+      const currentAddon = Number(userData?.addonCredits || 0);
+      const currentExpiry = userData?.addonCreditsExpiryAt;
+      
+      // Check if current credits are still valid
+      const now = new Date();
+      const isCurrentValid = currentExpiry 
+        ? new Date(String(currentExpiry)).getTime() > now.getTime() 
+        : false;
+      
+      // Add to existing if still valid, otherwise replace
+      const newAddonCredits = isCurrentValid ? currentAddon + amount : amount;
+      
+      await updateDoc(userRef, {
+        addonCredits: newAddonCredits,
+        addonCreditsExpiryAt: addonCreditsExpiry,
+        creditsUpdatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Update local state
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === addingCreditsUserId
+            ? { 
+                ...u, 
+                addonCredits: newAddonCredits,
+                addonCreditsExpiryAt: addonCreditsExpiry,
+              }
+            : u
+        )
+      );
+
+      toast.success(`Added ${amount.toLocaleString()} credits successfully!`);
+      setAddingCreditsUserId(null);
+      setAddonCreditsAmount("");
+      setAddonCreditsExpiry("");
+    } catch (error) {
+      console.error("Failed to add addon credits:", error);
+      toast.error("Failed to add credits");
+    } finally {
+      setSavingAddonCredits(false);
     }
   };
 
@@ -1129,6 +1220,9 @@ const Admin = () => {
                             Credits
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Addon Credits
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Usage
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
@@ -1188,6 +1282,22 @@ const Admin = () => {
                             <td className="py-4 px-6 text-sm text-foreground">
                               {user.credits ? user.credits.toLocaleString() : "—"}
                             </td>
+                            <td className="py-4 px-6">
+                              {user.addonCredits && user.addonCredits > 0 ? (
+                                <div className="flex flex-col">
+                                  <span className="text-sm text-foreground font-medium">
+                                    {user.addonCredits.toLocaleString()}
+                                  </span>
+                                  {user.addonCreditsExpiryAt && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Expires: {new Date(user.addonCreditsExpiryAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">—</span>
+                              )}
+                            </td>
                             <td className="py-4 px-6 text-sm text-foreground">
                               {user.credits
                                 ? `${(user.creditsUsed || 0).toLocaleString()} / ${user.credits.toLocaleString()}`
@@ -1215,6 +1325,14 @@ const Admin = () => {
                                     {reactivatingUserId === user.id ? "Reactivating..." : "Reactivate"}
                                   </Button>
                                 )}
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleAddAddonCredits(user.id, user)}
+                                  title="Add Addon Credits"
+                                >
+                                  <Coins className="w-4 h-4" />
+                                </Button>
                                 <Button 
                                   variant="ghost" 
                                   size="sm"
@@ -1298,6 +1416,93 @@ const Admin = () => {
                           variant="outline"
                           onClick={() => setEditingUserId(null)}
                           className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Add Addon Credits Dialog */}
+                {addingCreditsUserId && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full shadow-2xl">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-accent">
+                          <Coins className="w-5 h-5 text-accent-foreground" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground">
+                          Add Addon Credits
+                        </h3>
+                      </div>
+
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Add additional credits with a custom expiry date. These credits will be added on top of existing valid credits.
+                      </p>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            Credits Amount
+                          </label>
+                          <Input
+                            type="number"
+                            value={addonCreditsAmount}
+                            onChange={(e) => setAddonCreditsAmount(e.target.value)}
+                            placeholder="10000"
+                            min="1"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Enter the number of credits to add
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            Expiry Date & Time
+                          </label>
+                          <Input
+                            type="datetime-local"
+                            value={addonCreditsExpiry}
+                            onChange={(e) => setAddonCreditsExpiry(e.target.value)}
+                            min={new Date().toISOString().slice(0, 16)}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Credits will expire at the selected date and time
+                          </p>
+                        </div>
+
+                        <div className="bg-accent/10 rounded-lg p-3 border border-accent/20">
+                          <p className="text-xs text-foreground font-medium mb-1">
+                            📌 How it works:
+                          </p>
+                          <ul className="text-xs text-muted-foreground space-y-1">
+                            <li>• If user has valid addon credits, new amount will be added</li>
+                            <li>• If existing credits expired, they will be replaced</li>
+                            <li>• User can see expiry date in their dashboard</li>
+                            <li>• Credits automatically expire at the set date</li>
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 mt-6">
+                        <Button 
+                          onClick={handleSaveAddonCredits} 
+                          className="flex-1"
+                          disabled={savingAddonCredits}
+                        >
+                          {savingAddonCredits ? "Adding..." : "Add Credits"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setAddingCreditsUserId(null);
+                            setAddonCreditsAmount("");
+                            setAddonCreditsExpiry("");
+                          }}
+                          className="flex-1"
+                          disabled={savingAddonCredits}
                         >
                           Cancel
                         </Button>

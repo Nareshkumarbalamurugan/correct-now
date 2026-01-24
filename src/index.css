@@ -198,6 +198,23 @@
     font-family: inherit;
     font-size: inherit;
     line-height: inherit;
+  }
+
+  /* Red blinking animation for textarea welcome */
+  @keyframes redBlink {
+    0%, 100% {
+      border-color: hsl(var(--border));
+      box-shadow: 0 0 0 0 transparent;
+    }
+    50% {
+      border-color: hsl(4 90% 58%);
+      box-shadow: 0 0 0 4px hsla(4, 90%, 58%, 0.2);
+    }
+  }
+
+  .editor-textarea.blink-red {
+    animation: redBlink 1.5s ease-in-out 3;
+    border-width: 2px;
     letter-spacing: inherit;
     word-break: break-word;
     overflow-wrap: anywhere;

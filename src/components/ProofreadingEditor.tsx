@@ -12,7 +12,7 @@ import html2pdf from "html2pdf.js";
 import { upsertDoc } from "@/lib/docs";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc as firestoreDoc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc as firestoreDoc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { Link } from "react-router-dom";
 import {
   Dialog,
@@ -328,6 +328,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [wordLimit, setWordLimit] = useState(FREE_WORD_LIMIT);
   const [credits, setCredits] = useState(0);
   const [creditsUsed, setCreditsUsed] = useState(0);
+  const [addonCredits, setAddonCredits] = useState(0);
+  const [addonExpiry, setAddonExpiry] = useState<string | null>(null);
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [inputText, setInputText] = useState("");
@@ -337,6 +339,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState("");
   const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
+  const [shouldBlinkInput, setShouldBlinkInput] = useState(false);
   const [copied, setCopied] = useState(false);
   const [hasResults, setHasResults] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -474,7 +477,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       setUserEmail(user.email || "");
       try {
         const ref = firestoreDoc(db, `users/${user.uid}`);
-        onSnapshot(ref, (snap) => {
+        onSnapshot(ref, async (snap) => {
           const data = snap.exists() ? snap.data() : {};
           const planField = String(data?.plan || "").toLowerCase();
           const entitlementPlan =
@@ -491,32 +494,55 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
           const limit = Number(data?.wordLimit || (plan === "Pro" ? PRO_WORD_LIMIT : FREE_WORD_LIMIT));
           const planCredits = Number(data?.credits || (plan === "Pro" ? PRO_CREDITS : 0));
-          const addonCredits = Number(data?.addonCredits || 0);
-          const addonExpiry = data?.addonCreditsExpiryAt
-            ? new Date(String(data.addonCreditsExpiryAt))
+          const rawAddonCredits = Number(data?.addonCredits || 0);
+          const addonExpiryDate = data?.addonCreditsExpiryAt
+            ? String(data.addonCreditsExpiryAt)
             : null;
-          const addonValid = addonExpiry ? addonExpiry.getTime() > Date.now() : false;
-          const creditValue = planCredits + (addonValid ? addonCredits : 0);
+          const addonExpiryTime = addonExpiryDate
+            ? new Date(addonExpiryDate).getTime()
+            : null;
+          const addonValid = addonExpiryTime ? addonExpiryTime > Date.now() : false;
+          const validAddonCredits = addonValid ? rawAddonCredits : 0;
           
-          // Check if credits should reset (monthly billing cycle)
+          // Check if credits should reset (monthly billing cycle for Pro users)
           const lastResetDate = data?.creditsResetDate
             ? new Date(String(data.creditsResetDate))
             : data?.subscriptionUpdatedAt
             ? new Date(String(data.subscriptionUpdatedAt))
-            : data?.creditsUpdatedAt
-            ? new Date(String(data.creditsUpdatedAt))
             : null;
           const now = new Date();
+          const daysSinceReset = lastResetDate
+            ? (now.getTime() - lastResetDate.getTime()) / (1000 * 60 * 60 * 24)
+            : null;
           const shouldReset =
             plan === "Pro" &&
             isActive &&
-            Boolean(lastResetDate) &&
-            now.getTime() - lastResetDate.getTime() > 30 * 24 * 60 * 60 * 1000;
+            daysSinceReset !== null &&
+            daysSinceReset >= 30;
 
-          const usedValue = shouldReset ? 0 : Number(data?.creditsUsed || 0);
+          // Persist monthly reset to database
+          if (shouldReset) {
+            try {
+              await updateDoc(ref, {
+                creditsUsed: 0,
+                creditsResetDate: now.toISOString(),
+                updatedAt: now.toISOString(),
+              });
+              // State will update on next snapshot
+              return;
+            } catch (error) {
+              console.error("Failed to reset credits:", error);
+            }
+          }
+
+          const usedValue = Number(data?.creditsUsed || 0);
+          const totalCredits = planCredits + validAddonCredits;
+          
           setPlanName(plan);
           setWordLimit(Number.isFinite(limit) ? limit : FREE_WORD_LIMIT);
-          setCredits(Number.isFinite(creditValue) ? creditValue : 0);
+          setCredits(Number.isFinite(planCredits) ? planCredits : 0);
+          setAddonCredits(Number.isFinite(validAddonCredits) ? validAddonCredits : 0);
+          setAddonExpiry(addonValid ? addonExpiryDate : null);
           setCreditsUsed(Number.isFinite(usedValue) ? usedValue : 0);
         });
       } catch {
@@ -582,9 +608,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > wordLimit;
-  const creditsLimitEnabled = credits > 0;
+  const totalCredits = credits + addonCredits;
+  const creditsLimitEnabled = totalCredits > 0;
   const creditsRemaining = creditsLimitEnabled
-    ? Math.max(0, credits - creditsUsed)
+    ? Math.max(0, totalCredits - creditsUsed)
     : null;
   const isOverCredits = creditsLimitEnabled && wordCount > (creditsRemaining ?? 0);
   const isOutOfCredits = creditsLimitEnabled && (creditsRemaining ?? 0) <= 0;
@@ -867,20 +894,15 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       persistDoc(normalizedInput);
       const auth = getFirebaseAuth();
       const db = getFirebaseDb();
-      if (auth?.currentUser && db) {
+      if (auth?.currentUser && db && creditsLimitEnabled) {
         const usedNext = creditsUsed + overrideWordCount;
         setCreditsUsed(usedNext);
         const ref = firestoreDoc(db, `users/${auth.currentUser.uid}`);
-        await setDoc(
-          ref,
-          {
-            creditsUsed: usedNext,
-            creditsTotal: credits || PRO_CREDITS,
-            creditsUpdatedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
+        await updateDoc(ref, {
+          creditsUsed: usedNext,
+          creditsUpdatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
       }
       setHasResults(true);
       if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -1253,6 +1275,11 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                           setLanguageMode(value === "auto" ? "auto" : "manual");
                           setIsLanguageOpen(false);
                           setShowLanguageTooltip(false);
+                          // Trigger red blinking animation to welcome user
+                          setShouldBlinkInput(true);
+                          setTimeout(() => setShouldBlinkInput(false), 4500);
+                          // Focus on textarea after language selection
+                          setTimeout(() => textareaRef.current?.focus(), 100);
                         }}
                       />
                     </div>
@@ -1367,7 +1394,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                       }
                     }}
                     placeholder="Welcome! Paste or type your text here, and we’ll proofread it professionally while preserving your meaning and tone."
-                    className="editor-textarea editor-input"
+                    className={`editor-textarea editor-input ${shouldBlinkInput ? 'blink-red' : ''}`}
                     disabled={isLoading}
                   />
                 </div>
