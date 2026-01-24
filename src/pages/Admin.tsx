@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle,
   Users,
@@ -14,10 +14,21 @@ import {
   Filter,
   MessageSquare,
   CreditCard,
+  Bold,
+  Italic,
+  Underline,
+  Heading2,
+  Heading3,
+  List,
+  ListOrdered,
+  Quote,
+  Link2,
+  Undo,
+  Redo,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import { getFirebaseAuth, getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
@@ -63,9 +74,11 @@ type AdminUser = {
 type BlogPost = {
   id: string;
   title: string;
-  content: string;
-  imageUrl?: string;
-  imagePath?: string;
+  contentHtml: string;
+  contentText?: string;
+  imageUrls?: string[];
+  imagePaths?: string[];
+  coverImageUrl?: string;
   publishedAt?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -104,10 +117,15 @@ const Admin = () => {
   const [blogSaving, setBlogSaving] = useState(false);
   const [blogEditingId, setBlogEditingId] = useState<string | null>(null);
   const [blogTitle, setBlogTitle] = useState("");
-  const [blogContent, setBlogContent] = useState("");
+  const [blogContentHtml, setBlogContentHtml] = useState("");
+  const [blogContentText, setBlogContentText] = useState("");
   const [blogDateTime, setBlogDateTime] = useState("");
-  const [blogImageFile, setBlogImageFile] = useState<File | null>(null);
-  const [blogImagePreview, setBlogImagePreview] = useState<string>("");
+  const [blogImages, setBlogImages] = useState<
+    Array<{ url?: string; path?: string; file?: File; preview: string }>
+  >([]);
+  const blogEditorRef = useRef<HTMLDivElement>(null);
+  const [blogEditorKey, setBlogEditorKey] = useState(0);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponCode, setCouponCode] = useState("");
@@ -194,10 +212,11 @@ const Admin = () => {
     const nowIso = new Date().toISOString();
     setBlogEditingId(null);
     setBlogTitle("");
-    setBlogContent("");
+    setBlogContentHtml("");
+    setBlogContentText("");
     setBlogDateTime(toLocalInputValue(nowIso));
-    setBlogImageFile(null);
-    setBlogImagePreview("");
+    setBlogImages([]);
+    setBlogEditorKey((prev) => prev + 1);
   };
 
   const handleReactivateUser = async (userId: string) => {
@@ -324,12 +343,26 @@ const Admin = () => {
         const snap = await getDocs(blogQuery);
         const list: BlogPost[] = snap.docs.map((docSnap) => {
           const data = docSnap.data() as Record<string, any>;
+          const contentHtml = String(data?.contentHtml || data?.content || "");
+          const contentText = String(data?.contentText || "").trim();
+          const imageUrls: string[] = Array.isArray(data?.imageUrls)
+            ? data.imageUrls
+            : data?.imageUrl
+            ? [String(data.imageUrl)]
+            : [];
+          const imagePaths: string[] = Array.isArray(data?.imagePaths)
+            ? data.imagePaths
+            : data?.imagePath
+            ? [String(data.imagePath)]
+            : [];
           return {
             id: docSnap.id,
             title: data?.title || "",
-            content: data?.content || "",
-            imageUrl: data?.imageUrl || "",
-            imagePath: data?.imagePath || "",
+            contentHtml,
+            contentText,
+            imageUrls,
+            imagePaths,
+            coverImageUrl: String(data?.coverImageUrl || imageUrls[0] || ""),
             publishedAt: data?.publishedAt,
             createdAt: data?.createdAt,
             updatedAt: data?.updatedAt,
@@ -513,30 +546,109 @@ const Admin = () => {
     }
   };
 
-  const handleBlogImageChange = (file?: File | null) => {
-    if (!file) {
-      setBlogImageFile(null);
-      setBlogImagePreview("");
-      return;
-    }
-    setBlogImageFile(file);
-    const preview = URL.createObjectURL(file);
-    setBlogImagePreview(preview);
+  const handleBlogImagesChange = (files?: FileList | null) => {
+    if (!files || !files.length) return;
+    const next = Array.from(files).map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setBlogImages((prev) => [...prev, ...next]);
+  };
+
+  const removeBlogImage = (index: number) => {
+    setBlogImages((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const handleEditBlog = (post: BlogPost) => {
     setBlogEditingId(post.id);
     setBlogTitle(post.title || "");
-    setBlogContent(post.content || "");
+    setBlogContentHtml(post.contentHtml || "");
+    setBlogContentText(post.contentText || "");
     setBlogDateTime(toLocalInputValue(post.publishedAt));
-    setBlogImageFile(null);
-    setBlogImagePreview(post.imageUrl || "");
+    setBlogImages(
+      (post.imageUrls || []).map((url, idx) => ({
+        url,
+        path: post.imagePaths?.[idx],
+        preview: url,
+      }))
+    );
+    setBlogEditorKey((prev) => prev + 1);
+  };
+
+  const syncBlogContentState = (html: string) => {
+    setBlogContentHtml(html);
+    const text = html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .trim();
+    setBlogContentText(text);
+  };
+
+  const applyBlogCommand = (command: string, value?: string) => {
+    const target = blogEditorRef.current;
+    if (!target) return;
+    target.focus();
+    
+    // For headings and blockquote, wrap selected text only
+    if (command === 'formatBlock' && (value === '<h2>' || value === '<h3>' || value === '<blockquote>')) {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+      
+      const range = selection.getRangeAt(0);
+      const selectedText = range.toString();
+      
+      if (selectedText) {
+        // Create the appropriate element
+        const tagName = value.replace(/[<>]/g, '');
+        const element = document.createElement(tagName);
+        element.textContent = selectedText;
+        
+        // Replace selection with new element
+        range.deleteContents();
+        range.insertNode(element);
+        
+        // Add a line break after if needed
+        const br = document.createElement('br');
+        element.parentNode?.insertBefore(br, element.nextSibling);
+        
+        // Move cursor after the element
+        const newRange = document.createRange();
+        newRange.setStartAfter(element);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      } else {
+        // No selection, just apply to current line
+        document.execCommand(command, false, value);
+      }
+    } else {
+      // For other commands (bold, italic, underline, lists), use normal execCommand
+      document.execCommand(command, false, value);
+    }
+    
+    syncBlogContentState(target.innerHTML);
+  };
+
+  const handleBlogKeyDown = (e: React.KeyboardEvent) => {
+    // Handle Ctrl+U for underline
+    if (e.ctrlKey && e.key === 'u') {
+      e.preventDefault();
+      applyBlogCommand('underline');
+    }
+  };
+
+  const handleBlogLink = () => {
+    const url = window.prompt("Enter URL");
+    if (!url) return;
+    applyBlogCommand("createLink", url);
   };
 
   const handleSaveBlog = async () => {
     const db = getFirebaseDb();
     if (!db) return;
-    if (!blogTitle.trim() || !blogContent.trim()) {
+    const plainText = blogContentText || blogContentHtml.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    if (!blogTitle.trim() || !plainText) {
       toast.error("Title and content are required");
       return;
     }
@@ -556,34 +668,54 @@ const Admin = () => {
         ? doc(db, "blogs", blogEditingId)
         : doc(collection(db, "blogs"));
 
-      let imageUrl = existing?.imageUrl || "";
-      let imagePath = existing?.imagePath || "";
+      const storage = getFirebaseStorage();
+      const retainedExisting = blogImages.filter((item) => !item.file && item.url);
+      const retainedPaths = retainedExisting
+        .map((item) => item.path)
+        .filter((value): value is string => Boolean(value));
+      const existingPaths = existing?.imagePaths || [];
+      const removedPaths = existingPaths.filter((path) => !retainedPaths.includes(path));
 
-      if (blogImageFile) {
-        const storage = getFirebaseStorage();
-        if (storage) {
-          const path = `blog-images/${docRef.id}/${Date.now()}-${blogImageFile.name}`;
-          const fileRef = storageRef(storage, path);
-          await uploadBytes(fileRef, blogImageFile);
-          imageUrl = await getDownloadURL(fileRef);
-          imagePath = path;
-
-          if (existing?.imagePath && existing.imagePath !== path) {
-            try {
-              await deleteObject(storageRef(storage, existing.imagePath));
-            } catch {
-              // ignore
-            }
-          }
-        }
+      if (storage && removedPaths.length) {
+        await Promise.all(
+          removedPaths.map((path) =>
+            deleteObject(storageRef(storage, path)).catch(() => null)
+          )
+        );
       }
+
+      let uploaded: Array<{ url: string; path: string }> = [];
+      if (storage) {
+        const newFiles = blogImages.filter((item) => item.file);
+        uploaded = await Promise.all(
+          newFiles.map(async (item) => {
+            const file = item.file as File;
+            const path = `blog-images/${docRef.id}/${Date.now()}-${file.name}`;
+            const fileRef = storageRef(storage, path);
+            await uploadBytes(fileRef, file);
+            const url = await getDownloadURL(fileRef);
+            return { url, path };
+          })
+        );
+      }
+
+      const finalImageUrls = [
+        ...retainedExisting.map((item) => item.url as string),
+        ...uploaded.map((item) => item.url),
+      ];
+      const finalImagePaths = [
+        ...retainedPaths,
+        ...uploaded.map((item) => item.path),
+      ];
 
       const payload: BlogPost = {
         id: docRef.id,
         title: blogTitle.trim(),
-        content: blogContent.trim(),
-        imageUrl,
-        imagePath,
+        contentHtml: blogContentHtml.trim(),
+        contentText: plainText,
+        imageUrls: finalImageUrls,
+        imagePaths: finalImagePaths,
+        coverImageUrl: finalImageUrls[0] || "",
         publishedAt: publishedAtIso,
         updatedAt: nowIso,
         createdAt: existing?.createdAt || nowIso,
@@ -616,15 +748,12 @@ const Admin = () => {
 
     try {
       await deleteDoc(doc(db, "blogs", post.id));
-      if (post.imagePath) {
-        const storage = getFirebaseStorage();
-        if (storage) {
-          try {
-            await deleteObject(storageRef(storage, post.imagePath));
-          } catch {
-            // ignore
-          }
-        }
+      const storage = getFirebaseStorage();
+      const paths = post.imagePaths || [];
+      if (storage && paths.length) {
+        await Promise.all(
+          paths.map((path) => deleteObject(storageRef(storage, path)).catch(() => null))
+        );
       }
       setBlogPosts((prev) => prev.filter((item) => item.id !== post.id));
       toast.success("Blog post deleted");
@@ -1307,8 +1436,8 @@ const Admin = () => {
                   </div>
                 </div>
 
-                <div className="grid lg:grid-cols-5 gap-6">
-                  <div className="lg:col-span-2 bg-card rounded-xl border border-border p-6 space-y-4">
+                <div className="grid lg:grid-cols-2 gap-6">
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Title</label>
                       <Input
@@ -1319,12 +1448,68 @@ const Admin = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Content</label>
-                      <Textarea
-                        value={blogContent}
-                        onChange={(e) => setBlogContent(e.target.value)}
-                        placeholder="Write your blog content here..."
-                        className="min-h-[200px]"
-                      />
+                      <div className="rounded-lg border border-border bg-background">
+                        <div className="flex flex-wrap gap-2 border-b border-border p-2">
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("undo")}
+                            title="Undo (Ctrl+Z)">
+                            <Undo className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("redo")}
+                            title="Redo (Ctrl+Y)">
+                            <Redo className="w-4 h-4" />
+                          </Button>
+                          <div className="w-px bg-border" />
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("bold")}
+                            title="Bold (Ctrl+B)">
+                            <Bold className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("italic")}
+                            title="Italic (Ctrl+I)">
+                            <Italic className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("underline")}
+                            title="Underline (Ctrl+U)">
+                            <Underline className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("formatBlock", "<h2>")}
+                            title="Heading 2">
+                            <Heading2 className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("formatBlock", "<h3>")}
+                            title="Heading 3">
+                            <Heading3 className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("insertUnorderedList")}
+                            title="Bullet list">
+                            <List className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("insertOrderedList")}
+                            title="Numbered list">
+                            <ListOrdered className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => applyBlogCommand("formatBlock", "<blockquote>")}
+                            title="Quote">
+                            <Quote className="w-4 h-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={handleBlogLink}
+                            title="Insert link">
+                            <Link2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div
+                          key={blogEditorKey}
+                          ref={blogEditorRef}
+                          className="min-h-[220px] p-3 text-sm leading-relaxed focus:outline-none"
+                          contentEditable
+                          suppressContentEditableWarning
+                          onInput={(e) => syncBlogContentState(e.currentTarget.innerHTML)}
+                          onKeyDown={handleBlogKeyDown}
+                          dangerouslySetInnerHTML={{ __html: blogContentHtml }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Style your content like WordPress: headings, bold/italic, lists, quotes, and links.
+                      </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Publish date & time</label>
@@ -1335,19 +1520,39 @@ const Admin = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">Image</label>
+                      <label className="block text-sm font-medium mb-2">Images</label>
                       <Input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => handleBlogImageChange(e.target.files?.[0])}
+                        multiple
+                        onChange={(e) => handleBlogImagesChange(e.target.files)}
                       />
-                      {blogImagePreview && (
-                        <img
-                          src={blogImagePreview}
-                          alt="Blog preview"
-                          className="mt-3 w-full h-40 object-cover rounded-lg border border-border"
-                        />
+                      {blogImages.length > 0 && (
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          {blogImages.map((img, idx) => (
+                            <div key={idx} className="relative">
+                              <img
+                                src={img.preview}
+                                alt={`Blog image ${idx + 1}`}
+                                className="w-full h-28 object-cover rounded-lg border border-border"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute top-1 right-1 bg-background/80"
+                                onClick={() => removeBlogImage(idx)}
+                                title="Remove image"
+                              >
+                                ✕
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       )}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Upload multiple images. The first image will be used as the cover.
+                      </p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3">
                       <Button onClick={handleSaveBlog} disabled={blogSaving}>
@@ -1364,8 +1569,103 @@ const Admin = () => {
                       )}
                     </div>
                   </div>
-
-                  <div className="lg:col-span-3 bg-card rounded-xl border border-border p-6">
+                  
+                  {/* Live Preview Panel */}
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <div className="flex items-center justify-between border-b border-border pb-3">
+                      <h3 className="text-lg font-semibold">Live Preview</h3>
+                      <Badge variant="secondary">Auto-updating</Badge>
+                    </div>
+                    
+                    {/* Preview Header */}
+                    <div className="space-y-3">
+                      {blogTitle ? (
+                        <h1 className="text-3xl font-bold text-foreground">{blogTitle}</h1>
+                      ) : (
+                        <h1 className="text-3xl font-bold text-muted-foreground italic">Untitled Post</h1>
+                      )}
+                      {blogDateTime && (
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(blogDateTime).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Cover Image Preview */}
+                    {blogImages.length > 0 && (
+                      <div className="w-full h-64 rounded-lg overflow-hidden border border-border bg-muted flex items-center justify-center">
+                        <img
+                          src={blogImages[0].preview}
+                          alt="Cover preview"
+                          className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => setLightboxImage(blogImages[0].preview)}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Content Preview */}
+                    <div className="border-t border-border pt-4">
+                      <div className="blog-content prose max-w-none">
+                        {blogContentHtml ? (
+                          <div dangerouslySetInnerHTML={{ __html: blogContentHtml }} />
+                        ) : (
+                          <p className="text-muted-foreground italic">Start typing to see preview...</p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Image Gallery Preview */}
+                    {blogImages.length > 1 && (
+                      <div className="border-t border-border pt-4">
+                        <h4 className="text-sm font-semibold mb-3">Gallery Images</h4>
+                        <div className="grid grid-cols-3 gap-3">
+                          {blogImages.slice(1).map((img, idx) => (
+                            <div key={idx} className="w-full h-32 rounded-lg border border-border bg-muted flex items-center justify-center overflow-hidden">
+                              <img
+                                src={img.preview}
+                                alt={`Gallery ${idx + 1}`}
+                                className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => setLightboxImage(img.preview)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Image Lightbox */}
+                {lightboxImage && (
+                  <div 
+                    className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+                    onClick={() => setLightboxImage(null)}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-4 right-4 text-white hover:bg-white/20"
+                      onClick={() => setLightboxImage(null)}
+                    >
+                      <X className="w-6 h-6" />
+                    </Button>
+                    <img
+                      src={lightboxImage}
+                      alt="Full size preview"
+                      className="max-w-full max-h-full object-contain"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                )}
+                
+                {/* Blog Posts List */}
+                <div className="mt-6 bg-card rounded-xl border border-border p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-lg font-semibold text-foreground">All Posts</h2>
                       <span className="text-sm text-muted-foreground">
@@ -1381,9 +1681,9 @@ const Admin = () => {
                             key={post.id}
                             className="flex flex-col sm:flex-row gap-4 p-4 rounded-lg border border-border"
                           >
-                            {post.imageUrl && (
+                            {(post.coverImageUrl || post.imageUrls?.[0]) && (
                               <img
-                                src={post.imageUrl}
+                                src={post.coverImageUrl || post.imageUrls?.[0]}
                                 alt={post.title}
                                 className="w-full sm:w-32 h-24 object-cover rounded-md border border-border"
                               />
@@ -1400,7 +1700,7 @@ const Admin = () => {
                                 </span>
                               </div>
                               <p className="text-sm text-muted-foreground line-clamp-2">
-                                {post.content}
+                                {post.contentText || post.contentHtml.replace(/<[^>]*>/g, " ").trim()}
                               </p>
                               <div className="flex items-center gap-2">
                                 <Button variant="outline" size="sm" onClick={() => handleEditBlog(post)}>
@@ -1418,7 +1718,6 @@ const Admin = () => {
                       <p className="text-sm text-muted-foreground">No blog posts yet.</p>
                     )}
                   </div>
-                </div>
               </div>
             )}
 

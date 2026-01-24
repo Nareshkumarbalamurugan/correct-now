@@ -5,12 +5,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getFirebaseDb } from "@/lib/firebase";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { X } from "lucide-react";
 
 type BlogPost = {
   id: string;
   title: string;
-  content: string;
-  imageUrl?: string;
+  contentHtml: string;
+  contentText?: string;
+  imageUrls?: string[];
+  coverImageUrl?: string;
   publishedAt?: string;
   createdAt?: string;
 };
@@ -19,6 +22,7 @@ const Blog = () => {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   useEffect(() => {
     const loadPosts = async () => {
@@ -35,11 +39,20 @@ const Blog = () => {
         const snap = await getDocs(blogQuery);
         const list: BlogPost[] = snap.docs.map((docSnap) => {
           const data = docSnap.data() as Record<string, any>;
+          const contentHtml = String(data?.contentHtml || data?.content || "");
+          const contentText = String(data?.contentText || "").trim();
+          const imageUrls: string[] = Array.isArray(data?.imageUrls)
+            ? data.imageUrls
+            : data?.imageUrl
+            ? [String(data.imageUrl)]
+            : [];
           return {
             id: docSnap.id,
             title: data?.title || "",
-            content: data?.content || "",
-            imageUrl: data?.imageUrl || "",
+            contentHtml,
+            contentText,
+            imageUrls,
+            coverImageUrl: String(data?.coverImageUrl || imageUrls[0] || ""),
             publishedAt: data?.publishedAt,
             createdAt: data?.createdAt,
           };
@@ -88,6 +101,10 @@ const Blog = () => {
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {posts.map((post) => {
                   const isExpanded = expandedId === post.id;
+                  const coverImage = post.coverImageUrl || post.imageUrls?.[0] || "";
+                  const excerpt = post.contentText
+                    ? post.contentText
+                    : post.contentHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
                   return (
                     <Card
                       key={post.id}
@@ -102,16 +119,24 @@ const Blog = () => {
                         }
                         className="w-full text-left"
                       >
-                        {post.imageUrl && (
+                        {coverImage && (
                           <div
-                            className={`w-full bg-muted ${
+                            className={`w-full bg-muted flex items-center justify-center ${
                               isExpanded ? "h-72 md:h-96" : "h-56"
                             }`}
+                            onClick={(e) => {
+                              if (isExpanded) {
+                                e.stopPropagation();
+                                setLightboxImage(coverImage);
+                              }
+                            }}
                           >
                             <img
-                              src={post.imageUrl}
+                              src={coverImage}
                               alt={post.title}
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                              className={`max-w-full max-h-full object-contain transition-all duration-300 ${
+                                isExpanded ? "cursor-pointer hover:opacity-90" : "cursor-pointer hover:opacity-90"
+                              }`}
                               loading="lazy"
                             />
                           </div>
@@ -129,9 +154,36 @@ const Blog = () => {
                                 : ""}
                             </span>
                           </div>
-                          {isExpanded && (
-                            <p className="text-muted-foreground whitespace-pre-line leading-relaxed">
-                              {post.content}
+                          {isExpanded ? (
+                            <div className="space-y-6">
+                              {post.imageUrls && post.imageUrls.length > 1 && (
+                                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                  {post.imageUrls.map((url, idx) => (
+                                    <div 
+                                      key={idx} 
+                                      className="w-full h-48 rounded-lg border border-border bg-muted flex items-center justify-center overflow-hidden"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLightboxImage(url);
+                                      }}
+                                    >
+                                      <img
+                                        src={url}
+                                        alt={`${post.title} image ${idx + 1}`}
+                                        className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                        loading="lazy"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="blog-content prose max-w-none">
+                                <div dangerouslySetInnerHTML={{ __html: post.contentHtml }} />
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-muted-foreground leading-relaxed line-clamp-3">
+                              {excerpt}
                             </p>
                           )}
                         </CardContent>
@@ -148,6 +200,29 @@ const Blog = () => {
       </main>
 
       <Footer />
+      
+      {/* Image Lightbox */}
+      {lightboxImage && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-4 right-4 text-white hover:bg-white/20"
+            onClick={() => setLightboxImage(null)}
+          >
+            <X className="w-6 h-6" />
+          </Button>
+          <img
+            src={lightboxImage}
+            alt="Full size"
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 };

@@ -24,6 +24,11 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
+    match /blogs/{blogId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /suggestions/{suggestionId} {
       allow create: if isSignedIn();
       allow read, update: if isSignedIn() && request.auth.uid == resource.data.userId;

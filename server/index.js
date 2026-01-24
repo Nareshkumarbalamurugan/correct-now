@@ -1221,7 +1221,7 @@ app.post("/api/proofread", async (req, res) => {
       return res.status(500).json({ message: "Missing GEMINI_API_KEY" });
     }
 
-    const model = process.env.GEMINI_MODEL || "gemini-2.5-pro";
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {

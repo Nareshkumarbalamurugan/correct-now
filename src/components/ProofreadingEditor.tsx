@@ -362,11 +362,74 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const speechInterimRef = useRef<string>("");
   const suggestionsRef = useRef<HTMLDivElement>(null);
   
+  // API Result Cache - stores results for 24 hours to reduce costs
+  const getCacheKey = (text: string, lang: string) => {
+    return `proofreading_${lang}_${text.trim().substring(0, 100)}_${text.length}`;
+  };
+  
+  const cleanOldCache = () => {
+    try {
+      const keys = Object.keys(localStorage);
+      const now = Date.now();
+      keys.forEach(key => {
+        if (key.startsWith('proofreading_')) {
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            try {
+              const data = JSON.parse(cached);
+              const age = now - data.timestamp;
+              if (age > 24 * 60 * 60 * 1000) {
+                localStorage.removeItem(key);
+              }
+            } catch {
+              localStorage.removeItem(key);
+            }
+          }
+        }
+      });
+    } catch {
+      // Ignore cleanup errors
+    }
+  };
+  
+  const getCachedResult = (text: string, lang: string) => {
+    try {
+      const key = getCacheKey(text, lang);
+      const cached = localStorage.getItem(key);
+      if (!cached) return null;
+      
+      const data = JSON.parse(cached);
+      const age = Date.now() - data.timestamp;
+      // Cache valid for 24 hours
+      if (age > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(key);
+        return null;
+      }
+      return data.result;
+    } catch {
+      return null;
+    }
+  };
+  
+  const setCachedResult = (text: string, lang: string, result: any) => {
+    try {
+      const key = getCacheKey(text, lang);
+      localStorage.setItem(key, JSON.stringify({
+        result,
+        timestamp: Date.now()
+      }));
+    } catch {
+      // Ignore storage errors
+    }
+  };
+  
   useEffect(() => {
     // Auto-open language selector on page load
     if (!language) {
       setIsLanguageOpen(true);
     }
+    // Clean old cache entries on mount
+    cleanOldCache();
   }, []);
 
   useEffect(() => {
@@ -696,6 +759,39 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       toast.success("No changes needed — your text is clean.");
       return;
     }
+    
+    // Check cache first to avoid API call
+    const cachedResult = getCachedResult(normalizedInput, language);
+    if (cachedResult) {
+      const normalizedCorrected = String(cachedResult.corrected_text || "").trim().normalize("NFC");
+      if (normalizedCorrected === normalizedInput) {
+        setCorrectedText(normalizedInput);
+        setBaseText(normalizedInput);
+        setChanges([]);
+        setAcceptedTexts((prev) => {
+          const next = prev.filter((text) => text.trim() !== normalizedInput);
+          return [...next, normalizedInput].slice(-50);
+        });
+      } else {
+        setCorrectedText(normalizedCorrected);
+        const nextChanges: Change[] = Array.isArray(cachedResult.changes)
+          ? cachedResult.changes
+              .map((change: Change) => ({ ...change, status: "pending" as const }))
+              .filter((change) => {
+                if (!change.original || !change.corrected) return false;
+                return normalizeText(change.original) !== normalizeText(change.corrected);
+              })
+          : [];
+        setBaseText(normalizedInput);
+        setChanges(nextChanges);
+      }
+      persistDoc(normalizedInput);
+      setHasResults(true);
+      setIsLoading(false);
+      toast.success("Text checked (from cache)!");
+      return;
+    }
+    
     try {
       const response = await fetch("/api/proofread", {
         method: "POST",
@@ -742,6 +838,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       if (!data?.corrected_text) {
         throw new Error("Invalid response format");
       }
+      
+      // Cache the result for future use
+      setCachedResult(normalizedInput, language, data);
 
       const normalizedCorrected = String(data.corrected_text || "").trim().normalize("NFC");
       if (normalizedCorrected === normalizedInput) {
