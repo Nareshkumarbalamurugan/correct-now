@@ -31,13 +31,15 @@ const Index = () => {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
-  const [docs, setDocs] = useState(() =>
-    getDocs().map((doc) => ({
-      ...doc,
-      section: sectionForDate(doc.updatedAt),
-      updated: formatUpdated(doc.updatedAt),
-    }))
-  );
+  const [docs, setDocs] = useState<Array<{
+    id: string;
+    title: string;
+    preview: string;
+    text: string;
+    updatedAt: string;
+    section: string;
+    updated: string;
+  }>>([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
@@ -62,6 +64,19 @@ const Index = () => {
       ? onAuthStateChanged(auth, async (user) => {
           setIsAuthenticated(Boolean(user));
           setUserEmail(user?.email || "");
+          
+          // Only load docs for authenticated users
+          if (user) {
+            const userDocs = getDocs().map((doc) => ({
+              ...doc,
+              section: sectionForDate(doc.updatedAt),
+              updated: formatUpdated(doc.updatedAt),
+            }));
+            setDocs(userDocs);
+          } else {
+            // Clear docs for non-authenticated users
+            setDocs([]);
+          }
           
           // Fetch user profile from Firestore
           if (user) {
@@ -376,7 +391,19 @@ const Index = () => {
                     <main className="pt-2 pb-8">
                       <div className="container">
                         {filtered.length === 0 ? (
-                          <div className="text-center text-muted-foreground py-12">No documents found.</div>
+                          <div className="flex flex-col items-center justify-center text-center py-16">
+                            <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
+                              <FileText className="w-8 h-8 text-muted-foreground" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-foreground mb-2">No documents yet</h3>
+                            <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+                              Your checked documents will appear here. Start by checking your first document.
+                            </p>
+                            <Button variant="accent" onClick={() => navigate("/editor")}>
+                              <FileText className="w-4 h-4 mr-2" />
+                              Create your first document
+                            </Button>
+                          </div>
                         ) : (
                           sections.map((section) => (
                             <div key={section} className="mb-8">

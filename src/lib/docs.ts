@@ -38,6 +38,20 @@ export const saveDocs = (docs: DocItem[]) => {
 };
 
 export const upsertDoc = (text: string, id?: string): DocItem => {
+  const auth = getFirebaseAuth();
+  
+  // Only save documents for authenticated users
+  if (!auth?.currentUser) {
+    // Return a temporary doc without saving
+    return {
+      id: id || `temp-${Date.now()}`,
+      title: text.trim().split("\n")[0]?.slice(0, 60) || "Untitled",
+      preview: text.trim().slice(0, 180),
+      text: text.trim(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  
   const docs = getDocs();
   const content = text.trim();
   const title = content.split("\n")[0]?.slice(0, 60) || "Untitled";
@@ -55,7 +69,6 @@ export const upsertDoc = (text: string, id?: string): DocItem => {
   const next = [doc, ...docs.filter((d) => d.id !== doc.id)].slice(0, DOC_LIMIT);
   saveDocs(next);
 
-  const auth = getFirebaseAuth();
   const db = getFirebaseDb();
   if (auth?.currentUser && db) {
     const userRef = firestoreDoc(db, `users/${auth.currentUser.uid}`);
@@ -115,7 +128,11 @@ export const initDocsSync = () => {
   if (!auth || !db) return;
 
   onAuthStateChanged(auth, async (user) => {
-    if (!user) return;
+    if (!user) {
+      // Clear local docs when user logs out
+      saveDocs([]);
+      return;
+    }
     try {
       const userRef = firestoreDoc(db, `users/${user.uid}`);
       await setDoc(

@@ -83,6 +83,11 @@ const updateUsersBySubscriptionId = async (subscriptionId, updates) => {
   await batch.commit();
 };
 
+// IP tracking for rate limiting non-authenticated users
+const ipCheckCount = new Map(); // { ip: { count: number, resetAt: timestamp } }
+const IP_CHECK_LIMIT = 5;
+const IP_RESET_HOURS = 24;
+
 app.use(cors());
 
 // CRITICAL: Process webhook routes BEFORE any body parsing middleware
@@ -1166,7 +1171,42 @@ ${text}
 
 app.post("/api/proofread", async (req, res) => {
   try {
-    const { text, language } = req.body || {};
+    const { text, language, userId } = req.body || {};
+    
+    // Rate limiting for non-authenticated users
+    if (!userId) {
+      const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
+                       req.headers['x-real-ip'] || 
+                       req.socket.remoteAddress;
+      
+      const now = Date.now();
+      const ipData = ipCheckCount.get(clientIp);
+      
+      // Reset if past reset time
+      if (ipData && now > ipData.resetAt) {
+        ipCheckCount.delete(clientIp);
+      }
+      
+      const currentData = ipCheckCount.get(clientIp);
+      
+      if (currentData && currentData.count >= IP_CHECK_LIMIT) {
+        return res.status(429).json({ 
+          message: "Free limit reached. Please sign in to continue checking.",
+          requiresAuth: true,
+          checksRemaining: 0
+        });
+      }
+      
+      // Update count
+      const resetAt = now + (IP_RESET_HOURS * 60 * 60 * 1000);
+      ipCheckCount.set(clientIp, {
+        count: (currentData?.count || 0) + 1,
+        resetAt: currentData?.resetAt || resetAt
+      });
+      
+      const checksRemaining = IP_CHECK_LIMIT - (currentData?.count || 0) - 1;
+      res.setHeader('X-Checks-Remaining', checksRemaining.toString());
+    }
     if (!text || typeof text !== "string") {
       return res.status(400).json({ message: "Text is required" });
     }

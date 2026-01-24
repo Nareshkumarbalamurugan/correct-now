@@ -403,8 +403,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         setCreditsUsed(0);
         setUserName("");
         setUserEmail("");
+        setCurrentUserId(null);
         return;
       }
+      setCurrentUserId(user.uid);
       setUserName(user.displayName || "");
       setUserEmail(user.email || "");
       try {
@@ -512,6 +514,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [showCreditsDialog, setShowCreditsDialog] = useState(false);
   const hoverTimerRef = useRef<number | null>(null);
   const [hoveredError, setHoveredError] = useState<string | null>(null);
+  const [checksRemaining, setChecksRemaining] = useState<number | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > wordLimit;
@@ -702,11 +706,35 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           text: textToCheck,
           language,
           wordLimit,
+          userId: currentUserId,
         }),
       });
 
+      // Check for rate limiting response
+      const checksRemainingHeader = response.headers.get('X-Checks-Remaining');
+      if (checksRemainingHeader) {
+        const remaining = parseInt(checksRemainingHeader, 10);
+        setChecksRemaining(remaining);
+        
+        if (remaining <= 2 && remaining > 0) {
+          toast.warning(`Only ${remaining} free check${remaining === 1 ? '' : 's'} remaining. Sign in for unlimited checks!`);
+        }
+      }
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
+        
+        if (error.requiresAuth) {
+          toast.error("Free limit reached. Please sign in to continue.", {
+            action: {
+              label: "Sign In",
+              onClick: () => window.location.href = "/auth",
+            },
+          });
+          setIsLoading(false);
+          return;
+        }
+        
         throw new Error(error?.message || "Proofreading failed");
       }
 
