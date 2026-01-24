@@ -121,7 +121,7 @@ const Pricing = () => {
         const isActive = status === "active" && (updatedAt ? isRecent : true);
         const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
         setCurrentPlan(plan);
-        setSubscriptionId(String(data?.subscriptionId || ""));
+        setSubscriptionId(String(data?.subscriptionId || data?.stripeSubscriptionId || ""));
       });
     });
 
@@ -150,11 +150,6 @@ const Pricing = () => {
   }, [regionalPricing]);
 
   const handleDowngrade = async () => {
-    if (!subscriptionId) {
-      toast.error("No active subscription found");
-      return;
-    }
-
     const confirmed = window.confirm(
       "Are you sure you want to downgrade to the Free plan? This will cancel your subscription and stop all future payments immediately."
     );
@@ -179,6 +174,8 @@ const Pricing = () => {
           wordLimit: 200,
           credits: 0,
           creditsUsed: 0,
+          subscriptionId: "",
+          stripeSubscriptionId: "",
           subscriptionStatus: "cancelled",
           subscriptionUpdatedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

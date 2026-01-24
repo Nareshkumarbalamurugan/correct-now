@@ -72,8 +72,24 @@ const Index = () => {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists()) {
                   const data = userDoc.data();
+                  const planField = String(data?.plan || "").toLowerCase();
+                  const entitlementPlan =
+                    Number(data?.wordLimit) >= 5000 || planField === "pro";
+                  const status = String(data?.subscriptionStatus || "").toLowerCase();
+                  const hasStatus = Boolean(status);
+                  const updatedAt = data?.subscriptionUpdatedAt
+                    ? new Date(String(data.subscriptionUpdatedAt))
+                    : null;
+                  const isRecent = updatedAt
+                    ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
+                    : false;
+                  const isActive = status === "active" && (updatedAt ? isRecent : true);
+                  const effectivePlan = (hasStatus ? isActive && entitlementPlan : entitlementPlan)
+                    ? "pro"
+                    : "free";
+
                   setUserProfile({
-                    plan: data.plan || "free",
+                    plan: effectivePlan,
                     wordLimit: data.wordLimit || 1000,
                     creditsUsed: data.creditsUsed || 0,
                     subscriptionStatus: data.subscriptionStatus || "inactive",
@@ -461,13 +477,25 @@ const Index = () => {
                         <Card>
                           <CardContent className="p-6">
                             <h3 className="text-base font-semibold text-foreground mb-4">Subscription</h3>
-                            <Button 
-                              variant="outline" 
-                              className="w-full"
-                              onClick={() => navigate("/pricing")}
-                            >
-                              Manage Plan
-                            </Button>
+                            <div className="space-y-3">
+                              <Button 
+                                variant="outline" 
+                                className="w-full"
+                                onClick={() => navigate("/pricing")}
+                              >
+                                Manage Plan
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                className="w-full"
+                                onClick={() => navigate("/payment?mode=credits")}
+                              >
+                                Buy add-on credits
+                              </Button>
+                              <p className="text-xs text-muted-foreground">
+                                Add-on credits are valid for 30 days.
+                              </p>
+                            </div>
                           </CardContent>
                         </Card>
 

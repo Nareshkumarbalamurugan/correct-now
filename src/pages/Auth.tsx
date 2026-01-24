@@ -253,8 +253,15 @@ const Auth = () => {
       {/* Right Panel - Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md space-y-8">
-          <div className="lg:hidden">
-            <Link to="/" className="flex items-center gap-2 text-foreground mb-8">
+          <div className="lg:hidden flex flex-col items-center gap-4">
+            <Link to="/" className="flex items-center">
+              <img 
+                src="/Icon/correctnow logo final2.png" 
+                alt="CorrectNow"
+                className="h-24 w-auto object-contain"
+              />
+            </Link>
+            <Link to="/" className="flex items-center gap-2 text-foreground text-sm">
               <ArrowLeft className="w-4 h-4" />
               <span>Back to home</span>
             </Link>

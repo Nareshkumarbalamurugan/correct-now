@@ -375,7 +375,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       setShowLanguageTooltip(false);
     }
   }, [language]);
-  
+
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
     if (stored) {
@@ -425,7 +425,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           const isActive = status === "active" && (updatedAt ? isRecent : true);
           const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
           const limit = Number(data?.wordLimit || (plan === "Pro" ? PRO_WORD_LIMIT : FREE_WORD_LIMIT));
-          const creditValue = Number(data?.credits || (plan === "Pro" ? PRO_CREDITS : 0));
+          const planCredits = Number(data?.credits || (plan === "Pro" ? PRO_CREDITS : 0));
+          const addonCredits = Number(data?.addonCredits || 0);
+          const addonExpiry = data?.addonCreditsExpiryAt
+            ? new Date(String(data.addonCreditsExpiryAt))
+            : null;
+          const addonValid = addonExpiry ? addonExpiry.getTime() > Date.now() : false;
+          const creditValue = planCredits + (addonValid ? addonCredits : 0);
           
           // Check if credits should reset (monthly billing cycle)
           const lastResetDate = data?.creditsResetDate
@@ -497,19 +503,19 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const highlightRef = useRef<HTMLDivElement>(null);
   const modalEditorRef = useRef<HTMLDivElement>(null);
   const suggestionRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const [matchRanges, setMatchRanges] = useState<
-    Array<{ start: number; end: number; index: number }>
-  >([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number | null>(null);
   const [selectedWordDialog, setSelectedWordDialog] = useState<{
     open: boolean;
     suggestions: Array<{ change: Change; index: number }>;
     original: string;
   }>({ open: false, suggestions: [], original: "" });
+  const [showCreditsDialog, setShowCreditsDialog] = useState(false);
+  const hoverTimerRef = useRef<number | null>(null);
+  const [hoveredError, setHoveredError] = useState<string | null>(null);
 
   const wordCount = countWords(inputText);
   const isOverLimit = wordCount > wordLimit;
-  const creditsLimitEnabled = planName === "Pro" && credits > 0;
+  const creditsLimitEnabled = credits > 0;
   const creditsRemaining = creditsLimitEnabled
     ? Math.max(0, credits - creditsUsed)
     : null;
@@ -519,6 +525,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const accuracyScore = hasResults && wordCount
     ? Math.max(0, Math.min(100, Math.round((1 - pendingCount / wordCount) * 100)))
     : 0;
+
+  useEffect(() => {
+    if (isOutOfCredits) {
+      setShowCreditsDialog(true);
+    }
+  }, [isOutOfCredits]);
 
   const normalizeToken = (value: string) =>
     value.toLowerCase().replace(/[.,!?;:()"'“”‘’]/g, "").trim();
@@ -531,62 +543,101 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     }
   };
 
-  const handleTextareaClick = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const position = el.selectionStart || 0;
-    const match = matchRanges.find(
-      (range) => position >= range.start && position <= range.end
-    );
-    if (match) {
-      scrollToSuggestion(match.index);
-      const clickedChange = changes[match.index];
-      if (clickedChange && clickedChange.status !== "accepted" && clickedChange.status !== "ignored") {
-        // Find all suggestions with the same original text
-        const allSuggestionsForWord = changes
-          .map((change, idx) => ({ change, index: idx }))
-          .filter(
-            ({ change }) =>
-              change.original === clickedChange.original &&
-              change.status !== "accepted" &&
-              change.status !== "ignored"
-          );
-        
-        setSelectedWordDialog({
-          open: true,
-          suggestions: allSuggestionsForWord,
-          original: clickedChange.original || "",
-        });
+  const openSuggestionsForText = (originalText: string) => {
+    const normalizedTarget = normalizeToken(originalText);
+    const allSuggestionsForWord = changes
+      .map((change, idx) => ({ change, index: idx }))
+      .filter(
+        ({ change }) =>
+          change.original &&
+          normalizeToken(change.original) === normalizedTarget &&
+          change.status !== "accepted" &&
+          change.status !== "ignored"
+      );
+
+    if (!allSuggestionsForWord.length) return;
+    setSelectedWordDialog({
+      open: true,
+      suggestions: allSuggestionsForWord,
+      original: originalText,
+    });
+  };
+
+  const handleHighlightClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains('change-error')) {
+      const errorText = target.textContent?.trim() || "";
+      if (errorText) {
+        if (hoverTimerRef.current) {
+          clearTimeout(hoverTimerRef.current);
+          hoverTimerRef.current = null;
+        }
+        openSuggestionsForText(errorText);
+        // Find and scroll to the matching suggestion
+        const normalizedTarget = normalizeToken(errorText);
+        const matchIndex = changes.findIndex(
+          (change) =>
+            change.original &&
+            normalizeToken(change.original) === normalizedTarget &&
+            change.status !== "accepted" &&
+            change.status !== "ignored"
+        );
+        if (matchIndex !== -1) {
+          scrollToSuggestion(matchIndex);
+        }
       }
     }
   };
 
-  useEffect(() => {
-    if (!inputText || changes.length === 0) {
-      setMatchRanges([]);
-      return;
-    }
-
-    const pendingChanges = changes.filter(
-      (change) => change.status !== "accepted" && change.status !== "ignored"
-    );
-
-    const ranges: Array<{ start: number; end: number; index: number }> = [];
-    pendingChanges.forEach((change, changeIndex) => {
-      if (!change.original) return;
-      const regex = new RegExp(escapeRegExp(change.original), "gi");
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(inputText)) !== null) {
-        ranges.push({
-          start: match.index,
-          end: match.index + match[0].length - 1,
-          index: changes.indexOf(change),
-        });
+  const handleHighlightMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains('change-error')) {
+      const errorText = target.textContent?.trim() || "";
+      if (errorText && errorText !== hoveredError) {
+        setHoveredError(errorText);
+        // Clear existing timer
+        if (hoverTimerRef.current) {
+          clearTimeout(hoverTimerRef.current);
+        }
+        // Set new timer for hover trigger
+        hoverTimerRef.current = window.setTimeout(() => {
+          openSuggestionsForText(errorText);
+          // Find and scroll to the matching suggestion
+          const normalizedTarget = normalizeToken(errorText);
+          const matchIndex = changes.findIndex(
+            (change) =>
+              change.original &&
+              normalizeToken(change.original) === normalizedTarget &&
+              change.status !== "accepted" &&
+              change.status !== "ignored"
+          );
+          if (matchIndex !== -1) {
+            scrollToSuggestion(matchIndex);
+          }
+          hoverTimerRef.current = null;
+        }, 500); // 500ms hover delay
       }
-    });
+    } else {
+      // Mouse left error span
+      if (hoveredError) {
+        setHoveredError(null);
+        if (hoverTimerRef.current) {
+          clearTimeout(hoverTimerRef.current);
+          hoverTimerRef.current = null;
+        }
+      }
+    }
+  };
 
-    setMatchRanges(ranges);
-  }, [inputText, changes]);
+  const handleHighlightMouseLeave = () => {
+    setHoveredError(null);
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  };
+
+
 
   const applyAcceptedChanges = (text: string, changeList: Change[]) => {
     return changeList
@@ -612,7 +663,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     }
 
     if (!language || language === "") {
-      toast.error("Please select a language before checking");
+      setShowLanguageTooltip(true);
       setIsLanguageOpen(true);
       return;
     }
@@ -1046,9 +1097,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       ref={editorRef}
       className="relative -mt-10 md:-mt-14 py-14 md:py-20 bg-gradient-to-b from-background to-secondary/40"
     >
-      <div className="container max-w-[1600px]">
+      <div className="container max-w-[1700px] lg:pr-0">
         <div className="w-full mx-auto">
-          <div className="grid gap-6 lg:grid-cols-[1.5fr_0.7fr]">
+          <div className="grid gap-6 lg:grid-cols-[3fr_1fr]">
             {/* Input Section */}
             <Card className="shadow-elevated">
               <CardHeader className="pb-4 min-h-[72px] sm:min-h-[92px]">
@@ -1058,7 +1109,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     Your Text
                   </CardTitle>
                   <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                    <div className="w-full sm:w-auto">
+                    <div className="relative w-full sm:w-auto">
+                      {showLanguageTooltip && !language && (
+                        <div className="absolute -top-12 left-0 z-20 rounded-lg border border-destructive/60 bg-destructive px-4 py-2 text-xs font-semibold text-destructive-foreground shadow-xl ring-4 ring-destructive/20 animate-pulse">
+                          Please select a language first
+                          <span className="absolute -bottom-1.5 left-4 h-3 w-3 rotate-45 border-b border-r border-destructive/60 bg-destructive" />
+                        </div>
+                      )}
                       <LanguageSelector
                         value={language}
                         open={isLanguageOpen}
@@ -1139,6 +1196,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                   <div
                     ref={highlightRef}
                     className="editor-highlight"
+                    onClick={handleHighlightClick}
+                    onMouseMove={handleHighlightMouseMove}
+                    onMouseLeave={handleHighlightMouseLeave}
                     dangerouslySetInnerHTML={{
                       __html: highlightText(
                         inputText,
@@ -1164,13 +1224,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         return;
                       }
 
-                      // Prompt only once until user selects a language
-                      if (!language && !languagePromptedRef.current) {
-                        languagePromptedRef.current = true;
-                        setShowLanguageTooltip(true);
-                        setIsLanguageOpen(true);
-                        return;
-                      }
                     }}
                     spellCheck={false}
                     onPaste={() => {
@@ -1180,7 +1233,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         setInputText(next);
                       }, 0);
                     }}
-                    onClick={handleTextareaClick}
                     onScroll={(e) => {
                       if (highlightRef.current) {
                         highlightRef.current.scrollTop = e.currentTarget.scrollTop;
@@ -1322,7 +1374,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           setSelectedWordDialog({ open: false, suggestions: [], original: "" });
         }
       }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-xl w-full">
           <DialogHeader>
             <DialogTitle>
               {selectedWordDialog.suggestions.length > 1 ? "Suggestions" : "Suggestion"}
@@ -1332,22 +1384,32 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
             <div className="space-y-4">
               <div className="mb-3">
                 <div className="text-xs font-semibold text-muted-foreground mb-1">Original</div>
-                <div className="text-base font-medium text-foreground">{selectedWordDialog.original}</div>
+                <div className="text-base font-medium text-foreground break-words whitespace-pre-wrap">
+                  {selectedWordDialog.original}
+                </div>
               </div>
               
               <div className="space-y-3">
                 {selectedWordDialog.suggestions.map(({ change, index }, idx) => (
                   <div key={idx} className="border border-border rounded-lg p-4 bg-card hover:shadow-md transition-shadow">
-                    <div className="mb-2">
-                      <div className="text-xs font-semibold text-muted-foreground mb-1">
-                        Option {idx + 1}
+                    <div className="space-y-2">
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground mb-1">Original</div>
+                        <div className="text-base font-medium text-foreground break-words whitespace-pre-wrap">
+                          {selectedWordDialog.original}
+                        </div>
                       </div>
-                      <div className="text-base font-medium text-success">{change.corrected}</div>
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground mb-1">Suggestion</div>
+                        <div className="text-base font-medium text-success break-words whitespace-pre-wrap">
+                          {change.corrected}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground mb-3">
+                    <div className="text-sm text-muted-foreground mt-3 break-words whitespace-pre-wrap">
                       {change.explanation}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
                       <Button
                         size="sm"
                         variant="accent"
@@ -1388,6 +1450,43 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCreditsDialog} onOpenChange={setShowCreditsDialog}>
+        <DialogContent className="sm:max-w-md w-full">
+          <DialogHeader>
+            <DialogTitle>Credits exhausted</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-gradient-to-br from-accent/10 to-primary/10 p-4">
+            <p className="text-sm text-muted-foreground">
+              You’ve used all available credits. Add more credits to continue checking without interruptions.
+            </p>
+          </div>
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Credits remaining</span>
+              <span className="font-semibold text-foreground">0</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Suggested add-on packs</span>
+              <span className="font-semibold text-foreground">10K / 25K / 50K</span>
+            </div>
+          </div>
+          <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-2">
+            <Link to="/payment?mode=credits" className="w-full">
+              <Button variant="accent" className="w-full h-11">
+                Buy add-on credits
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              className="w-full h-11"
+              onClick={() => setShowCreditsDialog(false)}
+            >
+              Not now
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

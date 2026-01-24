@@ -25,6 +25,7 @@ import {
   collection,
   collectionGroup,
   getDocs,
+  getDoc,
   doc,
   updateDoc,
   setDoc,
@@ -53,6 +54,7 @@ type AdminUser = {
   credits?: number;
   creditsUsed?: number;
   subscriptionStatus?: string;
+  subscriptionUpdatedAt?: string;
   updatedAt?: string;
   createdAt?: string;
   status?: string;
@@ -67,6 +69,14 @@ type BlogPost = {
   publishedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+type Coupon = {
+  id: string;
+  code: string;
+  percent: number;
+  active: boolean;
+  createdAt?: string;
 };
 
 const Admin = () => {
@@ -98,6 +108,12 @@ const Admin = () => {
   const [blogDateTime, setBlogDateTime] = useState("");
   const [blogImageFile, setBlogImageFile] = useState<File | null>(null);
   const [blogImagePreview, setBlogImagePreview] = useState<string>("");
+
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponPercent, setCouponPercent] = useState("");
+  const [couponSaving, setCouponSaving] = useState(false);
+  const [couponLoading, setCouponLoading] = useState(false);
 
   // User limit management
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -214,15 +230,31 @@ const Admin = () => {
       const snap = await getDocs(collection(db, "users"));
       const list: AdminUser[] = snap.docs.map((docSnap) => {
         const data = docSnap.data() as Record<string, any>;
+        const planField = String(data?.plan || "").toLowerCase();
+        const entitlementPlan =
+          Number(data?.wordLimit) >= 5000 || planField === "pro";
+        const status = String(data?.subscriptionStatus || "").toLowerCase();
+        const hasStatus = Boolean(status);
+        const updatedAt = data?.subscriptionUpdatedAt
+          ? new Date(String(data.subscriptionUpdatedAt))
+          : null;
+        const isRecent = updatedAt
+          ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
+          : false;
+        const isActive = status === "active" && (updatedAt ? isRecent : true);
+        const effectivePlan = (hasStatus ? isActive && entitlementPlan : entitlementPlan)
+          ? "Pro"
+          : "Free";
         return {
           id: docSnap.id,
           name: data?.name || "User",
           email: data?.email || "",
-          plan: String(data?.plan || "free").toLowerCase() === "pro" ? "Pro" : "Free",
+          plan: effectivePlan,
           wordLimit: data?.wordLimit,
           credits: data?.credits,
           creditsUsed: data?.creditsUsed,
           subscriptionStatus: data?.subscriptionStatus,
+          subscriptionUpdatedAt: data?.subscriptionUpdatedAt,
           updatedAt: data?.updatedAt,
           createdAt: data?.createdAt,
           status: data?.status || "active",
@@ -314,6 +346,92 @@ const Admin = () => {
     window.addEventListener("correctnow:suggestions-updated", handleStorage);
     return () => window.removeEventListener("correctnow:suggestions-updated", handleStorage);
   }, [user]);
+
+  useEffect(() => {
+    const loadCoupons = async () => {
+      const db = getFirebaseDb();
+      if (!db) return;
+      setCouponLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "coupons"));
+        const items: Coupon[] = snap.docs.map((docSnap) => {
+          const data = docSnap.data() || {};
+          return {
+            id: docSnap.id,
+            code: String(data.code || docSnap.id),
+            percent: Number(data.percent || 0),
+            active: Boolean(data.active ?? true),
+            createdAt: String(data.createdAt || ""),
+          };
+        });
+        items.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        setCoupons(items);
+      } catch (err) {
+        console.error("Failed to load coupons", err);
+      } finally {
+        setCouponLoading(false);
+      }
+    };
+    loadCoupons();
+  }, []);
+
+  const handleCreateCoupon = async () => {
+    const db = getFirebaseDb();
+    if (!db) return;
+    const code = couponCode.trim().toUpperCase();
+    const percent = Number(couponPercent);
+    if (!code) {
+      toast.error("Enter a coupon code");
+      return;
+    }
+    if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+      toast.error("Enter a valid percentage (1-100)");
+      return;
+    }
+    setCouponSaving(true);
+    try {
+      const ref = doc(db, "coupons", code);
+      const existing = await getDoc(ref);
+      if (existing.exists()) {
+        toast.error("Coupon code already exists");
+        return;
+      }
+      await setDoc(ref, {
+        code,
+        percent,
+        active: true,
+        createdAt: new Date().toISOString(),
+      });
+      setCoupons((prev) => [
+        { id: code, code, percent, active: true, createdAt: new Date().toISOString() },
+        ...prev,
+      ]);
+      setCouponCode("");
+      setCouponPercent("");
+      toast.success("Coupon created");
+    } catch (err) {
+      console.error("Failed to create coupon", err);
+      toast.error("Failed to create coupon");
+    } finally {
+      setCouponSaving(false);
+    }
+  };
+
+  const handleToggleCoupon = async (coupon: Coupon) => {
+    const db = getFirebaseDb();
+    if (!db) return;
+    try {
+      await updateDoc(doc(db, "coupons", coupon.id), { active: !coupon.active });
+      setCoupons((prev) =>
+        prev.map((item) =>
+          item.id === coupon.id ? { ...item, active: !coupon.active } : item
+        )
+      );
+    } catch (err) {
+      console.error("Failed to update coupon", err);
+      toast.error("Failed to update coupon");
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -617,7 +735,7 @@ const Admin = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container flex items-center justify-between py-3">
           <div className="flex items-center gap-4">
             <Link to="/" className="flex items-center">
               <img
@@ -1313,6 +1431,77 @@ const Admin = () => {
                   <p className="text-muted-foreground">
                     Manage subscriptions, payments, and revenue
                   </p>
+                </div>
+
+                <div className="bg-card rounded-xl border border-border p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                    <div>
+                      <h2 className="text-lg font-semibold text-foreground">Coupons</h2>
+                      <p className="text-sm text-muted-foreground">Create discount codes for Pro subscriptions</p>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Not applicable to add-on credits</div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-[1.5fr_1fr_auto]">
+                    <div>
+                      <label className="text-sm text-muted-foreground">Coupon code</label>
+                      <Input
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="SAVE10"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-muted-foreground">Discount %</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={couponPercent}
+                        onChange={(e) => setCouponPercent(e.target.value)}
+                        placeholder="10"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        variant="accent"
+                        onClick={handleCreateCoupon}
+                        disabled={couponSaving}
+                      >
+                        {couponSaving ? "Saving..." : "Create"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    {couponLoading ? (
+                      <p className="text-sm text-muted-foreground">Loading coupons...</p>
+                    ) : coupons.length ? (
+                      <div className="space-y-3">
+                        {coupons.map((coupon) => (
+                          <div
+                            key={coupon.id}
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-border p-4"
+                          >
+                            <div>
+                              <div className="text-sm font-semibold text-foreground">{coupon.code}</div>
+                              <div className="text-xs text-muted-foreground">{coupon.percent}% off</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={coupon.active ? "secondary" : "outline"}>
+                                {coupon.active ? "Active" : "Inactive"}
+                              </Badge>
+                              <Button variant="outline" size="sm" onClick={() => handleToggleCoupon(coupon)}>
+                                {coupon.active ? "Disable" : "Enable"}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No coupons created yet.</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

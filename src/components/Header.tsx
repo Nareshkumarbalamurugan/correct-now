@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { doc as firestoreDoc, onSnapshot } from "firebase/firestore";
@@ -24,6 +24,7 @@ const Header = () => {
   const [subscriptionStatus, setSubscriptionStatus] = useState("");
   const [creditsUsed, setCreditsUsed] = useState(0);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -60,8 +61,15 @@ const Header = () => {
             : false;
           const isActive = status === "active" && (updatedAt ? isRecent : true);
           const plan = (hasStatus ? isActive && entitlementPlan : entitlementPlan) ? "Pro" : "Free";
+          const planCredits = Number(data?.credits || (plan === "Pro" ? 50000 : 0));
+          const addonCredits = Number(data?.addonCredits || 0);
+          const addonExpiry = data?.addonCreditsExpiryAt
+            ? new Date(String(data.addonCreditsExpiryAt))
+            : null;
+          const addonValid = addonExpiry ? addonExpiry.getTime() > Date.now() : false;
+          const totalCredits = planCredits + (addonValid ? addonCredits : 0);
           setPlanName(plan);
-          setCredits(Number(data?.credits || (plan === "Pro" ? 50000 : 0)));
+          setCredits(totalCredits);
           setWordLimit(Number(data?.wordLimit || (plan === "Pro" ? 5000 : 200)));
           setSubscriptionStatus(String(data?.subscriptionStatus || ""));
           
@@ -150,6 +158,13 @@ const Header = () => {
                 </Button>
               </Link>
             </>
+          )}
+          {isAuthenticated && location.pathname !== "/dashboard" && location.pathname !== "/" && (
+            <Link to="/dashboard">
+              <Button variant="outline" size="sm" className="h-9 px-3">
+                Dashboard
+              </Button>
+            </Link>
           )}
         </div>
       </div>

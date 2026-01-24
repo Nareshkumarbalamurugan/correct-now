@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -29,6 +30,10 @@ const Payment = () => {
   const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
   const [subscriptionStatus, setSubscriptionStatus] = useState("");
   const [selectedCreditPack, setSelectedCreditPack] = useState<"basic" | "saver" | "ultra">("basic");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponPercent, setCouponPercent] = useState<number | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [regionalPricing, setRegionalPricing] = useState<RegionalPricing>(() =>
     resolvePricing("")
   );
@@ -42,7 +47,14 @@ const Payment = () => {
     ultra: { credits: 50000, price: 500, label: "Ultra Saver" }
   };
   const creditPack = creditPacks[selectedCreditPack];
-  const canBuyCredits = currentPlan === "Pro" && String(subscriptionStatus).toLowerCase() === "active";
+  const canBuyCredits = true;
+
+  const baseProAmount = Number(regionalPricing.amount || 0);
+  const discountPercent = couponPercent ?? 0;
+  const discountedProAmount = discountPercent
+    ? Math.max(1, Number((baseProAmount * (1 - discountPercent / 100)).toFixed(2)))
+    : baseProAmount;
+  const discountedProLabel = formatPrice(regionalPricing.currency, discountedProAmount);
 
   useEffect(() => {
     const loadRegion = async () => {
@@ -59,6 +71,53 @@ const Payment = () => {
     };
     loadRegion();
   }, []);
+
+  useEffect(() => {
+    if (isCreditPurchase) {
+      setCouponCode("");
+      setCouponPercent(null);
+      setCouponError("");
+    }
+  }, [isCreditPurchase]);
+
+  const handleApplyCoupon = async () => {
+    if (isCreditPurchase) {
+      setCouponError("Coupons apply only to Pro subscriptions.");
+      return;
+    }
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      setCouponError("Enter a coupon code.");
+      return;
+    }
+    setIsApplyingCoupon(true);
+    setCouponError("");
+    try {
+      const res = await fetch(`${apiBase}/api/coupons/validate?code=${encodeURIComponent(code)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setCouponPercent(null);
+        setCouponError(err?.message || "Invalid coupon code.");
+        return;
+      }
+      const data = await res.json();
+      const percent = Number(data?.percent || 0);
+      if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+        setCouponPercent(null);
+        setCouponError("Invalid coupon percentage.");
+        return;
+      }
+      setCouponPercent(percent);
+      setCouponCode(String(data?.code || code));
+      setCouponError("");
+    } catch (error) {
+      console.error("Coupon validation error:", error);
+      setCouponPercent(null);
+      setCouponError("Unable to validate coupon. Please try again.");
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
 
   const proPriceLabel = useMemo(
     () => formatPrice(regionalPricing.currency, regionalPricing.amount),
@@ -137,9 +196,11 @@ const Payment = () => {
             userEmail: user.email,
             type: isCreditPurchase ? "credits" : "subscription",
             credits: isCreditPurchase ? creditPack.credits : undefined,
-            amount: isCreditPurchase ? creditPack.price : regionalPricing.amount,
+            amount: isCreditPurchase ? creditPack.price : baseProAmount,
             priceId: !isCreditPurchase ? regionalPricing.stripePriceId : undefined,
             currency: regionalPricing.currency,
+            couponCode: !isCreditPurchase && couponPercent ? couponCode : undefined,
+            discountPercent: !isCreditPurchase && couponPercent ? couponPercent : undefined,
           }),
         });
         
@@ -170,10 +231,11 @@ const Payment = () => {
           throw new Error("Credits add-ons are available for active Pro plans only");
         }
 
+        const upiTestAmount = paymentMethod === "upi" ? 1 : creditPack.price;
         const orderRes = await fetch(`${apiBase}/api/razorpay/order`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: creditPack.price, credits: creditPack.credits }),
+          body: JSON.stringify({ amount: upiTestAmount, credits: creditPack.credits }),
         });
         if (!orderRes.ok) throw new Error("Unable to create order");
         const order = await orderRes.json();
@@ -193,13 +255,19 @@ const Payment = () => {
           handler: async () => {
             const ref = firestoreDoc(db, `users/${user.uid}`);
             const snap = await getDoc(ref);
-            const currentCredits = Number(snap.exists() ? snap.data()?.credits : 0) || 0;
+            const now = new Date();
+            const expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            const currentAddon = Number(snap.exists() ? snap.data()?.addonCredits : 0) || 0;
+            const currentExpiry = snap.exists() ? snap.data()?.addonCreditsExpiryAt : null;
+            const isCurrentValid = currentExpiry ? new Date(String(currentExpiry)).getTime() > now.getTime() : false;
+            const nextAddon = (isCurrentValid ? currentAddon : 0) + creditPack.credits;
             await setDoc(
               ref,
               {
-                credits: currentCredits + creditPack.credits,
-                creditsUpdatedAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
+                addonCredits: nextAddon,
+                addonCreditsExpiryAt: expiry.toISOString(),
+                creditsUpdatedAt: now.toISOString(),
+                updatedAt: now.toISOString(),
               },
               { merge: true }
             );
@@ -216,10 +284,22 @@ const Payment = () => {
         return;
       }
 
+      const subscriptionAmount = Number.isFinite(baseProAmount) && baseProAmount > 0
+        ? baseProAmount
+        : Number(regionalPricing.amount || 0);
+      const subscriptionTestAmount = paymentMethod === "upi" ? 1 : subscriptionAmount;
+
       const subRes = await fetch(`${apiBase}/api/razorpay/subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totalCount: 12, period: "monthly", interval: 1 }),
+        body: JSON.stringify({
+          totalCount: 12,
+          period: "monthly",
+          interval: 1,
+          amount: subscriptionTestAmount,
+          couponCode: couponPercent ? couponCode : undefined,
+          discountPercent: couponPercent || undefined,
+        }),
       });
       if (!subRes.ok) throw new Error("Unable to create subscription");
       const subscription = await subRes.json();
@@ -274,14 +354,16 @@ const Payment = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-background/95 backdrop-blur">
-        <div className="container flex items-center py-3">
-          <Link to="/" className="flex items-center">
-            <img 
-              src="/Icon/correctnow logo final2.png" 
-              alt="CorrectNow"
-              className="h-24 w-auto object-contain"
-            />
-          </Link>
+        <div className="container max-w-7xl flex items-center py-3">
+          <div className="flex-1 flex items-center min-w-0">
+            <Link to="/" className="flex items-center">
+              <img 
+                src="/Icon/correctnow logo final2.png" 
+                alt="CorrectNow"
+                className="h-24 w-auto object-contain"
+              />
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -306,14 +388,9 @@ const Payment = () => {
                 : "You're upgrading to the Pro plan"}
             </p>
 
-            {isCreditPurchase && !canBuyCredits && (
+            {isCreditPurchase && (
               <div className="mb-6 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                Credits add-ons are available only for active Pro subscribers.
-                <div className="mt-2">
-                  <Link to="/payment" className="text-accent hover:underline">
-                    Start Pro subscription
-                  </Link>
-                </div>
+                Add-on credits are available to all users and expire after 30 days.
               </div>
             )}
 
@@ -363,34 +440,30 @@ const Payment = () => {
                     onValueChange={setCardProvider}
                     className="grid grid-cols-2 gap-4"
                   >
-                    {!regionalPricing.useRazorpay && (
-                      <Label
-                        htmlFor="stripe"
-                        className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                          cardProvider === "stripe"
-                            ? "border-accent bg-accent/5"
-                            : "border-border hover:border-accent/50"
-                        }`}
-                      >
-                        <RadioGroupItem value="stripe" id="stripe" />
-                        <CreditCard className="w-5 h-5 text-muted-foreground" />
-                        <span>Stripe</span>
-                      </Label>
-                    )}
-                    {regionalPricing.useRazorpay && (
-                      <Label
-                        htmlFor="razorpay"
-                        className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                          cardProvider === "razorpay"
-                            ? "border-accent bg-accent/5"
-                            : "border-border hover:border-accent/50"
-                        }`}
-                      >
-                        <RadioGroupItem value="razorpay" id="razorpay" />
-                        <CreditCard className="w-5 h-5 text-muted-foreground" />
-                        <span>Razorpay</span>
-                      </Label>
-                    )}
+                    <Label
+                      htmlFor="stripe"
+                      className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                        cardProvider === "stripe"
+                          ? "border-accent bg-accent/5"
+                          : "border-border hover:border-accent/50"
+                      }`}
+                    >
+                      <RadioGroupItem value="stripe" id="stripe" />
+                      <CreditCard className="w-5 h-5 text-muted-foreground" />
+                      <span>Stripe</span>
+                    </Label>
+                    <Label
+                      htmlFor="razorpay"
+                      className={`flex items-center gap-3 p-4 rounded-lg border transition-colors ${
+                        cardProvider === "razorpay"
+                          ? "border-accent bg-accent/5"
+                          : "border-border hover:border-accent/50"
+                      } ${!regionalPricing.useRazorpay ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                    >
+                      <RadioGroupItem value="razorpay" id="razorpay" disabled={!regionalPricing.useRazorpay} />
+                      <CreditCard className="w-5 h-5 text-muted-foreground" />
+                      <span>Razorpay</span>
+                    </Label>
                   </RadioGroup>
                 </div>
               ) : null}
@@ -399,10 +472,7 @@ const Payment = () => {
                 type="submit"
                 variant="accent"
                 className="w-full h-12 text-base"
-                disabled={
-                  isProcessing ||
-                  (isCreditPurchase && !canBuyCredits)
-                }
+                disabled={isProcessing}
               >
                 {isProcessing ? (
                   <span className="flex items-center gap-2">
@@ -412,7 +482,7 @@ const Payment = () => {
                 ) : (
                   isCreditPurchase
                     ? `Pay ₹${creditPack.price}`
-                    : `Pay ${proPriceLabel}`
+                    : `Pay ${discountedProLabel}`
                 )}
               </Button>
 
@@ -435,17 +505,55 @@ const Payment = () => {
                   <span className="text-muted-foreground">Pro Plan</span>
                   <span className="text-foreground">{proPriceLabel}/month</span>
                 </div>
+                {!isCreditPurchase && couponPercent ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Discount ({couponCode})</span>
+                    <span className="text-foreground">- {formatPrice(regionalPricing.currency, baseProAmount - discountedProAmount)}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Billed monthly</span>
                   <span className="text-muted-foreground">Cancel anytime</span>
                 </div>
               </div>
 
+              {!isCreditPurchase && (
+                <div className="mb-6">
+                  <Label className="text-sm font-medium text-foreground">Coupon code</Label>
+                  <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                    <Input
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleApplyCoupon();
+                        }
+                      }}
+                      placeholder="SAVE10"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleApplyCoupon}
+                      disabled={isApplyingCoupon}
+                    >
+                      {isApplyingCoupon ? "Applying..." : couponPercent ? "Applied" : "Apply"}
+                    </Button>
+                  </div>
+                  {couponError ? (
+                    <p className="mt-2 text-xs text-destructive">{couponError}</p>
+                  ) : couponPercent ? (
+                    <p className="mt-2 text-xs text-success">{couponPercent}% discount applied.</p>
+                  ) : null}
+                </div>
+              )}
+
               <div className="border-t border-border pt-4 mb-6">
                 <div className="flex justify-between text-lg font-semibold">
                   <span className="text-foreground">Total due today</span>
                   <span className="text-foreground">
-                    {isCreditPurchase ? `₹${creditPack.price}` : proPriceLabel}
+                    {isCreditPurchase ? `₹${creditPack.price}` : discountedProLabel}
                   </span>
                 </div>
               </div>

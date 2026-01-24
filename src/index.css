@@ -167,7 +167,7 @@
 
   /* Textarea styling */
   .editor-textarea {
-    @apply w-full min-h-[300px] p-4 text-base leading-relaxed resize-none;
+    @apply w-full min-h-[420px] p-4 text-base leading-relaxed resize-none;
     @apply bg-card border border-border rounded-lg;
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent;
     @apply transition-all duration-200;
@@ -250,10 +250,31 @@
     background-position: 0 calc(100% - 0px);
     background-color: transparent;
     padding: 0 0 3px 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+
+  .editor-highlight .change-error:hover {
+    background-color: hsl(var(--warning) / 0.15);
+    background-size: 100% 3px;
+    color: hsl(var(--foreground));
+    border-radius: 3px;
+    padding: 0 2px 3px 2px;
+    box-shadow: 0 2px 8px hsl(var(--warning) / 0.2);
   }
 
   .editor-highlight .change-error {
     color: inherit;
+  }
+
+  /* Make highlight layer clickable for error spans */
+  .editor-highlight {
+    pointer-events: none;
+  }
+
+  .editor-highlight .change-error {
+    pointer-events: auto;
   }
 
   /* Button blink animation */

@@ -162,12 +162,19 @@ app.post(
             console.log("Credits to add:", credits);
             
             const userSnap = await userRef.get();
-            const currentCredits = userSnap.exists ? Number(userSnap.data()?.credits || 0) : 0;
-            console.log("Current credits:", currentCredits);
-            console.log("New total credits:", currentCredits + credits);
+            const data = userSnap.exists ? userSnap.data() : {};
+            const currentAddon = Number(data?.addonCredits || 0) || 0;
+            const currentExpiry = data?.addonCreditsExpiryAt;
+            const now = new Date();
+            const isCurrentValid = currentExpiry ? new Date(String(currentExpiry)).getTime() > now.getTime() : false;
+            const nextAddon = (isCurrentValid ? currentAddon : 0) + credits;
+            const expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            console.log("Current addon credits:", currentAddon);
+            console.log("New addon credits:", nextAddon);
             
             await userRef.set({
-              credits: currentCredits + credits,
+              addonCredits: nextAddon,
+              addonCreditsExpiryAt: expiry,
               creditsUpdatedAt: nowIso,
               updatedAt: nowIso,
             }, { merge: true });
@@ -769,7 +776,15 @@ app.post("/api/razorpay/order", async (req, res) => {
       return res.status(500).json({ message: "Razorpay is not configured" });
     }
 
-    const amountInRupees = Number(req.body?.amount ?? 500);
+    const percent = Number(req.body?.discountPercent || 0);
+    const baseAmount = Number(req.body?.amount ?? 500);
+    const amountInRupees = percent > 0
+      ? Math.max(1, Number((baseAmount * (1 - percent / 100)).toFixed(2)))
+      : baseAmount;
+
+    if (!Number.isFinite(amountInRupees) || amountInRupees <= 0) {
+      return res.status(400).json({ message: "Invalid subscription amount" });
+    }
     const credits = Number(req.body?.credits ?? 0);
     const amount = Math.round(amountInRupees * 100);
     const order = await razorpay.orders.create({
@@ -808,7 +823,20 @@ app.post("/api/razorpay/subscription", async (req, res) => {
       ? requestedPeriod
       : "monthly";
     const interval = Math.max(1, Number(req.body?.interval ?? 1));
+    const percent = Number(req.body?.discountPercent || 0);
+    const baseAmount = Number(req.body?.amount ?? 500);
+    const amountInRupees = percent > 0
+      ? Math.max(1, Number((baseAmount * (1 - percent / 100)).toFixed(2)))
+      : baseAmount;
     let planId = requestedPlanId || process.env.RAZORPAY_PLAN_ID;
+
+    if (!Number.isFinite(amountInRupees) || amountInRupees <= 0) {
+      return res.status(400).json({ message: "Invalid subscription amount" });
+    }
+
+    if (Number.isFinite(amountInRupees) && amountInRupees > 0 && percent > 0) {
+      planId = undefined;
+    }
 
     if (!planId) {
       console.log("Creating new Razorpay plan");
@@ -817,7 +845,7 @@ app.post("/api/razorpay/subscription", async (req, res) => {
         interval,
         item: {
           name: "CorrectNow Pro",
-          amount: 100, // ₹500 in paise
+          amount: Math.round(amountInRupees * 100),
           currency: "INR",
           description: "Monthly Pro subscription - 2000 word limit, 50,000 credits",
         },
@@ -860,6 +888,34 @@ app.get("/api/stripe/config", (_req, res) => {
   return res.json({ publishableKey });
 });
 
+app.get("/api/coupons/validate", async (req, res) => {
+  try {
+    const code = String(req.query?.code || "").trim().toUpperCase();
+    if (!code) {
+      return res.status(400).json({ message: "Coupon code required" });
+    }
+    if (!adminDb) {
+      return res.status(500).json({ message: "Admin DB not configured" });
+    }
+    const docSnap = await adminDb.collection("coupons").doc(code).get();
+    if (!docSnap.exists) {
+      return res.status(404).json({ message: "Invalid coupon code" });
+    }
+    const data = docSnap.data() || {};
+    if (data.active === false) {
+      return res.status(400).json({ message: "Coupon is inactive" });
+    }
+    const percent = Number(data.percent || 0);
+    if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+      return res.status(400).json({ message: "Invalid coupon percentage" });
+    }
+    return res.json({ code, percent });
+  } catch (err) {
+    console.error("Coupon validate error:", err);
+    return res.status(500).json({ message: "Failed to validate coupon" });
+  }
+});
+
 app.post("/api/stripe/create-checkout-session", async (req, res) => {
   try {
     const stripe = getStripe();
@@ -867,7 +923,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       return res.status(500).json({ message: "Stripe is not configured" });
     }
 
-    const { userId, userEmail, type, credits, amount, priceId, currency } = req.body;
+    const { userId, userEmail, type, credits, amount, priceId, currency, couponCode, discountPercent } = req.body;
     
     if (!userId || !userEmail) {
       return res.status(400).json({ message: "User ID and email required" });
@@ -906,7 +962,13 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       sessionConfig.metadata.credits = String(credits || 10000);
     } else {
       // Subscription
-      let resolvedPriceId = priceId || process.env.STRIPE_PRICE_ID;
+      const percent = Number(discountPercent || 0);
+      const baseAmount = Number(amount || 1);
+      const discountedAmount = percent > 0
+        ? Math.max(1, Number((baseAmount * (1 - percent / 100)).toFixed(2)))
+        : baseAmount;
+
+      let resolvedPriceId = percent > 0 ? undefined : (priceId || process.env.STRIPE_PRICE_ID);
       
       if (!resolvedPriceId) {
         // Create a price if not configured
@@ -917,7 +979,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
         
         const price = await stripe.prices.create({
           product: product.id,
-          unit_amount: Math.round(Number(amount || 1) * 100),
+          unit_amount: Math.round(discountedAmount * 100),
           currency: String(currency || "inr").toLowerCase(),
           recurring: { interval: "month" },
         });
@@ -930,6 +992,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
         quantity: 1,
       }];
       sessionConfig.metadata.type = "subscription";
+      if (couponCode) sessionConfig.metadata.couponCode = String(couponCode);
     }
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
@@ -1066,15 +1129,14 @@ const buildPrompt = (text, language) => {
       ? `Language: ${language}.`
       : "Auto-detect language.";
 
-  return `You are a senior award-winning professional proofreader, language expert, and grammar expert.
+  return `You are a strict grammar and spelling correction assistant.
 ${languageInstruction}
-Task: Produce a clean, formal, professional version with correct grammar, punctuation, and clarity.
+Task: Correct ONLY grammar, spelling, and punctuation errors.
 Rules:
 - Fix ALL errors: spelling, grammar, punctuation, verb tenses, articles, prepositions, subject-verb agreement.
-- Improve awkward phrasing and non-native expressions for natural fluency.
-- Enhance sentence structure and flow while keeping meaning and tone unchanged.
+- Do NOT rewrite sentences or change wording, vocabulary, or sentence structure.
+- Do NOT change tone, emotion, or style; preserve spoken or conversational feel.
 - Do NOT add new facts, change names, or alter numbers.
-- Use a formal, professional tone across all languages.
 - Do NOT change meaning; keep the same content.
 - Provide Grammarly-level quality with native proficiency.
 - Aim for expert-level output (10/10 quality).
