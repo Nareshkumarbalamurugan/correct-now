@@ -227,10 +227,16 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = f
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[280px] p-0" align="start" side="bottom" sideOffset={8} avoidCollisions={true} collisionPadding={8}>
+      <PopoverContent
+        className="w-[calc(100vw-2rem)] sm:w-[280px] p-0 max-h-[70vh]"
+        align="center"
+        side="bottom"
+        sideOffset={8}
+        avoidCollisions={false}
+      >
         <Command>
           <CommandInput placeholder="Type to search..." autoFocus />
-          <CommandList>
+          <CommandList className="max-h-[55vh] overflow-y-auto">
             <CommandEmpty>No languages found.</CommandEmpty>
             <CommandGroup>
               {languages.map((lang) => (

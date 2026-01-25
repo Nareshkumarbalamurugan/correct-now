@@ -111,15 +111,17 @@ const Header = () => {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container max-w-7xl px-3 sm:px-4">
-        <div className="flex items-center justify-between gap-3 py-2 sm:py-3">
-          <Link to="/" className="flex items-center flex-shrink-0">
-            <img
-              src="/Icon/correctnow logo final2.png"
-              alt="CorrectNow"
-              className="h-12 sm:h-16 md:h-20 lg:h-24 w-auto object-contain"
-              loading="eager"
-            />
-          </Link>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 sm:gap-3 py-2 sm:py-3">
+          <div className="flex w-full md:w-auto items-center justify-center md:justify-start">
+            <Link to="/" className="flex items-center">
+              <img
+                src="/Icon/correctnow logo final2.png"
+                alt="CorrectNow"
+                className="h-12 sm:h-16 md:h-20 lg:h-24 w-auto object-contain"
+                loading="eager"
+              />
+            </Link>
+          </div>
 
           <nav className="hidden md:flex items-center gap-4 lg:gap-6">
             <Link
@@ -142,7 +144,7 @@ const Header = () => {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex w-full md:w-auto items-center justify-center md:justify-end gap-2">
             {!isAuthenticated && (
               <>
                 <Link to="/auth">
@@ -167,7 +169,7 @@ const Header = () => {
           </div>
         </div>
 
-        <nav className="flex md:hidden items-center gap-3 overflow-x-auto scrollbar-hide pb-2 -mt-1">
+        <nav className="flex md:hidden items-center justify-center gap-3 overflow-x-auto scrollbar-hide pb-2 -mt-1">
           <Link
             to="/features"
             className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
