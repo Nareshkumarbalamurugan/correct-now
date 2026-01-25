@@ -68,6 +68,32 @@ const getStripe = () => {
   return new Stripe(secretKey, { apiVersion: "2024-11-20.acacia" });
 };
 
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "bif",
+  "clp",
+  "djf",
+  "gnf",
+  "jpy",
+  "kmf",
+  "krw",
+  "mga",
+  "pyg",
+  "rwf",
+  "ugx",
+  "vnd",
+  "vuv",
+  "xaf",
+  "xof",
+  "xpf",
+]);
+
+const toStripeAmount = (amount, currency) => {
+  const code = String(currency || "").toLowerCase();
+  return ZERO_DECIMAL_CURRENCIES.has(code)
+    ? Math.round(amount)
+    : Math.round(amount * 100);
+};
+
 const updateUsersBySubscriptionId = async (subscriptionId, updates) => {
   if (!adminDb || !subscriptionId) return;
   const snapshot = await adminDb
@@ -959,7 +985,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
             name: `${credits || 10000} Credits Pack`,
             description: "Credits for extra checks",
           },
-          unit_amount: Math.round(creditAmount * 100), // Convert to paise
+          unit_amount: toStripeAmount(creditAmount, currency),
         },
         quantity: 1,
       }];
@@ -984,7 +1010,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
         
         const price = await stripe.prices.create({
           product: product.id,
-          unit_amount: Math.round(discountedAmount * 100),
+          unit_amount: toStripeAmount(discountedAmount, currency),
           currency: String(currency || "inr").toLowerCase(),
           recurring: { interval: "month" },
         });

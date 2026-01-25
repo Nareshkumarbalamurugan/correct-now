@@ -6,6 +6,16 @@ export type RegionalPricing = {
   useRazorpay?: boolean;
 };
 
+export type CreditPackKey = "basic" | "saver" | "ultra";
+
+export type CreditPack = {
+  key: CreditPackKey;
+  credits: number;
+  amount: number;
+  label: string;
+  highlight?: boolean;
+};
+
 const env = import.meta.env as Record<string, string | undefined>;
 
 const SEA = ["SG", "MY", "ID", "PH", "TH", "VN"];
@@ -147,6 +157,39 @@ export const formatPrice = (currency: string, amount: number) => {
   } catch {
     return `${amount} ${currency}`;
   }
+};
+
+const CREDIT_PACKS_BY_CURRENCY: Record<string, CreditPack[]> = {
+  INR: [
+    { key: "basic", credits: 10000, amount: 200, label: "Basic Pack" },
+    { key: "saver", credits: 25000, amount: 300, label: "Super Saver" },
+    { key: "ultra", credits: 50000, amount: 500, label: "Ultra Saver", highlight: true },
+  ],
+  USD: [
+    { key: "basic", credits: 10000, amount: 2.99, label: "Basic Pack" },
+    { key: "saver", credits: 25000, amount: 4.99, label: "Super Saver" },
+    { key: "ultra", credits: 50000, amount: 7.99, label: "Ultra Saver", highlight: true },
+  ],
+  EUR: [
+    { key: "basic", credits: 10000, amount: 2.79, label: "Basic Pack" },
+    { key: "saver", credits: 25000, amount: 4.49, label: "Super Saver" },
+    { key: "ultra", credits: 50000, amount: 6.99, label: "Ultra Saver", highlight: true },
+  ],
+  GBP: [
+    { key: "basic", credits: 10000, amount: 2.49, label: "Basic Pack" },
+    { key: "saver", credits: 25000, amount: 3.99, label: "Super Saver" },
+    { key: "ultra", credits: 50000, amount: 6.49, label: "Ultra Saver", highlight: true },
+  ],
+  JPY: [
+    { key: "basic", credits: 10000, amount: 300, label: "Basic Pack" },
+    { key: "saver", credits: 25000, amount: 500, label: "Super Saver" },
+    { key: "ultra", credits: 50000, amount: 800, label: "Ultra Saver", highlight: true },
+  ],
+};
+
+export const getCreditPacks = (currency: string): CreditPack[] => {
+  const key = String(currency || "").toUpperCase();
+  return CREDIT_PACKS_BY_CURRENCY[key] ?? CREDIT_PACKS_BY_CURRENCY.USD;
 };
 
 export const detectCountryCode = async (): Promise<string> => {

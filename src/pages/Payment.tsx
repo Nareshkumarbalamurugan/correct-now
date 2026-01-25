@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { doc as firestoreDoc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { detectCountryCode, formatPrice, resolvePricing, type RegionalPricing } from "@/lib/pricing";
+import { detectCountryCode, formatPrice, getCreditPacks, resolvePricing, type CreditPackKey, type RegionalPricing } from "@/lib/pricing";
 
 declare global {
   interface Window {
@@ -29,7 +29,7 @@ const Payment = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<"Free" | "Pro">("Free");
   const [subscriptionStatus, setSubscriptionStatus] = useState("");
-  const [selectedCreditPack, setSelectedCreditPack] = useState<"basic" | "saver" | "ultra">("basic");
+  const [selectedCreditPack, setSelectedCreditPack] = useState<CreditPackKey>("basic");
   const [couponCode, setCouponCode] = useState("");
   const [couponPercent, setCouponPercent] = useState<number | null>(null);
   const [couponError, setCouponError] = useState("");
@@ -41,12 +41,11 @@ const Payment = () => {
   const [searchParams] = useSearchParams();
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";
   const isCreditPurchase = searchParams.get("mode") === "credits";
-  const creditPacks = {
-    basic: { credits: 10000, price: 200, label: "Basic Pack" },
-    saver: { credits: 25000, price: 300, label: "Super Saver" },
-    ultra: { credits: 50000, price: 500, label: "Ultra Saver" }
-  };
-  const creditPack = creditPacks[selectedCreditPack];
+  const creditPacks = useMemo(() => getCreditPacks(regionalPricing.currency), [regionalPricing.currency]);
+  const creditPack = useMemo(
+    () => creditPacks.find((pack) => pack.key === selectedCreditPack) ?? creditPacks[0],
+    [creditPacks, selectedCreditPack]
+  );
   const canBuyCredits = true;
 
   const baseProAmount = Number(regionalPricing.amount || 0);
@@ -196,7 +195,7 @@ const Payment = () => {
             userEmail: user.email,
             type: isCreditPurchase ? "credits" : "subscription",
             credits: isCreditPurchase ? creditPack.credits : undefined,
-            amount: isCreditPurchase ? creditPack.price : baseProAmount,
+            amount: isCreditPurchase ? creditPack.amount : baseProAmount,
             priceId: !isCreditPurchase ? regionalPricing.stripePriceId : undefined,
             currency: regionalPricing.currency,
             couponCode: !isCreditPurchase && couponPercent ? couponCode : undefined,
@@ -231,7 +230,7 @@ const Payment = () => {
           throw new Error("Credits add-ons are available for active Pro plans only");
         }
 
-        const upiTestAmount = paymentMethod === "upi" ? 1 : creditPack.price;
+        const upiTestAmount = paymentMethod === "upi" ? 1 : creditPack.amount;
         const orderRes = await fetch(`${apiBase}/api/razorpay/order`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -481,7 +480,7 @@ const Payment = () => {
                   </span>
                 ) : (
                   isCreditPurchase
-                    ? `Pay ₹${creditPack.price}`
+                    ? `Pay ${formatPrice(regionalPricing.currency, creditPack.amount)}`
                     : `Pay ${discountedProLabel}`
                 )}
               </Button>
@@ -502,8 +501,16 @@ const Payment = () => {
 
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Pro Plan</span>
-                  <span className="text-foreground">{proPriceLabel}/month</span>
+                  <span className="text-muted-foreground">
+                    {isCreditPurchase
+                      ? `${creditPack.label} (${creditPack.credits.toLocaleString()} credits)`
+                      : "Pro Plan"}
+                  </span>
+                  <span className="text-foreground">
+                    {isCreditPurchase
+                      ? formatPrice(regionalPricing.currency, creditPack.amount)
+                      : `${proPriceLabel}/month`}
+                  </span>
                 </div>
                 {!isCreditPurchase && couponPercent ? (
                   <div className="flex justify-between text-sm">
@@ -512,8 +519,12 @@ const Payment = () => {
                   </div>
                 ) : null}
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Billed monthly</span>
-                  <span className="text-muted-foreground">Cancel anytime</span>
+                  <span className="text-muted-foreground">
+                    {isCreditPurchase ? "One-time purchase" : "Billed monthly"}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {isCreditPurchase ? "Credits valid for 30 days" : "Cancel anytime"}
+                  </span>
                 </div>
               </div>
 
@@ -553,7 +564,7 @@ const Payment = () => {
                 <div className="flex justify-between text-lg font-semibold">
                   <span className="text-foreground">Total due today</span>
                   <span className="text-foreground">
-                    {isCreditPurchase ? `₹${creditPack.price}` : discountedProLabel}
+                    {isCreditPurchase ? formatPrice(regionalPricing.currency, creditPack.amount) : discountedProLabel}
                   </span>
                 </div>
               </div>
@@ -562,30 +573,27 @@ const Payment = () => {
                 <div className="mb-6">
                   <h3 className="font-medium text-foreground mb-3">Select Credit Pack</h3>
                   <RadioGroup value={selectedCreditPack} onValueChange={(value: any) => setSelectedCreditPack(value)}>
-                    <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer">
-                      <RadioGroupItem value="basic" id="basic" />
-                      <Label htmlFor="basic" className="flex-1 cursor-pointer">
-                        <div className="font-medium text-foreground">Basic Pack - ₹200</div>
-                        <div className="text-sm text-muted-foreground">10,000 credits</div>
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer">
-                      <RadioGroupItem value="saver" id="saver" />
-                      <Label htmlFor="saver" className="flex-1 cursor-pointer">
-                        <div className="font-medium text-foreground">Super Saver - ₹300</div>
-                        <div className="text-sm text-muted-foreground">25,000 credits</div>
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer bg-accent/5">
-                      <RadioGroupItem value="ultra" id="ultra" />
-                      <Label htmlFor="ultra" className="flex-1 cursor-pointer">
-                        <div className="font-medium text-foreground flex items-center gap-2">
-                          Ultra Saver - ₹500
-                          <span className="text-xs bg-accent text-accent-foreground px-2 py-0.5 rounded">Best Value</span>
-                        </div>
-                        <div className="text-sm text-muted-foreground">50,000 credits</div>
-                      </Label>
-                    </div>
+                    {creditPacks.map((pack) => (
+                      <div
+                        key={pack.key}
+                        className={`flex items-center space-x-2 p-4 border border-border rounded-lg hover:border-accent transition-colors cursor-pointer ${
+                          pack.highlight ? "bg-accent/5" : ""
+                        }`}
+                      >
+                        <RadioGroupItem value={pack.key} id={pack.key} />
+                        <Label htmlFor={pack.key} className="flex-1 cursor-pointer">
+                          <div className="font-medium text-foreground flex items-center gap-2">
+                            {pack.label} - {formatPrice(regionalPricing.currency, pack.amount)}
+                            {pack.highlight ? (
+                              <span className="text-xs bg-accent text-accent-foreground px-2 py-0.5 rounded">Best Value</span>
+                            ) : null}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {pack.credits.toLocaleString()} credits
+                          </div>
+                        </Label>
+                      </div>
+                    ))}
                   </RadioGroup>
                 </div>
               )}
@@ -599,7 +607,7 @@ const Payment = () => {
                     ? [
                         `${creditPack.credits.toLocaleString()} credits added`,
                         "Use credits for extra checks",
-                        "Credits never expire",
+                        "Credits expire after 30 days",
                       ]
                     : [
                         "5,000 words per check",
