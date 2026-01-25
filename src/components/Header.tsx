@@ -110,84 +110,83 @@ const Header = () => {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container max-w-7xl flex flex-col gap-2 py-2 px-3 sm:px-4 sm:gap-3 sm:py-3 md:flex-row md:items-center">
-        <div className="flex-1 flex items-center min-w-0">
-          <Link to="/" className="flex items-center">
+      <div className="container max-w-7xl px-3 sm:px-4">
+        <div className="flex items-center justify-between gap-3 py-2 sm:py-3">
+          <Link to="/" className="flex items-center flex-shrink-0">
             <img
               src="/Icon/correctnow logo final2.png"
               alt="CorrectNow"
-              className="h-16 sm:h-20 md:h-24 w-auto object-contain"
+              className="h-12 sm:h-16 md:h-20 lg:h-24 w-auto object-contain"
               loading="eager"
             />
           </Link>
-        </div>
 
-        <nav className="flex md:hidden items-center gap-3 overflow-x-auto scrollbar-hide">
-          <Link
-            to="/features"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-          >
-            Features
-          </Link>
-          <Link
-            to="/blog"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-          >
-            Blog
-          </Link>
-          <Link
-            to="/pricing"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-          >
-            Pricing
-          </Link>
-        </nav>
-
-        <nav className="hidden md:flex items-center gap-6 flex-1 justify-center">
-          <Link
-            to="/features"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Features
-          </Link>
-          <Link
-            to="/blog"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Blog
-          </Link>
-          <Link
-            to="/pricing"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Pricing
-          </Link>
-        </nav>
-
-
-        <div className="flex flex-wrap items-center gap-2 flex-1 justify-end">
-          {!isAuthenticated && (
-            <>
-              <Link to="/auth">
-                <Button variant="ghost" size="sm" className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm">
-                  Log in
-                </Button>
-              </Link>
-              <Link to="/auth?mode=register">
-                <Button variant="accent" size="sm" className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm">
-                  Get Started
-                </Button>
-              </Link>
-            </>
-          )}
-          {isAuthenticated && location.pathname !== "/dashboard" && location.pathname !== "/" && (
-            <Link to="/dashboard">
-              <Button variant="outline" size="sm" className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm">
-                Dashboard
-              </Button>
+          <nav className="hidden md:flex items-center gap-4 lg:gap-6">
+            <Link
+              to="/features"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Features
             </Link>
-          )}
+            <Link
+              to="/blog"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Blog
+            </Link>
+            <Link
+              to="/pricing"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Pricing
+            </Link>
+          </nav>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {!isAuthenticated && (
+              <>
+                <Link to="/auth">
+                  <Button variant="ghost" size="sm" className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm">
+                    Log in
+                  </Button>
+                </Link>
+                <Link to="/auth?mode=register">
+                  <Button variant="accent" size="sm" className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
+            )}
+            {isAuthenticated && location.pathname !== "/dashboard" && location.pathname !== "/" && (
+              <Link to="/dashboard">
+                <Button variant="outline" size="sm" className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm">
+                  Dashboard
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
+
+        <nav className="flex md:hidden items-center gap-3 overflow-x-auto scrollbar-hide pb-2 -mt-1">
+          <Link
+            to="/features"
+            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+          >
+            Features
+          </Link>
+          <Link
+            to="/blog"
+            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+          >
+            Blog
+          </Link>
+          <Link
+            to="/pricing"
+            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+          >
+            Pricing
+          </Link>
+        </nav>
       </div>
     </header>
   );
