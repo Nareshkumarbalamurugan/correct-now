@@ -57,6 +57,15 @@ export const resolvePricing = (countryCode: string): RegionalPricing => {
     };
   }
 
+  if (code === "JP") {
+    return {
+      regionLabel: "Japan",
+      currency: "JPY",
+      amount: 800,
+      stripePriceId: env.VITE_STRIPE_PRICE_ID_JPY_800,
+    };
+  }
+
   if (code === "US" || code === "CA") {
     return {
       regionLabel: "US / Canada",

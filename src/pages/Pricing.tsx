@@ -141,6 +141,12 @@ const Pricing = () => {
 
   const displayPlans = useMemo(() => {
     return plans.map((plan) => {
+      if (plan.name === "Free") {
+        return {
+          ...plan,
+          price: formatPrice(regionalPricing.currency, 0),
+        };
+      }
       if (plan.name !== "Pro") return plan;
       return {
         ...plan,

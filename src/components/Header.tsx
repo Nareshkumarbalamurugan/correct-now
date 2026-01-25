@@ -110,9 +110,9 @@ const Header = () => {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container max-w-7xl px-3 sm:px-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 sm:gap-3 py-2 sm:py-3">
-          <div className="flex w-full md:w-auto items-center justify-center md:justify-start">
+      <div className="container max-w-none px-3 sm:px-4 md:px-0">
+        <div className="flex flex-col md:grid md:grid-cols-[1fr_auto_1fr] md:items-center gap-2 sm:gap-3 py-2 sm:py-4">
+          <div className="flex w-full md:w-auto items-center justify-center md:justify-start md:pl-6">
             <Link to="/" className="flex items-center">
               <img
                 src="/Icon/correctnow logo final2.png"
@@ -123,7 +123,7 @@ const Header = () => {
             </Link>
           </div>
 
-          <nav className="hidden md:flex items-center gap-4 lg:gap-6">
+          <nav className="hidden md:flex items-center justify-center gap-4 lg:gap-6">
             <Link
               to="/features"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"

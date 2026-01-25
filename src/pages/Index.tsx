@@ -620,7 +620,7 @@ const Index = () => {
                     </div>
                   </div>
                   <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight mt-4 sm:mt-5 tracking-tight px-2 sm:px-0">
-                    CorrectNow – The only AI proofreader and grammar checker for ALL languages.
+                    CorrectNow – An AI proofreader and grammar checker for multiple languages
                   </h1>
                   <p className="text-white/90 text-sm sm:text-base md:text-lg lg:text-xl mt-3 sm:mt-4 leading-relaxed px-2 sm:px-0">
                     Correct grammar, spelling, and punctuation errors instantly with CorrectNow. 
