@@ -698,7 +698,7 @@ const Index = () => {
 
         {/* Features Section with SEO Content */}
         {!isAuthenticated && (
-        <section className="container py-16 md:py-20">
+        <section className="container pt-16 pb-8 md:pt-20 md:pb-10">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
               Why Choose CorrectNow Grammar Checker?
@@ -799,7 +799,7 @@ const Index = () => {
               Languages supported for grammar checking
             </h3>
             <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
-              English, Mandarin Chinese, Hindi, Spanish, French, Modern Standard Arabic, Bengali, Portuguese, Russian, Indonesian, Urdu, Standard German, Japanese, Nigerian Pidgin, Egyptian Arabic, Marathi, Telugu, Turkish, Tamil, Yue Chinese (Cantonese), Vietnamese, Tagalog, Wu Chinese, Hausa, Western Punjabi, Swahili, Iranian Persian, Korean, Javanese, Italian, Thai, Gujarati, Kannada, Amharic, Bhojpuri, Levantine Arabic, Southern Pashto, Polish, Uzbek, Malayalam, Sundanese, Burmese, Oromo, Odia (Oriya), Maithili, Azerbaijani, Fula, Romanian, Ukrainian, Somali, Yoruba, Sindhi, Magahi, Greek, Czech, Dutch, Zulu, Pashto, Hungarian, Chittagonian, Belarusian, Sinhala, Haryanvi, Marwari, Khmer, Northern Sotho, Assamese, Madurese, Chhattisgarhi, Deccan, Swedish, Bulgarian, Tatar, Kazakh, Ilocano, Lombard, Haitian Creole, Uyghur, Balochi, Konkani, Afrikaans, Albanian, Armenian, Batak, Balinese, Bemba, Bosnian, Buginese, Catalan, Cebuano, Croatian, Danish, Estonian, Finnish, Georgian, Hebrew, Icelandic, Kinyarwanda, Kyrgyz, Norwegian, Napoletano-Calabrese, Central Khmer, Eastern Farsi, Akan, Hiligaynon, Kurmanji, Shona, Mossi, Xhosa, Minangkabau, Turkmen, Makhuwa, Santali, Batak Toba, Ganda, Sukuma, Tsonga, Kikuyu, Umbundu, Tshiluba, Wolof, Southern Qiang, Bikol, Varhadi-Nagpuri, Tulu, Pangasinan, Waray-Waray, Slovak, Romani, Papiamento, Ladin, Tibetan, Guarani.
+              Grammarly alternative and AI proofreader for English, Mandarin Chinese, Hindi, Spanish, French, Modern Standard Arabic, Bengali, Portuguese, Russian, Indonesian, Urdu, Standard German, Japanese, Marathi, Telugu, Turkish, Tamil, Vietnamese, Korean, Italian, Thai, Gujarati, Kannada, Malayalam, Polish, Dutch, Greek, Ukrainian, Romanian, Swedish, Hungarian, Czech, Arabic dialects, and more.
             </p>
           </div>
 

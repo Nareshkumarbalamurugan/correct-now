@@ -24,6 +24,12 @@ const Blog = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
+  const normalizeBlogHtml = (html: string) =>
+    html.replace(
+      /href="(?!https?:|mailto:|tel:|#|\/)([^"]+)"/gi,
+      'href="https://$1"'
+    );
+
   useEffect(() => {
     const loadPosts = async () => {
       const db = getFirebaseDb();
@@ -178,7 +184,7 @@ const Blog = () => {
                                 </div>
                               )}
                               <div className="blog-content prose max-w-none">
-                                <div dangerouslySetInnerHTML={{ __html: post.contentHtml }} />
+                                <div dangerouslySetInnerHTML={{ __html: normalizeBlogHtml(post.contentHtml) }} />
                               </div>
                             </div>
                           ) : (

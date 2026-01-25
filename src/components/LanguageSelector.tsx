@@ -198,7 +198,8 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = f
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const isOpen = open ?? internalOpen;
-  const selectedLanguage = languages.find((lang) => lang.code === value);
+  const uniqueLanguages = Array.from(new Map(languages.map((lang) => [lang.code, lang])).values());
+  const selectedLanguage = uniqueLanguages.find((lang) => lang.code === value);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!isControlled) {
@@ -239,7 +240,7 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = f
           <CommandList className="max-h-[55vh] overflow-y-auto">
             <CommandEmpty>No languages found.</CommandEmpty>
             <CommandGroup>
-              {languages.map((lang) => (
+              {uniqueLanguages.map((lang) => (
                 <CommandItem
                   key={lang.code}
                   value={`${lang.name} ${lang.code}`}
