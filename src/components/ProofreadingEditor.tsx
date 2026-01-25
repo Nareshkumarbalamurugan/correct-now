@@ -259,6 +259,12 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 
 const normalizeText = (value: string) => value.trim().normalize("NFC");
 
+const normalizePunctuationSpacing = (value: string) =>
+  value
+    .replace(/\s*([,.;:!?])\s*/g, "$1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 const buildLooseRegex = (value: string) => {
   const chars = value.split("");
   const parts = chars.map((char, index) => {
@@ -806,7 +812,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .map((change: Change) => ({ ...change, status: "pending" as const }))
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
-                return normalizeText(change.original) !== normalizeText(change.corrected);
+                if (!normalizedInput.includes(change.original)) return false;
+                if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
+                return (
+                  normalizePunctuationSpacing(change.original) !==
+                  normalizePunctuationSpacing(change.corrected)
+                );
               })
           : [];
         setBaseText(normalizedInput);
@@ -885,7 +896,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .map((change: Change) => ({ ...change, status: "pending" as const }))
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
-                return normalizeText(change.original) !== normalizeText(change.corrected);
+                if (!normalizedInput.includes(change.original)) return false;
+                if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
+                return (
+                  normalizePunctuationSpacing(change.original) !==
+                  normalizePunctuationSpacing(change.corrected)
+                );
               })
           : [];
         setBaseText(normalizedInput);

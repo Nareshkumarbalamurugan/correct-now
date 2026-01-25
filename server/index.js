@@ -55,6 +55,24 @@ const initAdminDb = () => {
 
 const adminDb = initAdminDb();
 
+// Simple in-memory cache to reduce latency and cost
+const cacheStore = new Map();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+const getCache = (key) => {
+  const entry = cacheStore.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    cacheStore.delete(key);
+    return null;
+  }
+  return entry.value;
+};
+
+const setCache = (key, value) => {
+  cacheStore.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+};
+
 const getRazorpay = () => {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -1077,46 +1095,16 @@ app.post("/api/detect-language", async (req, res) => {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const allowed = ["en","hi","ta","te","bn","mr","gu","kn","ml","pa","ur","fa","es","fr","de","pt","it","nl","sv","no","da","fi","pl","ro","tr","el","he","id","ms","th","vi","tl","sw","ru","uk","ja","ko","zh","ar","af","cs","hu","auto"];
-    const prompt = `Detect the language of the text and return ONLY a JSON object with one field "code".
-  Allowed codes: ${allowed.join(", ")}.
-  Return the closest matching code. If unsure, return "auto".
-  Important: Distinguish closely related languages carefully.
-  Examples that commonly look like English (DO NOT return "en" for these):
-  - French: "Ce document contient des informations importantes concernant l’organisation du système."
-  - German: "Dieses Dokument erklärt die Struktur und Funktion des Organisationssystems."
-  - Dutch: "Dit document beschrijft de structuur en organisatie van het systeem."
-  - Afrikaans: "Hierdie dokument verduidelik die struktuur en funksie van die organisasie."
-  - Spanish: "Este documento explica la estructura y organización del sistema."
-  - Portuguese: "Este documento explica a estrutura e organização do sistema."
-  - Italian: "Questo documento spiega la struttura e l’organizzazione del sistema."
-  Very confusing for detectors:
-  - Norwegian: "Dette dokumentet forklarer strukturen og organiseringen av systemet."
-  - Swedish: "Detta dokument förklarar strukturen och organisationen av systemet."
-  - Danish: "Dette dokument forklarer strukturen og organisationen af systemet."
-  - Romanian: "Acest document explică structura și organizarea sistemului."
-  - Czech: "Tento dokument vysvětluje strukturu a organizaci systému."
-  - Polish: "Ten dokument wyjaśnia strukturę i organizację systemu."
-  - Hungarian: "Ez a dokument elmagyarázza a rendszer struktúráját és szervezését."
-  Asian languages in Latin script:
-  - Indonesian: "Dokumen ini menjelaskan struktur dan organisasi sistem."
-  - Malay: "Dokumen ini menerangkan struktur dan organisasi sistem."
-  - Filipino/Tagalog: "Ipinapaliwanag ng dokumentong ito ang istruktura at organisasyon ng sistema."
-  Control languages (NEVER English):
-  - Tamil: "இந்த ஆவணம் அமைப்பின் கட்டமைப்பை விளக்குகிறது."
-  - Hindi: "यह दस्तावेज़ प्रणाली की संरचना को समझाता है।"
-  - Arabic: "تشرح هذه الوثيقة هيكل وتنظيم النظام."
-  - Chinese: "本文件解释了系统的结构和组织。"
-  - French often includes: "je", "tu", "être", "réveillé", "bureau", "réunion", "très", accents (à â ç é è ê ë î ï ô ù û ü).
-  - Spanish often includes: "yo", "tú", "porque", "reunión", "oficina", "muy", and ¿ ¡ punctuation.
-  - Portuguese often includes: "você", "não", "obrigado", "amanhã".
-  - Turkish includes: ç, ğ, ı, ö, ş, ü and words like "teşekkür".
-  - Polish includes: ą, ć, ę, ł, ń, ó, ś, ź, ż.
-  - Romanian includes: ă, â, î, ș, ț.
-  - Hindi/Marathi share script; prefer Marathi for common Marathi words.
-  - Urdu/Persian use Arabic script; use common Urdu/Persian words to distinguish.
-  - Only return Tagalog (tl) when multiple Tagalog words appear (e.g., "salamat", "ikaw", "hindi", "bukas", "ngayon").
-  - If text is generic Latin script without strong language-specific words, prefer "en".
-  Text:\n"""${text}"""`;
+    const prompt = `Detect language and return ONLY JSON: {"code":"<code>"}.
+Allowed codes: ${allowed.join(", ")}.
+Return closest code; if unsure, "auto".
+Text:\n"""${text}"""`;
+
+    const detectKey = crypto.createHash("sha256").update(prompt).digest("hex");
+    const cachedDetect = getCache(`detect:${detectKey}`);
+    if (cachedDetect) {
+      return res.json(cachedDetect);
+    }
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -1147,7 +1135,9 @@ app.post("/api/detect-language", async (req, res) => {
     }
 
     const code = typeof parsed?.code === "string" ? parsed.code : "auto";
-    return res.json({ code: allowed.includes(code) ? code : "auto" });
+    const result = { code: allowed.includes(code) ? code : "auto" };
+    setCache(`detect:${detectKey}`, result);
+    return res.json(result);
   } catch (err) {
     console.error("Detect-language server error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -1164,24 +1154,10 @@ const buildPrompt = (text, language) => {
 ${languageInstruction}
 Task: Correct ONLY grammar, spelling, and punctuation errors.
 Rules:
-- Fix ALL errors: spelling, grammar, punctuation, verb tenses, articles, prepositions, subject-verb agreement.
-- Do NOT rewrite sentences or change wording, vocabulary, or sentence structure.
-- Do NOT change tone, emotion, or style; preserve spoken or conversational feel.
-- Do NOT add new facts, change names, or alter numbers.
-- Do NOT change meaning; keep the same content.
-- Provide Grammarly-level quality with native proficiency.
-- Aim for expert-level output (10/10 quality).
-- For misspelled English words in mixed-language text (e.g., "confushion" in Tamil/Hindi text):
-  * Create TWO SEPARATE change entries:
-    1. First entry: { "original": "confushion", "corrected": "confusion", "explanation": "Corrected English spelling." }
-    2. Second entry: { "original": "confushion", "corrected": "[Tamil/target language translation]", "explanation": "Translated English word to [language]." }
-  * Example for "office" (correct English) in Tamil text: Create ONE entry with Tamil translation
-  * Example for "alaram" (misspelled) in Tamil text: Create TWO entries - one with "alarm" and one with Tamil equivalent
-- For mixed language text (Tanglish): Keep code-switching natural but fix grammar around it.
-- List EVERY correction in the changes array, even minor punctuation.
-- Each changes.original must be an exact substring from the input text.
-- Explanations must be concise (max 12 words) and describe the fix.
-- If no corrections are needed, return corrected_text identical to input and an empty changes array.
+- Fix errors without rewriting or changing meaning.
+- Preserve tone and wording; no extra facts.
+- List every change with concise explanations (<=12 words).
+- If no changes, return original text and empty changes.
 Return ONLY valid JSON in this format:
 {
   "corrected_text": "...",
@@ -1193,6 +1169,25 @@ Text:
 """
 ${text}
 """`;
+};
+
+const parseGeminiJson = (raw) => {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start !== -1 && end !== -1 && end > start) {
+      const slice = raw.slice(start, end + 1);
+      try {
+        return JSON.parse(slice);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
 };
 
 app.post("/api/proofread", async (req, res) => {
@@ -1249,28 +1244,43 @@ app.post("/api/proofread", async (req, res) => {
 
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const prompt = buildPrompt(text, language);
+    const cacheKey = crypto
+      .createHash("sha256")
+      .update(`${model}|${language || "auto"}|${prompt}`)
+      .digest("hex");
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: buildPrompt(text, language) }],
+    const cached = getCache(`proofread:${cacheKey}`);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const callGemini = async (maxTokens) => {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: prompt }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0,
+            topP: 0.6,
+            responseMimeType: "application/json",
+            maxOutputTokens: maxTokens,
           },
-        ],
-        generationConfig: {
-          temperature: 0,
-          topP: 0.9,
-          responseMimeType: "application/json",
-          maxOutputTokens: 8192,
-        },
-        systemInstruction: {
-          parts: [{ text: "Return the JSON response directly in the output. Do not use internal reasoning mode." }],
-        },
-      }),
-    });
+          systemInstruction: {
+            parts: [{ text: "Return ONLY valid JSON. Do not add extra text." }],
+          },
+        }),
+      });
+      return response;
+    };
+
+    let response = await callGemini(2048);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1278,18 +1288,27 @@ app.post("/api/proofread", async (req, res) => {
       return res.status(500).json({ message: "API error" });
     }
 
-    const data = await response.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    let data = await response.json();
+    let raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!raw) {
       console.error("Gemini response missing content:", JSON.stringify(data));
       return res.status(500).json({ message: "Invalid Gemini response" });
     }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (parseError) {
-      console.error("Failed to parse Gemini response:", raw, parseError);
+    let parsed = parseGeminiJson(raw);
+    if (!parsed) {
+      // Retry once with a higher token limit in case the response was truncated
+      response = await callGemini(4096);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Gemini API error (retry):", errorText);
+        return res.status(500).json({ message: "API error" });
+      }
+      data = await response.json();
+      raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      parsed = parseGeminiJson(raw);
+    }
+    if (!parsed) {
+      console.error("Failed to parse Gemini response:", raw);
       return res.status(500).json({ message: "Failed to parse Gemini response" });
     }
 
@@ -1307,10 +1326,12 @@ app.post("/api/proofread", async (req, res) => {
         })
       : [];
 
-    return res.json({
+    const result = {
       corrected_text: correctedText,
       changes,
-    });
+    };
+    setCache(`proofread:${cacheKey}`, result);
+    return res.json(result);
   } catch (err) {
     console.error("Server error:", err);
     return res.status(500).json({ message: "Server error" });
