@@ -794,6 +794,15 @@ const Index = () => {
             </Card>
           </div>
 
+          <div className="mt-6 sm:mt-8 rounded-2xl border border-border bg-secondary/30 p-6 md:p-8 text-center">
+            <h3 className="text-xl md:text-2xl font-bold text-foreground mb-3">
+              Languages supported for grammar checking
+            </h3>
+            <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
+              English, Mandarin Chinese, Hindi, Spanish, French, Modern Standard Arabic, Bengali, Portuguese, Russian, Indonesian, Urdu, Standard German, Japanese, Nigerian Pidgin, Egyptian Arabic, Marathi, Telugu, Turkish, Tamil, Yue Chinese (Cantonese), Vietnamese, Tagalog, Wu Chinese, Hausa, Western Punjabi, Swahili, Iranian Persian, Korean, Javanese, Italian, Thai, Gujarati, Kannada, Amharic, Bhojpuri, Levantine Arabic, Southern Pashto, Polish, Uzbek, Malayalam, Sundanese, Burmese, Oromo, Odia (Oriya), Maithili, Azerbaijani, Fula, Romanian, Ukrainian, Somali, Yoruba, Sindhi, Magahi, Greek, Czech, Dutch, Zulu, Pashto, Hungarian, Chittagonian, Belarusian, Sinhala, Haryanvi, Marwari, Khmer, Northern Sotho, Assamese, Madurese, Chhattisgarhi, Deccan, Swedish, Bulgarian, Tatar, Kazakh, Ilocano, Lombard, Haitian Creole, Uyghur, Balochi, Konkani, Afrikaans, Albanian, Armenian, Batak, Balinese, Bemba, Bosnian, Buginese, Catalan, Cebuano, Croatian, Danish, Estonian, Finnish, Georgian, Hebrew, Icelandic, Kinyarwanda, Kyrgyz, Norwegian, Napoletano-Calabrese, Central Khmer, Eastern Farsi, Akan, Hiligaynon, Kurmanji, Shona, Mossi, Xhosa, Minangkabau, Turkmen, Makhuwa, Santali, Batak Toba, Ganda, Sukuma, Tsonga, Kikuyu, Umbundu, Tshiluba, Wolof, Southern Qiang, Bikol, Varhadi-Nagpuri, Tulu, Pangasinan, Waray-Waray, Slovak, Romani, Papiamento, Ladin, Tibetan, Guarani.
+            </p>
+          </div>
+
           <div className="text-center">
             <h3 className="text-2xl font-bold text-foreground mb-3">Ready to Write Error-Free Content?</h3>
             <p className="text-muted-foreground mb-6">Join thousands of users who trust CorrectNow for professional writing</p>
@@ -830,7 +839,7 @@ const Index = () => {
                   ))}
                 </div>
                 <p className="text-foreground mb-4 leading-relaxed">
-                  "CorrectNow helps me write without fear of mistakes. Very easy to use."
+                  "CorrectNow helps me write without fear of mistakes. Very easy to use. (English, Hindi)"
                 </p>
                 <div className="flex items-center gap-3 pt-3 border-t border-border">
                   <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
@@ -853,7 +862,7 @@ const Index = () => {
                   ))}
                 </div>
                 <p className="text-foreground mb-4 leading-relaxed">
-                  "Finally, a grammar checker that understands native languages properly."
+                  "Finally, a grammar checker that understands native languages properly. (Malayalam, Tamil)"
                 </p>
                 <div className="flex items-center gap-3 pt-3 border-t border-border">
                   <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
@@ -876,7 +885,7 @@ const Index = () => {
                   ))}
                 </div>
                 <p className="text-foreground mb-4 leading-relaxed">
-                  "We save time and improve clarity across languages. Highly useful."
+                  "We save time and improve clarity across languages. Highly useful. (English, Marathi)"
                 </p>
                 <div className="flex items-center gap-3 pt-3 border-t border-border">
                   <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
@@ -899,7 +908,7 @@ const Index = () => {
                   ))}
                 </div>
                 <p className="text-foreground mb-4 leading-relaxed">
-                  "My emails and reports sound more professional now."
+                  "My emails and reports sound more professional now. (English, Telugu)"
                 </p>
                 <div className="flex items-center gap-3 pt-3 border-t border-border">
                   <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
@@ -922,7 +931,7 @@ const Index = () => {
                   ))}
                 </div>
                 <p className="text-foreground mb-4 leading-relaxed">
-                  "Excellent accuracy for research writing. Rating: 10/10."
+                  "Excellent accuracy for research writing. Rating: 10/10. (German, English)"
                 </p>
                 <div className="flex items-center gap-3 pt-3 border-t border-border">
                   <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
@@ -945,7 +954,7 @@ const Index = () => {
                   ))}
                 </div>
                 <p className="text-foreground mb-4 leading-relaxed">
-                  "CorrectNow understands grammar and context perfectly. Powerful tool."
+                  "CorrectNow understands grammar and context perfectly. Powerful tool. (Tamil, English)"
                 </p>
                 <div className="flex items-center gap-3 pt-3 border-t border-border">
                   <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold">
