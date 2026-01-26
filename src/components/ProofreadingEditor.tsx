@@ -306,11 +306,8 @@ const highlightText = (text: string, changeList: Change[]) => {
   );
 
   sortedChanges.forEach((change) => {
-    const rawTarget = change.original;
-    const target = rawTarget?.trim();
-    if (!rawTarget || !target) return;
-    if (/^\s+$/.test(rawTarget)) return;
-    if (/\n/.test(rawTarget)) return;
+    const target = change.original;
+    if (!target) return;
     const escapedTarget = escapeHtml(target);
     // Use a more robust regex that handles Unicode properly
     const pattern = escapeRegExp(escapedTarget).replace(/\s+/g, '\\s+');
@@ -784,13 +781,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const target = event.target as HTMLElement;
     if (target.classList.contains('change-error')) {
       const errorText = target.textContent?.trim() || "";
-      if (
-        hoverSuggestion.open &&
-        hoverSuggestion.original &&
-        hoverSuggestion.original === errorText
-      ) {
-        return;
-      }
       if (errorText && errorText !== hoveredError) {
         setHoveredError(errorText);
         if (hoverCloseTimerRef.current) {
@@ -803,9 +793,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         }
         // Set new timer for hover trigger
         hoverTimerRef.current = window.setTimeout(() => {
-          if (hoverSuggestion.open) {
-            setHoverSuggestion((prev) => ({ ...prev, open: false }));
-          }
           const suggestions = getSuggestionsForText(errorText);
           if (suggestions.length) {
             const rect = target.getBoundingClientRect();
@@ -932,7 +919,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .map((change: Change) => ({ ...change, status: "pending" as const }))
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
-                if (!change.original.trim()) return false;
                 if (!normalizedInput.includes(change.original)) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
                 return true;
@@ -1014,7 +1000,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .map((change: Change) => ({ ...change, status: "pending" as const }))
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
-                if (!change.original.trim()) return false;
                 if (!normalizedInput.includes(change.original)) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
                 return true;
