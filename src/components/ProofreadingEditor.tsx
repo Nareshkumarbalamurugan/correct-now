@@ -681,8 +681,18 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     suggestions: Array<{ change: Change; index: number }>;
     original: string;
   }>({ open: false, suggestions: [], original: "" });
+  const [hoverSuggestion, setHoverSuggestion] = useState<{
+    open: boolean;
+    top: number;
+    left: number;
+    change?: Change;
+    index?: number;
+    original: string;
+  }>({ open: false, top: 0, left: 0, original: "" });
   const [showCreditsDialog, setShowCreditsDialog] = useState(false);
   const hoverTimerRef = useRef<number | null>(null);
+  const hoverCloseTimerRef = useRef<number | null>(null);
+  const [isHoverPopover, setIsHoverPopover] = useState(false);
   const [hoveredError, setHoveredError] = useState<string | null>(null);
   const [checksRemaining, setChecksRemaining] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -718,9 +728,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     }
   };
 
-  const openSuggestionsForText = (originalText: string) => {
+  const getSuggestionsForText = (originalText: string) => {
     const normalizedTarget = normalizeToken(originalText);
-    const allSuggestionsForWord = changes
+    return changes
       .map((change, idx) => ({ change, index: idx }))
       .filter(
         ({ change }) =>
@@ -729,7 +739,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           change.status !== "accepted" &&
           change.status !== "ignored"
       );
+  };
 
+  const openSuggestionsForText = (originalText: string) => {
+    const allSuggestionsForWord = getSuggestionsForText(originalText);
     if (!allSuggestionsForWord.length) return;
     setSelectedWordDialog({
       open: true,
@@ -770,24 +783,30 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       const errorText = target.textContent?.trim() || "";
       if (errorText && errorText !== hoveredError) {
         setHoveredError(errorText);
+        if (hoverCloseTimerRef.current) {
+          clearTimeout(hoverCloseTimerRef.current);
+          hoverCloseTimerRef.current = null;
+        }
         // Clear existing timer
         if (hoverTimerRef.current) {
           clearTimeout(hoverTimerRef.current);
         }
         // Set new timer for hover trigger
         hoverTimerRef.current = window.setTimeout(() => {
-          openSuggestionsForText(errorText);
-          // Find and scroll to the matching suggestion
-          const normalizedTarget = normalizeToken(errorText);
-          const matchIndex = changes.findIndex(
-            (change) =>
-              change.original &&
-              normalizeToken(change.original) === normalizedTarget &&
-              change.status !== "accepted" &&
-              change.status !== "ignored"
-          );
-          if (matchIndex !== -1) {
-            scrollToSuggestion(matchIndex);
+          const suggestions = getSuggestionsForText(errorText);
+          if (suggestions.length) {
+            const rect = target.getBoundingClientRect();
+            const left = Math.min(window.innerWidth - 260, rect.right + 10);
+            const top = Math.max(8, rect.top - 8);
+            scrollToSuggestion(suggestions[0].index);
+            setHoverSuggestion({
+              open: true,
+              top,
+              left,
+              change: suggestions[0].change,
+              index: suggestions[0].index,
+              original: errorText,
+            });
           }
           hoverTimerRef.current = null;
         }, 500); // 500ms hover delay
@@ -801,6 +820,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           hoverTimerRef.current = null;
         }
       }
+      if (hoverSuggestion.open && !isHoverPopover) {
+        hoverCloseTimerRef.current = window.setTimeout(() => {
+          setHoverSuggestion((prev) => ({ ...prev, open: false }));
+          hoverCloseTimerRef.current = null;
+        }, 200);
+      }
     }
   };
 
@@ -809,6 +834,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
+    }
+    if (hoverSuggestion.open && !isHoverPopover) {
+      hoverCloseTimerRef.current = window.setTimeout(() => {
+        setHoverSuggestion((prev) => ({ ...prev, open: false }));
+        hoverCloseTimerRef.current = null;
+      }, 200);
     }
   };
 
@@ -1446,6 +1477,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                   <textarea
                     ref={textareaRef}
                     value={inputText}
+                    onMouseDown={() => setShouldBlinkLanguage(false)}
+                    onTouchStart={() => setShouldBlinkLanguage(false)}
+                    onKeyDown={() => setShouldBlinkLanguage(false)}
                     onPointerDown={() => setShouldBlinkLanguage(false)}
                     onChange={(e) => {
                       // Skip manual updates during voice recording to prevent duplication
@@ -1521,6 +1555,46 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                 <CardTitle className="text-xl">Suggestions</CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
+                {hoverSuggestion.open && hoverSuggestion.change && (
+                  <div
+                    className="hover-suggestion-popover"
+                    style={{ top: hoverSuggestion.top, left: hoverSuggestion.left }}
+                    onMouseEnter={() => {
+                      setIsHoverPopover(true);
+                      if (hoverCloseTimerRef.current) {
+                        clearTimeout(hoverCloseTimerRef.current);
+                        hoverCloseTimerRef.current = null;
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      setIsHoverPopover(false);
+                      hoverCloseTimerRef.current = window.setTimeout(() => {
+                        setHoverSuggestion((prev) => ({ ...prev, open: false }));
+                        hoverCloseTimerRef.current = null;
+                      }, 200);
+                    }}
+                  >
+                    <div className="hover-suggestion-arrow" />
+                    <div className="text-[11px] text-muted-foreground">Suggestion</div>
+                    <div className="text-sm font-semibold text-success">
+                      {hoverSuggestion.change.corrected}
+                    </div>
+                    {typeof hoverSuggestion.index === "number" && (
+                      <div className="mt-2">
+                        <Button
+                          size="sm"
+                          variant="accent"
+                          onClick={() => {
+                            handleAccept(hoverSuggestion.index as number);
+                            setHoverSuggestion((prev) => ({ ...prev, open: false }));
+                          }}
+                        >
+                          Accept
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="border border-border rounded-lg p-4">
                   <div className="flex flex-col gap-3 mb-5">
                     <div className="flex items-center justify-between gap-3">
