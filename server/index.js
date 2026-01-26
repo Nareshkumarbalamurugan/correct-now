@@ -843,6 +843,68 @@ app.post("/api/set-admin", async (req, res) => {
   }
 });
 
+// Create new user (admin only)
+app.post("/api/admin/create-user", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "Name, email, and password are required" });
+    }
+
+    if (!adminDb) {
+      return res.status(500).json({ error: "Database not initialized" });
+    }
+
+    // Check if user already exists
+    try {
+      await admin.auth().getUserByEmail(email);
+      return res.status(400).json({ error: "User with this email already exists" });
+    } catch (error) {
+      // User doesn't exist, continue with creation
+    }
+
+    // Create user in Firebase Auth
+    const userRecord = await admin.auth().createUser({
+      email,
+      password,
+      emailVerified: true,
+      displayName: name,
+    });
+
+    console.log(`Created new user: ${email} (${userRecord.uid})`);
+
+    // Create user document in Firestore
+    const nowIso = new Date().toISOString();
+    await adminDb.collection("users").doc(userRecord.uid).set({
+      uid: userRecord.uid,
+      email: email,
+      name: name,
+      plan: "free",
+      wordLimit: 200,
+      credits: 0,
+      creditsUsed: 0,
+      subscriptionStatus: "inactive",
+      status: "active",
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+
+    console.log(`Created Firestore document for user: ${userRecord.uid}`);
+
+    res.json({ 
+      success: true, 
+      message: `User created successfully: ${email}`,
+      uid: userRecord.uid,
+      email: email,
+      name: name
+    });
+  } catch (error) {
+    console.error("Create user error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get("/api/razorpay/key", (_req, res) => {
   const keyId = process.env.RAZORPAY_KEY_ID;
   if (!keyId) {

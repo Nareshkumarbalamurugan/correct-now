@@ -65,10 +65,18 @@ const Index = () => {
 
   useEffect(() => {
     const auth = getFirebaseAuth();
+    let unsubscribeProfile: (() => void) | null = null;
+    
     const unsub = auth
-      ? onAuthStateChanged(auth, async (user) => {
+      ? onAuthStateChanged(auth, (user) => {
           setIsAuthenticated(Boolean(user));
           setUserEmail(user?.email || "");
+          
+          // Clean up previous profile listener if exists
+          if (unsubscribeProfile) {
+            unsubscribeProfile();
+            unsubscribeProfile = null;
+          }
           
           // Only load docs for authenticated users
           if (user) {
@@ -89,7 +97,7 @@ const Index = () => {
             const db = getFirebaseDb();
             if (db) {
               // Set up real-time listener for user profile
-              const unsubscribeProfile = onSnapshot(
+              unsubscribeProfile = onSnapshot(
                 doc(db, "users", user.uid),
                 (userDoc) => {
                   if (userDoc.exists()) {
@@ -155,14 +163,13 @@ const Index = () => {
                   setIsLoadingProfile(false);
                 }
               );
-              
-              // Return cleanup function
-              return () => {
-                unsubscribeProfile();
-              };
+            } else {
+              // Database not available
+              setIsLoadingProfile(false);
             }
           } else {
             setUserProfile(null);
+            setIsLoadingProfile(false);
           }
           
           setIsAuthLoading(false);
@@ -198,6 +205,7 @@ const Index = () => {
 
     return () => {
       if (unsub) unsub();
+      if (unsubscribeProfile) unsubscribeProfile();
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("correctnow:docs-updated", handleDocsUpdated);

@@ -27,10 +27,19 @@ import {
   Redo,
   X,
   Coins,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Link } from "react-router-dom";
 import { getFirebaseAuth, getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
 import {
@@ -148,6 +157,13 @@ const Admin = () => {
   const [addonCreditsAmount, setAddonCreditsAmount] = useState("");
   const [addonCreditsExpiry, setAddonCreditsExpiry] = useState("");
   const [savingAddonCredits, setSavingAddonCredits] = useState(false);
+
+  // User creation
+  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [creatingUser, setCreatingUser] = useState(false);
 
   // All hooks must be called before any conditional returns
   const filteredUsers = users.filter(
@@ -510,6 +526,75 @@ const Admin = () => {
     const defaultExpiry = new Date();
     defaultExpiry.setDate(defaultExpiry.getDate() + 30);
     setAddonCreditsExpiry(defaultExpiry.toISOString().slice(0, 16));
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newUserEmail)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    // Password validation (minimum 6 characters)
+    if (newUserPassword.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
+
+    setCreatingUser(true);
+    try {
+      const response = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newUserName.trim(),
+          email: newUserEmail.trim(),
+          password: newUserPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create user");
+      }
+
+      // Add new user to local state
+      setUsers((prev) => [
+        {
+          id: data.uid,
+          name: data.name,
+          email: data.email,
+          plan: "free",
+          wordLimit: 200,
+          credits: 0,
+          creditsUsed: 0,
+          subscriptionStatus: "inactive",
+          status: "active",
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+
+      toast.success(`User created successfully! Email: ${data.email}, Password: ${newUserPassword}`);
+      
+      // Reset form
+      setIsCreateUserOpen(false);
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewUserPassword("");
+    } catch (error) {
+      console.error("Failed to create user:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to create user");
+    } finally {
+      setCreatingUser(false);
+    }
   };
 
   const handleSaveAddonCredits = async () => {
@@ -1178,10 +1263,20 @@ const Admin = () => {
                       Manage all registered users
                     </p>
                   </div>
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Users
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      onClick={() => setIsCreateUserOpen(true)}
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Create User
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export Users
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Search & Filter */}
@@ -1510,6 +1605,94 @@ const Admin = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Create User Dialog */}
+                <Dialog open={isCreateUserOpen} onOpenChange={setIsCreateUserOpen}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Create New User</DialogTitle>
+                      <DialogDescription>
+                        Create a new user account with email and password. The user can log in immediately with these credentials.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          Full Name
+                        </label>
+                        <Input
+                          type="text"
+                          value={newUserName}
+                          onChange={(e) => setNewUserName(e.target.value)}
+                          placeholder="John Doe"
+                          disabled={creatingUser}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          Email Address
+                        </label>
+                        <Input
+                          type="email"
+                          value={newUserEmail}
+                          onChange={(e) => setNewUserEmail(e.target.value)}
+                          placeholder="user@example.com"
+                          disabled={creatingUser}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          Password
+                        </label>
+                        <Input
+                          type="text"
+                          value={newUserPassword}
+                          onChange={(e) => setNewUserPassword(e.target.value)}
+                          placeholder="Minimum 6 characters"
+                          disabled={creatingUser}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Share this password securely with the user
+                        </p>
+                      </div>
+
+                      <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-1">
+                          ℹ️ Note:
+                        </p>
+                        <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                          <li>• Email verification will be auto-enabled</li>
+                          <li>• User starts with Free plan (200 word limit)</li>
+                          <li>• You can upgrade their plan or add credits later</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setIsCreateUserOpen(false);
+                          setNewUserName("");
+                          setNewUserEmail("");
+                          setNewUserPassword("");
+                        }}
+                        disabled={creatingUser}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleCreateUser}
+                        disabled={creatingUser}
+                      >
+                        {creatingUser ? "Creating..." : "Create User"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             )}
 
