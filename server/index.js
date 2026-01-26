@@ -1252,7 +1252,7 @@ Task: Correct ONLY grammar, spelling, and punctuation errors.
 Rules:
 - Fix errors without rewriting or changing meaning.
 - Preserve tone and wording; no extra facts.
-- List every change with concise explanations (<=12 words).
+- For each change, give a clear, user-friendly reason (8-14 words).
 - If no changes, return original text and empty changes.
 Return ONLY valid JSON in this format:
 {

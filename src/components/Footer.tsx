@@ -15,9 +15,6 @@ const Footer = () => {
           </div>
 
           <nav className="flex flex-wrap items-center justify-center md:justify-start gap-x-6 gap-y-3 text-sm text-muted-foreground">
-            <Link to="/about" className="hover:text-foreground transition-colors">
-              About Us
-            </Link>
             <Link to="/blog" className="hover:text-foreground transition-colors">
               Blog
             </Link>

@@ -125,6 +125,12 @@ const Header = () => {
 
           <nav className="hidden md:flex items-center justify-center gap-4 lg:gap-6">
             <Link
+              to="/about"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              About Us
+            </Link>
+            <Link
               to="/features"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -176,6 +182,12 @@ const Header = () => {
         </div>
 
         <nav className="flex md:hidden items-center justify-center gap-3 overflow-x-auto scrollbar-hide pb-2 -mt-1">
+          <Link
+            to="/about"
+            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+          >
+            About Us
+          </Link>
           <Link
             to="/features"
             className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
