@@ -148,7 +148,16 @@ const Index = () => {
                 },
                 (error) => {
                   console.error("Error in profile listener:", error);
-                  // Set defaults on error
+                  
+                  // Handle permission errors (user might have been deleted or switched accounts)
+                  if (error.code === "permission-denied" || error.message?.includes("permission")) {
+                    console.log("Permission denied - user may have switched accounts");
+                    setUserProfile(null);
+                    setIsLoadingProfile(false);
+                    return;
+                  }
+                  
+                  // Set defaults on other errors
                   setUserProfile({
                     plan: "free",
                     wordLimit: 1000,

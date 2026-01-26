@@ -65,17 +65,35 @@ export const startSessionEnforcement = () => {
 
     const ref = doc(db, "users", user.uid);
     unsubscribeDoc = onSnapshot(ref, async (snap) => {
-      if (!snap.exists()) return;
-      const data = snap.data() as { sessionId?: string; status?: string };
+      if (!snap.exists()) {
+        // New user or admin - initialize session
+        await setDoc(
+          ref,
+          {
+            email: user.email || "",
+            sessionId: getSessionId(),
+            sessionUpdatedAt: new Date().toISOString(),
+            status: "active",
+          },
+          { merge: true }
+        );
+        return;
+      }
+      
+      const data = snap.data() as { sessionId?: string; status?: string; email?: string };
       const localSessionId = getSessionId();
 
-      if (data.status === "deactivated") {
+      // Skip session enforcement for admin emails (check both auth and firestore)
+      const userEmail = user.email || data.email || "";
+      const isAdmin = userEmail.includes("@correctnow.app") || userEmail.includes("admin");
+
+      if (data.status === "deactivated" && !isAdmin) {
         await signOut(auth);
         toast.error("Your account is deactivated. Contact support to reactivate.");
         return;
       }
 
-      if (data.sessionId && data.sessionId !== localSessionId) {
+      if (data.sessionId && data.sessionId !== localSessionId && !isAdmin) {
         await signOut(auth);
         toast.error("You were signed out because your account was used on another device.");
         return;

@@ -856,12 +856,30 @@ app.post("/api/admin/create-user", async (req, res) => {
       return res.status(500).json({ error: "Database not initialized" });
     }
 
-    // Check if user already exists
+    // Check if user already exists in Auth
     try {
-      await admin.auth().getUserByEmail(email);
-      return res.status(400).json({ error: "User with this email already exists" });
+      const existingUser = await admin.auth().getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "User with this email already exists" });
+      }
     } catch (error) {
+      // If error code is 'auth/user-not-found', user doesn't exist - continue
+      if (error.code !== 'auth/user-not-found') {
+        // Some other error occurred
+        console.error("Error checking user existence:", error);
+        return res.status(500).json({ error: "Failed to check if user exists" });
+      }
       // User doesn't exist, continue with creation
+    }
+
+    // Check if user already exists in Firestore by querying email field
+    const existingUserQuery = await adminDb.collection("users")
+      .where("email", "==", email)
+      .limit(1)
+      .get();
+    
+    if (!existingUserQuery.empty) {
+      return res.status(400).json({ error: "User with this email already exists" });
     }
 
     // Create user in Firebase Auth
@@ -901,6 +919,46 @@ app.post("/api/admin/create-user", async (req, res) => {
     });
   } catch (error) {
     console.error("Create user error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete user (admin only) - deletes from both Auth and Firestore
+app.post("/api/admin/delete-user", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    if (!adminDb) {
+      return res.status(500).json({ error: "Database not initialized" });
+    }
+
+    // Delete from Firebase Auth
+    try {
+      await admin.auth().deleteUser(userId);
+      console.log(`Deleted user from Auth: ${userId}`);
+    } catch (error) {
+      // If user doesn't exist in Auth, continue to delete from Firestore
+      console.warn(`User not found in Auth (${userId}), continuing to delete from Firestore:`, error.message);
+    }
+
+    // Delete from Firestore
+    try {
+      await adminDb.collection("users").doc(userId).delete();
+      console.log(`Deleted user document from Firestore: ${userId}`);
+    } catch (error) {
+      console.warn(`Failed to delete Firestore document for ${userId}:`, error.message);
+    }
+
+    res.json({ 
+      success: true, 
+      message: `User deleted successfully: ${userId}`
+    });
+  } catch (error) {
+    console.error("Delete user error:", error);
     res.status(500).json({ error: error.message });
   }
 });

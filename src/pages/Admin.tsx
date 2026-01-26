@@ -291,7 +291,19 @@ const Admin = () => {
 
     setIsDeletingUsers(true);
     try {
-      await deleteDoc(doc(db, "users", userId));
+      // Call backend API to delete from both Auth and Firestore
+      const response = await fetch("/api/admin/delete-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete user");
+      }
+
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       setSelectedUsers((prev) => {
         const newSet = new Set(prev);
@@ -301,7 +313,7 @@ const Admin = () => {
       toast.success("User deleted successfully");
     } catch (error) {
       console.error("Error deleting user:", error);
-      toast.error("Failed to delete user");
+      toast.error(error instanceof Error ? error.message : "Failed to delete user");
     } finally {
       setIsDeletingUsers(false);
       setIsDeleteDialogOpen(false);
@@ -320,7 +332,19 @@ const Admin = () => {
     try {
       for (const userId of Array.from(selectedUsers)) {
         try {
-          await deleteDoc(doc(db, "users", userId));
+          // Call backend API to delete from both Auth and Firestore
+          const response = await fetch("/api/admin/delete-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || "Failed to delete user");
+          }
+
           successCount++;
         } catch (error) {
           console.error(`Error deleting user ${userId}:`, error);
@@ -596,12 +620,65 @@ const Admin = () => {
     setLoginError("");
     setLoggingIn(true);
     try {
+      // Clear any existing session data before login
+      localStorage.removeItem("correctnow:sessionId");
+      
       await signInWithEmailAndPassword(auth, email, password);
+      
+      // Reset admin state
+      setUsers([]);
+      setSelectedUsers(new Set());
+      setActiveTab("overview");
     } catch (error: any) {
       setLoginError(error.message || "Failed to login");
     } finally {
       setLoggingIn(false);
     }
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Clear session data
+      localStorage.removeItem("correctnow:sessionId");
+      
+      // Clear admin state
+      setUsers([]);
+      setSelectedUsers(new Set());
+      setBlogPosts([]);
+      setCoupons([]);
+      setSuggestions([]);
+      setActiveTab("overview");
+      
+      // Sign out
+      await auth.signOut();
+    } catch (error) {
+      console.error("Error during logout:", error);
+      toast.error("Failed to sign out");
+    }
+  };
+
+  const downloadSampleCSV = () => {
+    // Create sample CSV content with timestamp to avoid duplicates
+    const timestamp = Date.now();
+    const csvContent = `name,email,password
+John Doe,john${timestamp}@example.com,password123
+Jane Smith,jane${timestamp}@example.com,password456
+Bob Wilson,bob${timestamp}@example.com,password789`;
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'sample_users.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast.success("Sample CSV downloaded! Edit emails before uploading.");
   };
 
   const handleEditUser = (userId: string, userData: AdminUser) => {
@@ -696,8 +773,20 @@ const Admin = () => {
   };
 
   const handleBulkUpload = async () => {
+    // Prevent double-click/double submission
+    if (isUploadingBulk) {
+      return;
+    }
+
     if (!bulkUploadFile) {
       toast.error("Please select a CSV file");
+      return;
+    }
+
+    // Validate file type - must be CSV
+    const fileName = bulkUploadFile.name.toLowerCase();
+    if (!fileName.endsWith('.csv')) {
+      toast.error("Please upload a CSV file (.csv), not Excel (.xlsx) or other formats");
       return;
     }
 
@@ -707,16 +796,31 @@ const Admin = () => {
 
     try {
       const text = await bulkUploadFile.text();
+      console.log('Raw CSV text:', text); // Debug log
+      
       const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+      console.log('Total lines after split:', lines.length); // Debug log
       
       if (lines.length === 0) {
         toast.error("CSV file is empty");
+        setBulkUploadResults({ success: 0, failed: 0, errors: ["CSV file is empty"] });
         return;
       }
 
-      // Skip header if it exists
-      const startIndex = lines[0].toLowerCase().includes('name') ? 1 : 0;
+      // Skip header if it exists (check for common header keywords)
+      const firstLine = lines[0].toLowerCase();
+      const hasHeader = firstLine.includes('name') || firstLine.includes('email') || firstLine.includes('password');
+      const startIndex = hasHeader ? 1 : 0;
       const userLines = lines.slice(startIndex);
+      
+      console.log('Has header:', hasHeader); // Debug log
+      console.log('User lines to process:', userLines.length); // Debug log
+
+      if (userLines.length === 0) {
+        toast.error("No user data found in CSV");
+        setBulkUploadResults({ success: 0, failed: 0, errors: ["No user data found (file only contains header)"] });
+        return;
+      }
 
       const results = {
         success: 0,
@@ -726,11 +830,16 @@ const Admin = () => {
 
       for (let i = 0; i < userLines.length; i++) {
         const line = userLines[i];
+        console.log(`Processing line ${i + 1}:`, line); // Debug log
+        
+        // Split by comma and clean up whitespace and quotes
         const parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
+        
+        console.log('Parts:', parts); // Debug log
         
         if (parts.length < 3) {
           results.failed++;
-          results.errors.push(`Line ${i + startIndex + 1}: Invalid format (expected: name,email,password)`);
+          results.errors.push(`Line ${i + startIndex + 1}: Invalid format (expected: name,email,password) - got ${parts.length} field(s)`);
           continue;
         }
 
@@ -738,7 +847,7 @@ const Admin = () => {
 
         if (!name || !email || !password) {
           results.failed++;
-          results.errors.push(`Line ${i + startIndex + 1}: Missing required fields`);
+          results.errors.push(`Line ${i + startIndex + 1}: Missing required fields (name: "${name}", email: "${email}", password: "${password}")`);
           continue;
         }
 
@@ -790,9 +899,24 @@ const Admin = () => {
       if (results.failed > 0) {
         toast.error(`Failed to create ${results.failed} user(s). Check details below.`);
       }
+      if (results.success === 0 && results.failed === 0) {
+        toast.warning("No users were processed. Check the CSV format.");
+      }
+
+      if (results.success > 0 && results.failed === 0) {
+        setIsBulkUploadOpen(false);
+        setBulkUploadFile(null);
+        setBulkUploadProgress(0);
+        setBulkUploadResults(null);
+      }
     } catch (error) {
       console.error("Bulk upload error:", error);
       toast.error("Failed to process CSV file");
+      setBulkUploadResults({ 
+        success: 0, 
+        failed: 0, 
+        errors: [`File processing error: ${error instanceof Error ? error.message : 'Unknown error'}`] 
+      });
     } finally {
       setIsUploadingBulk(false);
     }
@@ -1289,7 +1413,7 @@ const Admin = () => {
                 </button>
               ))}
               <button 
-                onClick={() => auth.signOut()}
+                onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
               >
                 <LogOut className="w-5 h-5" />
@@ -1481,6 +1605,17 @@ const Admin = () => {
                       <Upload className="w-4 h-4 mr-2" />
                       Bulk Upload
                     </Button>
+                    {selectedUsers.size > 0 && (
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={() => setIsDeleteDialogOpen(true)}
+                        disabled={isDeletingUsers}
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Delete Selected ({selectedUsers.size})
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm">
                       <Download className="w-4 h-4 mr-2" />
                       Export Users
@@ -1957,32 +2092,51 @@ const Admin = () => {
                     <DialogHeader>
                       <DialogTitle>Bulk Upload Users</DialogTitle>
                       <DialogDescription>
-                        Upload a CSV file to create multiple users at once. Format: name,email,password
+                        Upload a CSV file (NOT Excel .xlsx) to create multiple users. Format: name,email,password
                       </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-4">
                       <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                        <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
-                          CSV Format Requirements:
-                        </p>
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                            CSV Format Requirements:
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={downloadSampleCSV}
+                            className="h-7 text-xs"
+                          >
+                            <Download className="w-3 h-3 mr-1" />
+                            Download Sample
+                          </Button>
+                        </div>
                         <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                          <li>• File must be .csv format (not .xlsx Excel file)</li>
                           <li>• Each line: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">name,email,password</code></li>
                           <li>• Optional header row (will be skipped if detected)</li>
                           <li>• Example: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">John Doe,john@example.com,pass123</code></li>
+                          <li>• Download sample CSV above, edit it with your users, and upload</li>
                         </ul>
                       </div>
 
                       <div>
                         <label className="block text-sm font-medium mb-2">
-                          Select CSV File
+                          Select CSV File (NOT Excel)
                         </label>
                         <Input
                           type="file"
-                          accept=".csv,.txt"
+                          accept=".csv,text/csv"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              // Additional client-side validation
+                              if (!file.name.toLowerCase().endsWith('.csv')) {
+                                toast.error("Please select a CSV file (.csv), not Excel (.xlsx)");
+                                e.target.value = '';
+                                return;
+                              }
                               setBulkUploadFile(file);
                               setBulkUploadResults(null);
                             }
@@ -2059,9 +2213,9 @@ const Admin = () => {
                       </Button>
                       <Button
                         onClick={handleBulkUpload}
-                        disabled={!bulkUploadFile || isUploadingBulk}
+                        disabled={!bulkUploadFile || isUploadingBulk || (bulkUploadResults?.success ?? 0) > 0}
                       >
-                        {isUploadingBulk ? "Uploading..." : "Upload Users"}
+                        {isUploadingBulk ? "Uploading..." : (bulkUploadResults?.success ?? 0) > 0 ? "Uploaded" : "Upload Users"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
