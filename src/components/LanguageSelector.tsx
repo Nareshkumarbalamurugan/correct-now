@@ -32,7 +32,7 @@ interface LanguageSelectorProps {
 }
 
 export const LANGUAGE_OPTIONS = [
-  { code: "auto", name: "Other (Common)" },
+  { code: "auto", name: "Any language (Common)" },
   // Global / Most Widely Used
   { code: "en", name: "English" },
   { code: "zh", name: "Chinese Mandarin (中文)" },

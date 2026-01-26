@@ -1522,9 +1522,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-4">
                   <p className="text-sm text-muted-foreground">
-                    {!language || language === ""
-                      ? "Please select a language to check"
-                      : `Checking in ${language.toUpperCase()}`}
+                    
                   </p>
                   <div className="flex flex-wrap items-center gap-3">
                     <Button
