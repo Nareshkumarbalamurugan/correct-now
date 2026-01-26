@@ -28,6 +28,7 @@ import {
   X,
   Coins,
   UserPlus,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +77,8 @@ type AdminUser = {
   creditsUsed?: number;
   addonCredits?: number;
   addonCreditsExpiryAt?: string;
+  adminCredits?: number;
+  adminCreditsExpiryAt?: string;
   subscriptionStatus?: string;
   subscriptionUpdatedAt?: string;
   updatedAt?: string;
@@ -164,6 +167,23 @@ const Admin = () => {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [creatingUser, setCreatingUser] = useState(false);
+
+  // Bulk user upload
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [bulkUploadFile, setBulkUploadFile] = useState<File | null>(null);
+  const [bulkUploadProgress, setBulkUploadProgress] = useState(0);
+  const [bulkUploadResults, setBulkUploadResults] = useState<{
+    success: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
+  const [isUploadingBulk, setIsUploadingBulk] = useState(false);
+
+  // User deletion
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [isDeletingUsers, setIsDeletingUsers] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
 
   // All hooks must be called before any conditional returns
   const filteredUsers = users.filter(
@@ -262,6 +282,84 @@ const Admin = () => {
       );
     } finally {
       setReactivatingUserId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    setIsDeletingUsers(true);
+    try {
+      await deleteDoc(doc(db, "users", userId));
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setSelectedUsers((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+      toast.success("User deleted successfully");
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("Failed to delete user");
+    } finally {
+      setIsDeletingUsers(false);
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
+    }
+  };
+
+  const handleDeleteSelectedUsers = async () => {
+    const db = getFirebaseDb();
+    if (!db || selectedUsers.size === 0) return;
+
+    setIsDeletingUsers(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (const userId of Array.from(selectedUsers)) {
+        try {
+          await deleteDoc(doc(db, "users", userId));
+          successCount++;
+        } catch (error) {
+          console.error(`Error deleting user ${userId}:`, error);
+          failCount++;
+        }
+      }
+
+      setUsers((prev) => prev.filter((u) => !selectedUsers.has(u.id)));
+      setSelectedUsers(new Set());
+
+      if (successCount > 0) {
+        toast.success(`${successCount} user(s) deleted successfully`);
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to delete ${failCount} user(s)`);
+      }
+    } finally {
+      setIsDeletingUsers(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+
+  const toggleSelectUser = (userId: string) => {
+    setSelectedUsers((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUsers.size === filteredUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(filteredUsers.map((u) => u.id)));
     }
   };
 
@@ -594,6 +692,109 @@ const Admin = () => {
       toast.error(error instanceof Error ? error.message : "Failed to create user");
     } finally {
       setCreatingUser(false);
+    }
+  };
+
+  const handleBulkUpload = async () => {
+    if (!bulkUploadFile) {
+      toast.error("Please select a CSV file");
+      return;
+    }
+
+    setIsUploadingBulk(true);
+    setBulkUploadProgress(0);
+    setBulkUploadResults(null);
+
+    try {
+      const text = await bulkUploadFile.text();
+      const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+      
+      if (lines.length === 0) {
+        toast.error("CSV file is empty");
+        return;
+      }
+
+      // Skip header if it exists
+      const startIndex = lines[0].toLowerCase().includes('name') ? 1 : 0;
+      const userLines = lines.slice(startIndex);
+
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: [] as string[],
+      };
+
+      for (let i = 0; i < userLines.length; i++) {
+        const line = userLines[i];
+        const parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
+        
+        if (parts.length < 3) {
+          results.failed++;
+          results.errors.push(`Line ${i + startIndex + 1}: Invalid format (expected: name,email,password)`);
+          continue;
+        }
+
+        const [name, email, password] = parts;
+
+        if (!name || !email || !password) {
+          results.failed++;
+          results.errors.push(`Line ${i + startIndex + 1}: Missing required fields`);
+          continue;
+        }
+
+        try {
+          const response = await fetch("/api/admin/create-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, email, password }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || "Failed to create user");
+          }
+
+          results.success++;
+          
+          // Add new user to local state
+          setUsers((prev) => [
+            {
+              id: data.uid,
+              name: data.name,
+              email: data.email,
+              plan: "free",
+              wordLimit: 200,
+              credits: 0,
+              creditsUsed: 0,
+              subscriptionStatus: "inactive",
+              status: "active",
+              createdAt: new Date().toISOString(),
+            },
+            ...prev,
+          ]);
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`${email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+
+        // Update progress
+        setBulkUploadProgress(Math.round(((i + 1) / userLines.length) * 100));
+      }
+
+      setBulkUploadResults(results);
+      
+      if (results.success > 0) {
+        toast.success(`Successfully created ${results.success} user(s)`);
+      }
+      if (results.failed > 0) {
+        toast.error(`Failed to create ${results.failed} user(s). Check details below.`);
+      }
+    } catch (error) {
+      console.error("Bulk upload error:", error);
+      toast.error("Failed to process CSV file");
+    } finally {
+      setIsUploadingBulk(false);
     }
   };
 
@@ -1272,6 +1473,14 @@ const Admin = () => {
                       <UserPlus className="w-4 h-4 mr-2" />
                       Create User
                     </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setIsBulkUploadOpen(true)}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Bulk Upload
+                    </Button>
                     <Button variant="outline" size="sm">
                       <Download className="w-4 h-4 mr-2" />
                       Export Users
@@ -1302,6 +1511,14 @@ const Admin = () => {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-border bg-muted/50">
+                          <th className="py-4 px-6 text-sm font-medium text-muted-foreground w-12">
+                            <input
+                              type="checkbox"
+                              checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
+                              onChange={toggleSelectAll}
+                              className="w-4 h-4 cursor-pointer"
+                            />
+                          </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             User
                           </th>
@@ -1316,6 +1533,9 @@ const Admin = () => {
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Addon Credits
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Addon Used
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Usage
@@ -1338,19 +1558,48 @@ const Admin = () => {
                             className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                           >
                             <td className="py-4 px-6">
+                              <input
+                                type="checkbox"
+                                checked={selectedUsers.has(user.id)}
+                                onChange={() => toggleSelectUser(user.id)}
+                                className="w-4 h-4 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-4 px-6">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">
                                   <span className="text-xs font-medium text-accent-foreground">
                                     {user.name.charAt(0)}
                                   </span>
                                 </div>
-                                <div>
+                                <div className="flex-1">
                                   <p className="text-sm font-medium text-foreground">
                                     {user.name}
                                   </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {user.email}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs text-muted-foreground">
+                                      {user.email}
+                                    </p>
+                                    <div className="flex items-center gap-1">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        className="h-6 px-2 text-xs"
+                                        onClick={() => handleEditUser(user.id, user)}
+                                      >
+                                        Manage Plan
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                        onClick={() => handleAddAddonCredits(user.id, user)}
+                                        title="Add Addon Credits"
+                                      >
+                                        <Coins className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -1394,6 +1643,17 @@ const Admin = () => {
                               )}
                             </td>
                             <td className="py-4 px-6 text-sm text-foreground">
+                              {(() => {
+                                const baseLimit = user.credits || 0;
+                                const totalUsed = user.creditsUsed || 0;
+                                const totalAddon = (user.addonCredits || 0) + (user.adminCredits || 0);
+                                const addonUsed = Math.max(0, totalUsed - baseLimit);
+                                return addonUsed > 0 && totalAddon > 0 
+                                  ? `${addonUsed.toLocaleString()} / ${totalAddon.toLocaleString()}`
+                                  : "—";
+                              })()}
+                            </td>
+                            <td className="py-4 px-6 text-sm text-foreground">
                               {user.credits
                                 ? `${(user.creditsUsed || 0).toLocaleString()} / ${user.credits.toLocaleString()}`
                                 : "—"}
@@ -1420,20 +1680,17 @@ const Admin = () => {
                                     {reactivatingUserId === user.id ? "Reactivating..." : "Reactivate"}
                                   </Button>
                                 )}
-                                <Button 
-                                  variant="ghost" 
+                                <Button
+                                  variant="ghost"
                                   size="sm"
-                                  onClick={() => handleAddAddonCredits(user.id, user)}
-                                  title="Add Addon Credits"
+                                  onClick={() => {
+                                    setUserToDelete(user.id);
+                                    setIsDeleteDialogOpen(true);
+                                  }}
+                                  disabled={isDeletingUsers}
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                 >
-                                  <Coins className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => handleEditUser(user.id, user)}
-                                >
-                                  Manage Limits
+                                  <X className="w-4 h-4" />
                                 </Button>
                               </div>
                             </td>
@@ -1689,6 +1946,122 @@ const Admin = () => {
                         disabled={creatingUser}
                       >
                         {creatingUser ? "Creating..." : "Create User"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Bulk Upload Dialog */}
+                <Dialog open={isBulkUploadOpen} onOpenChange={setIsBulkUploadOpen}>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Bulk Upload Users</DialogTitle>
+                      <DialogDescription>
+                        Upload a CSV file to create multiple users at once. Format: name,email,password
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                      <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                        <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
+                          CSV Format Requirements:
+                        </p>
+                        <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                          <li>• Each line: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">name,email,password</code></li>
+                          <li>• Optional header row (will be skipped if detected)</li>
+                          <li>• Example: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">John Doe,john@example.com,pass123</code></li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          Select CSV File
+                        </label>
+                        <Input
+                          type="file"
+                          accept=".csv,.txt"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setBulkUploadFile(file);
+                              setBulkUploadResults(null);
+                            }
+                          }}
+                          disabled={isUploadingBulk}
+                        />
+                        {bulkUploadFile && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Selected: {bulkUploadFile.name} ({(bulkUploadFile.size / 1024).toFixed(2)} KB)
+                          </p>
+                        )}
+                      </div>
+
+                      {isUploadingBulk && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Processing...</span>
+                            <span className="font-medium">{bulkUploadProgress}%</span>
+                          </div>
+                          <div className="w-full bg-secondary rounded-full h-2">
+                            <div
+                              className="bg-primary h-2 rounded-full transition-all"
+                              style={{ width: `${bulkUploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {bulkUploadResults && (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 border border-green-200 dark:border-green-800">
+                              <p className="text-xs text-green-600 dark:text-green-400">Success</p>
+                              <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                                {bulkUploadResults.success}
+                              </p>
+                            </div>
+                            <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-3 border border-red-200 dark:border-red-800">
+                              <p className="text-xs text-red-600 dark:text-red-400">Failed</p>
+                              <p className="text-2xl font-bold text-red-700 dark:text-red-300">
+                                {bulkUploadResults.failed}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {bulkUploadResults.errors.length > 0 && (
+                            <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-3 border border-red-200 dark:border-red-800 max-h-40 overflow-y-auto">
+                              <p className="text-xs font-medium text-red-700 dark:text-red-300 mb-2">
+                                Errors:
+                              </p>
+                              <ul className="text-xs text-red-600 dark:text-red-400 space-y-1">
+                                {bulkUploadResults.errors.map((error, index) => (
+                                  <li key={index}>• {error}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setIsBulkUploadOpen(false);
+                          setBulkUploadFile(null);
+                          setBulkUploadProgress(0);
+                          setBulkUploadResults(null);
+                        }}
+                        disabled={isUploadingBulk}
+                      >
+                        Close
+                      </Button>
+                      <Button
+                        onClick={handleBulkUpload}
+                        disabled={!bulkUploadFile || isUploadingBulk}
+                      >
+                        {isUploadingBulk ? "Uploading..." : "Upload Users"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -2342,6 +2715,46 @@ const Admin = () => {
             )}
           </main>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                {userToDelete 
+                  ? "Are you sure you want to delete this user? This action cannot be undone."
+                  : `Are you sure you want to delete ${selectedUsers.size} selected user(s)? This action cannot be undone.`
+                }
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDeleteDialogOpen(false);
+                  setUserToDelete(null);
+                }}
+                disabled={isDeletingUsers}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (userToDelete) {
+                    handleDeleteUser(userToDelete);
+                  } else {
+                    handleDeleteSelectedUsers();
+                  }
+                }}
+                disabled={isDeletingUsers}
+              >
+                {isDeletingUsers ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
