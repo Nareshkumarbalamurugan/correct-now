@@ -17,6 +17,7 @@ const PORT = process.env.PORT || 8787;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, "..", "dist");
+const publicPath = path.join(__dirname, "..", "public");
 
 const initAdminDb = () => {
   try {
@@ -1521,6 +1522,20 @@ app.post("/api/proofread", async (req, res) => {
 
 // Serve frontend in production (or when dist exists)
 if (existsSync(distPath)) {
+  app.get("/sitemap.xml", (req, res) => {
+    const sitemapPath = existsSync(path.join(distPath, "sitemap.xml"))
+      ? path.join(distPath, "sitemap.xml")
+      : path.join(publicPath, "sitemap.xml");
+    return res.sendFile(sitemapPath);
+  });
+
+  app.get("/robots.txt", (req, res) => {
+    const robotsPath = existsSync(path.join(distPath, "robots.txt"))
+      ? path.join(distPath, "robots.txt")
+      : path.join(publicPath, "robots.txt");
+    return res.sendFile(robotsPath);
+  });
+
   app.use(express.static(distPath));
 
   app.get("*", (req, res) => {
