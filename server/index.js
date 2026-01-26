@@ -8,6 +8,7 @@ import Razorpay from "razorpay";
 import Stripe from "stripe";
 import crypto from "crypto";
 import admin from "firebase-admin";
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
@@ -84,6 +85,37 @@ const getStripe = () => {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) return null;
   return new Stripe(secretKey, { apiVersion: "2024-11-20.acacia" });
+};
+
+const getBrevoTransporter = () => {
+  const apiKey = process.env.BREVO_API_KEY;
+  const smtpUser = process.env.BREVO_SMTP_USER || "apikey";
+  const smtpPass = process.env.BREVO_SMTP_PASS || apiKey;
+  if (!smtpPass) return null;
+  return nodemailer.createTransport({
+    host: process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com",
+    port: Number(process.env.BREVO_SMTP_PORT || 587),
+    secure: false,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+  });
+};
+
+const sendBrevoEmail = async ({ to, subject, html }) => {
+  const transporter = getBrevoTransporter();
+  if (!transporter) {
+    throw new Error("Brevo SMTP is not configured");
+  }
+  const fromEmail = process.env.BREVO_FROM_EMAIL || "no-reply@yourdomain.com";
+  const fromName = process.env.BREVO_FROM_NAME || "CorrectNow";
+  await transporter.sendMail({
+    from: `"${fromName}" <${fromEmail}>`,
+    to,
+    subject,
+    html,
+  });
 };
 
 const ZERO_DECIMAL_CURRENCIES = new Set([
@@ -926,6 +958,70 @@ app.post("/api/razorpay/subscription", async (req, res) => {
       error: err.message,
       details: err.error?.description || err.error?.reason || "Unknown error"
     });
+  }
+});
+
+app.post("/api/auth/send-verification", async (req, res) => {
+  try {
+    const { email, continueUrl } = req.body || {};
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    if (!admin.apps.length) {
+      return res.status(500).json({ message: "Firebase admin not initialized" });
+    }
+
+    const link = await admin.auth().generateEmailVerificationLink(String(email), {
+      url: String(continueUrl || process.env.CLIENT_URL || "http://localhost:5173"),
+      handleCodeInApp: false,
+    });
+
+    await sendBrevoEmail({
+      to: String(email),
+      subject: "Verify your email",
+      html: `
+        <h2>Welcome to CorrectNow</h2>
+        <p>Please verify your email address to activate your account:</p>
+        <p><a href="${link}">Verify Email</a></p>
+        <p>If you did not create this account, you can ignore this email.</p>
+      `,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Send verification error:", err);
+    return res.status(500).json({ message: "Failed to send verification email" });
+  }
+});
+
+app.post("/api/auth/send-password-reset", async (req, res) => {
+  try {
+    const { email, continueUrl } = req.body || {};
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    if (!admin.apps.length) {
+      return res.status(500).json({ message: "Firebase admin not initialized" });
+    }
+
+    const link = await admin.auth().generatePasswordResetLink(String(email), {
+      url: String(continueUrl || process.env.CLIENT_URL || "http://localhost:5173"),
+      handleCodeInApp: false,
+    });
+
+    await sendBrevoEmail({
+      to: String(email),
+      subject: "Reset your password",
+      html: `
+        <h2>Reset your password</h2>
+        <p>Click the link below to reset your password:</p>
+        <p><a href="${link}">Reset Password</a></p>
+        <p>If you did not request this, you can ignore this email.</p>
+      `,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Send reset error:", err);
+    return res.status(500).json({ message: "Failed to send reset email" });
   }
 });
 

@@ -4,12 +4,12 @@ const Footer = () => {
   return (
     <footer className="mt-auto w-full border-t border-border bg-background py-12">
       <div className="container max-w-7xl">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
-          <div className="flex items-center">
+        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6 text-center md:text-left">
+          <div className="flex w-full md:w-auto items-center justify-center md:justify-start">
             <img
               src="/Icon/correctnow logo final2.png"
               alt="CorrectNow"
-              className="h-24 w-auto object-contain"
+              className="brand-logo"
               loading="lazy"
             />
           </div>

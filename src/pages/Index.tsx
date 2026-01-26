@@ -371,7 +371,7 @@ const Index = () => {
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                         <h1 className="text-2xl font-semibold text-foreground">Docs</h1>
                         <div className="flex items-center gap-2">
-                          <Button variant="accent" size="sm" className="h-9" onClick={() => navigate("/editor")}>
+                          <Button variant="accent" size="sm" className="h-9 blink-green-slow" onClick={() => navigate("/editor")}>
                             <FileText className="w-4 h-4 mr-2" />
                             New doc
                           </Button>
@@ -588,17 +588,8 @@ const Index = () => {
             // Non-authenticated Layout (Hero + Recent Docs)
             <>
               <div className="container pt-3 pb-2">
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                  <div className="relative w-full sm:max-w-md">
-                    <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                    <Input
-                      className="pl-9"
-                      placeholder="Search docs"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </div>
-                  <Button variant="accent" size="sm" className="h-9" onClick={() => navigate("/editor")}>New doc</Button>
+                <div className="flex items-center justify-end">
+                  <Button variant="accent" size="sm" className="h-9 blink-green-slow" onClick={() => navigate("/editor")}>New doc</Button>
                 </div>
               </div>
 

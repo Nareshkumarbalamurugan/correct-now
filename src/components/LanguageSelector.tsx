@@ -28,9 +28,11 @@ interface LanguageSelectorProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   showTooltip?: boolean;
+  highlight?: boolean;
 }
 
-const languages = [
+export const LANGUAGE_OPTIONS = [
+  { code: "auto", name: "Other (Common)" },
   // Global / Most Widely Used
   { code: "en", name: "English" },
   { code: "zh", name: "Chinese Mandarin (中文)" },
@@ -194,11 +196,11 @@ const languages = [
   { code: "hmn", name: "Hmong" },
 ];
 
-const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = false }: LanguageSelectorProps) => {
+const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = false, highlight = false }: LanguageSelectorProps) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const isOpen = open ?? internalOpen;
-  const uniqueLanguages = Array.from(new Map(languages.map((lang) => [lang.code, lang])).values());
+  const uniqueLanguages = Array.from(new Map(LANGUAGE_OPTIONS.map((lang) => [lang.code, lang])).values());
   const selectedLanguage = uniqueLanguages.find((lang) => lang.code === value);
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -220,7 +222,10 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = f
           variant="outline"
           role="combobox"
           aria-expanded={isOpen}
-          className="w-full sm:w-[180px] justify-between bg-card"
+          className={cn(
+            "w-full sm:w-[180px] justify-between bg-card",
+            highlight ? "blink-green" : ""
+          )}
         >
           <span className="truncate">
             {selectedLanguage ? selectedLanguage.name : "Select language"}

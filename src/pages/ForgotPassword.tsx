@@ -11,6 +11,7 @@ import { getFirebaseAuth } from "@/lib/firebase";
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "";
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,7 +23,14 @@ const ForgotPassword = () => {
         toast.error("Firebase is not configured yet.");
         return;
       }
-      await sendPasswordResetEmail(auth, email);
+      const res = await fetch(`${apiBase}/api/auth/send-password-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, continueUrl: window.location.origin }),
+      });
+      if (!res.ok) {
+        await sendPasswordResetEmail(auth, email);
+      }
       setIsSubmitted(true);
       toast.success("Password reset email sent");
     } catch (error: any) {

@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  sendEmailVerification,
   signInWithPopup,
   signInWithEmailAndPassword,
   updateProfile,
@@ -37,6 +36,7 @@ const Auth = () => {
   const [googleUserData, setGoogleUserData] = useState<any>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "";
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -89,7 +89,17 @@ const Auth = () => {
         if (name.trim()) {
           await updateProfile(result.user, { displayName: name.trim() });
         }
-        await sendEmailVerification(result.user);
+        const verifyRes = await fetch(`${apiBase}/api/auth/send-verification`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: result.user.email,
+            continueUrl: window.location.origin,
+          }),
+        });
+        if (!verifyRes.ok) {
+          throw new Error("Failed to send verification email");
+        }
         
         // Sign out the user to prevent auto-login before verification
         await auth.signOut();
@@ -217,7 +227,7 @@ const Auth = () => {
             <img 
               src="/Icon/correctnow logo final2.png" 
               alt="CorrectNow"
-              className="h-16 lg:h-20 xl:h-24 w-auto object-contain"
+              className="brand-logo"
             />
           </Link>
         </div>
@@ -258,7 +268,7 @@ const Auth = () => {
               <img 
                 src="/Icon/correctnow logo final2.png" 
                 alt="CorrectNow"
-                className="h-16 sm:h-20 md:h-24 w-auto object-contain"
+                className="brand-logo"
               />
             </Link>
             <Link to="/" className="flex items-center gap-2 text-foreground text-xs sm:text-sm">

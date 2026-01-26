@@ -3,7 +3,7 @@ import { Send, Copy, Check, RotateCcw, FileText, Bold, Italic, Underline, Mic, M
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import LanguageSelector from "./LanguageSelector";
+import LanguageSelector, { LANGUAGE_OPTIONS } from "./LanguageSelector";
 import WordCounter from "./WordCounter";
 import LoadingDots from "./LoadingDots";
 import { Change } from "./ChangeLogTable";
@@ -21,6 +21,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 const FREE_WORD_LIMIT = 200;
 const PRO_WORD_LIMIT = 5000;
@@ -259,12 +267,6 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 
 const normalizeText = (value: string) => value.trim().normalize("NFC");
 
-const normalizePunctuationSpacing = (value: string) =>
-  value
-    .replace(/\s*([,.;:!?])\s*/g, "$1 ")
-    .replace(/\s+/g, " ")
-    .trim();
-
 const buildLooseRegex = (value: string) => {
   const chars = value.split("");
   const parts = chars.map((char, index) => {
@@ -346,6 +348,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [language, setLanguage] = useState("");
   const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
   const [shouldBlinkInput, setShouldBlinkInput] = useState(false);
+  const [shouldBlinkCheck, setShouldBlinkCheck] = useState(false);
+  const [shouldBlinkNewDoc, setShouldBlinkNewDoc] = useState(false);
   const [copied, setCopied] = useState(false);
   const [hasResults, setHasResults] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -357,10 +361,13 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
   const [showLanguageTooltip, setShowLanguageTooltip] = useState(false);
+  const [showLanguageDialog, setShowLanguageDialog] = useState(false);
   const [pendingRecording, setPendingRecording] = useState(false);
   const [docId, setDocId] = useState<string | undefined>(initialDocId);
   const initializedRef = useRef(false);
   const languagePromptedRef = useRef(false);
+  const checkPromptedRef = useRef(false);
+  const newDocPromptedRef = useRef(false);
   const speechRef = useRef<any>(null);
   const shouldContinueRef = useRef(false);
   const speechBaseRef = useRef<string>("");
@@ -370,6 +377,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const speechPulseRef = useRef<number | null>(null);
   const speechInterimRef = useRef<string>("");
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const uniqueLanguageOptions = Array.from(
+    new Map(LANGUAGE_OPTIONS.map((lang) => [lang.code, lang])).values()
+  );
   
   // API Result Cache - stores results for 24 hours to reduce costs
   const getCacheKey = (text: string, lang: string) => {
@@ -433,9 +443,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   };
   
   useEffect(() => {
-    // Auto-open language selector on page load
     if (!language) {
-      setIsLanguageOpen(true);
+      setShowLanguageDialog(true);
     }
     // Clean old cache entries on mount
     cleanOldCache();
@@ -445,8 +454,62 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     if (language) {
       languagePromptedRef.current = false;
       setShowLanguageTooltip(false);
+      setShowLanguageDialog(false);
     }
   }, [language]);
+
+  const handleLanguagePick = (value: string) => {
+    setLanguage(value);
+    setLanguageMode(value === "auto" ? "auto" : "manual");
+    setIsLanguageOpen(false);
+    setShowLanguageDialog(false);
+    setShowLanguageTooltip(false);
+    setShouldBlinkInput(true);
+    setTimeout(() => setShouldBlinkInput(false), 9600);
+    setTimeout(() => textareaRef.current?.focus(), 100);
+  };
+
+  useEffect(() => {
+    if (!language) {
+      checkPromptedRef.current = false;
+      setShouldBlinkCheck(false);
+      return;
+    }
+
+    if (!inputText.trim()) {
+      checkPromptedRef.current = false;
+      setShouldBlinkCheck(false);
+      return;
+    }
+
+    if (hasResults || isLoading) {
+      setShouldBlinkCheck(false);
+      return;
+    }
+
+      if (!checkPromptedRef.current) {
+      checkPromptedRef.current = true;
+      setShouldBlinkCheck(true);
+        const timer = window.setTimeout(() => setShouldBlinkCheck(false), 12000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [language, inputText, hasResults, isLoading]);
+
+  useEffect(() => {
+    if (hasResults && !isLoading) {
+      setShouldBlinkCheck(false);
+      if (!newDocPromptedRef.current) {
+        newDocPromptedRef.current = true;
+        setShouldBlinkNewDoc(true);
+        const timer = window.setTimeout(() => setShouldBlinkNewDoc(false), 12000);
+        return () => window.clearTimeout(timer);
+      }
+      return;
+    }
+
+    newDocPromptedRef.current = false;
+    setShouldBlinkNewDoc(false);
+  }, [hasResults, isLoading]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("correctnow:acceptedTexts");
@@ -764,7 +827,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
     if (!language || language === "") {
       setShowLanguageTooltip(true);
-      setIsLanguageOpen(true);
+      setIsLanguageOpen(false);
+      setShowLanguageDialog(true);
       return;
     }
 
@@ -814,10 +878,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                 if (!change.original || !change.corrected) return false;
                 if (!normalizedInput.includes(change.original)) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
-                return (
-                  normalizePunctuationSpacing(change.original) !==
-                  normalizePunctuationSpacing(change.corrected)
-                );
+                return true;
               })
           : [];
         setBaseText(normalizedInput);
@@ -898,10 +959,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                 if (!change.original || !change.corrected) return false;
                 if (!normalizedInput.includes(change.original)) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
-                return (
-                  normalizePunctuationSpacing(change.original) !==
-                  normalizePunctuationSpacing(change.corrected)
-                );
+                return true;
               })
           : [];
         setBaseText(normalizedInput);
@@ -949,6 +1007,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setChanges([]);
     setHasResults(false);
     setDocId(undefined);
+    checkPromptedRef.current = false;
+    newDocPromptedRef.current = false;
+    setShouldBlinkCheck(false);
+    setShouldBlinkNewDoc(false);
     textareaRef.current?.focus();
     if (languageMode === "auto") {
       setLanguage("auto");
@@ -1287,15 +1349,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         onOpenChange={setIsLanguageOpen}
                         showTooltip={showLanguageTooltip}
                         onChange={(value) => {
-                          setLanguage(value);
-                          setLanguageMode(value === "auto" ? "auto" : "manual");
-                          setIsLanguageOpen(false);
-                          setShowLanguageTooltip(false);
-                          // Trigger red blinking animation to welcome user
-                          setShouldBlinkInput(true);
-                          setTimeout(() => setShouldBlinkInput(false), 4500);
-                          // Focus on textarea after language selection
-                          setTimeout(() => textareaRef.current?.focus(), 100);
+                          handleLanguagePick(value);
                         }}
                       />
                     </div>
@@ -1342,7 +1396,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     <Button
                       variant="accent"
                       size="sm"
-                      className={`w-full sm:w-auto text-sm${isLoading ? " is-checking" : ""}`}
+                      className={`w-full sm:w-auto text-sm${isLoading ? " is-checking" : ""}${shouldBlinkCheck ? " blink-green-slow" : ""}`}
                       onClick={() => handleCheck()}
                       disabled={isLoading || !inputText.trim() || isOverLimit || isOverCredits || isOutOfCredits}
                     >
@@ -1410,7 +1464,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                       }
                     }}
                     placeholder="Welcome! Paste or type your text here, and we’ll proofread it professionally while preserving your meaning and tone."
-                    className={`editor-textarea editor-input ${shouldBlinkInput ? 'blink-red' : ''}`}
+                    className={`editor-textarea editor-input ${shouldBlinkInput ? 'blink-green' : ''}`}
                     disabled={isLoading}
                   />
                 </div>
@@ -1433,7 +1487,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     {hasResults && (
                       <Button
                         variant="outline"
-                        className="w-full sm:w-auto"
+                        className={`w-full sm:w-auto${shouldBlinkNewDoc ? " blink-green-slow" : ""}`}
                         onClick={handleReset}
                         disabled={isLoading}
                       >
@@ -1538,6 +1592,50 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           </div>
         </div>
       </div>
+
+      <Dialog open={showLanguageDialog} onOpenChange={setShowLanguageDialog}>
+        <DialogContent className="sm:max-w-md w-full max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Select a language</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Choose a language to get accurate corrections. You can change this anytime.
+            </p>
+            <div className="rounded-lg border border-border bg-card">
+              <Command>
+                <CommandInput placeholder="Search languages..." />
+                <CommandList className="max-h-[50vh] overflow-y-auto">
+                  <CommandEmpty>No languages found.</CommandEmpty>
+                  <CommandGroup>
+                    {uniqueLanguageOptions.map((lang) => (
+                      <CommandItem
+                        key={lang.code}
+                        value={`${lang.name} ${lang.code}`}
+                        onSelect={() => handleLanguagePick(lang.code)}
+                        className="cursor-pointer"
+                      >
+                        <span className="mr-2 inline-flex h-4 w-4 items-center justify-center">
+                          {language === lang.code ? "✓" : ""}
+                        </span>
+                        {lang.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowLanguageDialog(false)}
+            >
+              Not now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={selectedWordDialog.open} onOpenChange={(open) => {
         if (!open) {

@@ -200,20 +200,46 @@
     line-height: inherit;
   }
 
-  /* Red blinking animation for textarea welcome */
-  @keyframes redBlink {
+  /* Green blinking animation for textarea/language selector welcome */
+  @keyframes greenBlink {
     0%, 100% {
       border-color: hsl(var(--border));
       box-shadow: 0 0 0 0 transparent;
     }
+    25% {
+      border-color: hsl(var(--success) / 0.5);
+      box-shadow: 0 0 0 2px hsl(var(--success) / 0.15);
+    }
     50% {
-      border-color: hsl(4 90% 58%);
-      box-shadow: 0 0 0 4px hsla(4, 90%, 58%, 0.2);
+      border-color: hsl(var(--success));
+      box-shadow: 0 0 0 4px hsl(var(--success) / 0.25);
+    }
+    75% {
+      border-color: hsl(var(--success) / 0.5);
+      box-shadow: 0 0 0 2px hsl(var(--success) / 0.15);
     }
   }
 
-  .editor-textarea.blink-red {
-    animation: redBlink 1.5s ease-in-out 3;
+  /* Stronger green blink for action buttons */
+  @keyframes greenBlinkStrong {
+    0%, 100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+    25% {
+      box-shadow: 0 0 0 4px hsl(var(--success) / 0.25), 0 0 18px hsl(var(--success) / 0.25);
+    }
+    50% {
+      box-shadow: 0 0 0 7px hsl(var(--success) / 0.35), 0 0 26px hsl(var(--success) / 0.35);
+    }
+    75% {
+      box-shadow: 0 0 0 4px hsl(var(--success) / 0.25), 0 0 18px hsl(var(--success) / 0.25);
+    }
+  }
+
+  .editor-textarea.blink-green,
+  .blink-green {
+    animation: greenBlink 3.2s ease-in-out 3;
+    animation-fill-mode: both;
     border-width: 2px;
     letter-spacing: inherit;
     word-break: break-word;
@@ -516,6 +542,35 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .blink-green-slow {
+    animation: greenBlinkStrong 4s ease-in-out 3;
+    animation-fill-mode: both;
+  }
+
+  .brand-logo {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+  }
+
+  @media (min-width: 640px) {
+    .brand-logo {
+      height: 56px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .brand-logo {
+      height: 72px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .brand-logo {
+      height: 88px;
+    }
   }
   
   /* Hide scrollbar but keep functionality */
