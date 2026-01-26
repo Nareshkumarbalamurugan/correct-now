@@ -250,7 +250,7 @@
   }
 
   .editor-textarea.blink-green {
-    animation: greenBlinkInput 3.2s ease-in-out 3;
+    animation: greenBlinkInput 6.4s ease-in-out 3;
     animation-fill-mode: both;
     border-width: 2px;
     letter-spacing: inherit;
@@ -259,7 +259,7 @@
   }
 
   .blink-green {
-    animation: greenBlink 3.2s ease-in-out 3;
+    animation: greenBlink 6.4s ease-in-out 3;
     animation-fill-mode: both;
     border-width: 2px;
     letter-spacing: inherit;
@@ -589,7 +589,7 @@
   }
 
   .blink-green-slow {
-    animation: greenBlinkStrong 4s ease-in-out 3;
+    animation: greenBlinkStrong 8s ease-in-out 3;
     animation-fill-mode: both;
   }
 

@@ -1253,6 +1253,7 @@ Rules:
 - Fix errors without rewriting or changing meaning.
 - Preserve tone and wording; no extra facts.
 - For each change, give a clear, user-friendly reason (8-14 words) in the same language as the input.
+- Normalize repeated punctuation (e.g., "...", "!!", "??") when inappropriate.
 - If no changes, return original text and empty changes.
 Return ONLY valid JSON in this format:
 {

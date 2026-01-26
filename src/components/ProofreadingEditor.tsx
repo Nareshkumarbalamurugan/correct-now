@@ -450,7 +450,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         setLanguage(storedLanguage);
         setLanguageMode(storedLanguage === "auto" ? "auto" : "manual");
         setShouldBlinkLanguage(true);
-        window.setTimeout(() => setShouldBlinkLanguage(false), 6000);
+        window.setTimeout(() => setShouldBlinkLanguage(false), 12000);
       } else {
         setShowLanguageDialog(true);
       }
@@ -477,7 +477,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setShowLanguageDialog(false);
     setShowLanguageTooltip(false);
     setShouldBlinkInput(true);
-    setTimeout(() => setShouldBlinkInput(false), 9600);
+    setTimeout(() => setShouldBlinkInput(false), 19200);
     setTimeout(() => textareaRef.current?.focus(), 100);
   };
 
@@ -502,7 +502,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       if (!checkPromptedRef.current) {
       checkPromptedRef.current = true;
       setShouldBlinkCheck(true);
-        const timer = window.setTimeout(() => setShouldBlinkCheck(false), 12000);
+        const timer = window.setTimeout(() => setShouldBlinkCheck(false), 24000);
       return () => window.clearTimeout(timer);
     }
   }, [language, inputText, hasResults, isLoading]);
@@ -513,7 +513,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       if (!newDocPromptedRef.current) {
         newDocPromptedRef.current = true;
         setShouldBlinkNewDoc(true);
-        const timer = window.setTimeout(() => setShouldBlinkNewDoc(false), 12000);
+        const timer = window.setTimeout(() => setShouldBlinkNewDoc(false), 24000);
         return () => window.clearTimeout(timer);
       }
       return;
@@ -717,8 +717,11 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     }
   }, [isOutOfCredits]);
 
-  const normalizeToken = (value: string) =>
-    value.toLowerCase().replace(/[.,!?;:()"'“”‘’]/g, "").trim();
+  const normalizeToken = (value: string) => {
+    const trimmed = value.trim().toLowerCase();
+    const stripped = trimmed.replace(/[.,!?;:()"'“”‘’]/g, "").trim();
+    return stripped || trimmed;
+  };
 
   const scrollToSuggestion = (index: number) => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -1577,23 +1580,18 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                   >
                     <div className="hover-suggestion-arrow" />
                     <div className="text-[11px] text-muted-foreground">Suggestion</div>
-                    <div className="text-sm font-semibold text-success">
+                    <button
+                      type="button"
+                      className="text-sm font-semibold text-success hover:underline text-left"
+                      onClick={() => {
+                        if (typeof hoverSuggestion.index === "number") {
+                          handleAccept(hoverSuggestion.index as number);
+                          setHoverSuggestion((prev) => ({ ...prev, open: false }));
+                        }
+                      }}
+                    >
                       {hoverSuggestion.change.corrected}
-                    </div>
-                    {typeof hoverSuggestion.index === "number" && (
-                      <div className="mt-2">
-                        <Button
-                          size="sm"
-                          variant="accent"
-                          onClick={() => {
-                            handleAccept(hoverSuggestion.index as number);
-                            setHoverSuggestion((prev) => ({ ...prev, open: false }));
-                          }}
-                        >
-                          Accept
-                        </Button>
-                      </div>
-                    )}
+                    </button>
                   </div>
                 )}
                 <div className="border border-border rounded-lg p-4">

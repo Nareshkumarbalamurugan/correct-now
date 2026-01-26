@@ -52,6 +52,8 @@ const Index = () => {
     wordLimit: number;
     creditsUsed: number;
     subscriptionStatus: string;
+    addonCredits: number;
+    addonCreditsExpiryAt: string | null;
   } | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -108,6 +110,8 @@ const Index = () => {
                     wordLimit: data.wordLimit || 1000,
                     creditsUsed: data.creditsUsed || 0,
                     subscriptionStatus: data.subscriptionStatus || "inactive",
+                    addonCredits: data.addonCredits || 0,
+                    addonCreditsExpiryAt: data.addonCreditsExpiryAt || null,
                   });
                 } else {
                   // User document doesn't exist, set defaults
@@ -117,6 +121,8 @@ const Index = () => {
                     wordLimit: 1000,
                     creditsUsed: 0,
                     subscriptionStatus: "inactive",
+                    addonCredits: 0,
+                    addonCreditsExpiryAt: null,
                   });
                 }
               } catch (error) {
@@ -127,6 +133,8 @@ const Index = () => {
                   wordLimit: 1000,
                   creditsUsed: 0,
                   subscriptionStatus: "inactive",
+                  addonCredits: 0,
+                  addonCreditsExpiryAt: null,
                 });
               } finally {
                 setIsLoadingProfile(false);
@@ -457,14 +465,6 @@ const Index = () => {
                                 <span className="text-sm text-muted-foreground">Email</span>
                                 <span className="text-sm font-medium text-foreground">{userEmail}</span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-muted-foreground">Plan</span>
-                                <span className="text-sm font-medium text-foreground capitalize">{userProfile?.plan || "free"}</span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-muted-foreground">Status</span>
-                                <span className="text-sm font-medium text-foreground capitalize">{userProfile?.subscriptionStatus || "inactive"}</span>
-                              </div>
                             </div>
                           </CardContent>
                         </Card>
@@ -505,6 +505,52 @@ const Index = () => {
                           <CardContent className="p-6">
                             <h3 className="text-base font-semibold text-foreground mb-4">Subscription</h3>
                             <div className="space-y-3">
+                              <div className="space-y-2 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Plan</span>
+                                  <span className="font-semibold text-foreground capitalize">{userProfile?.plan || "free"}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Status</span>
+                                  <span className="font-semibold text-foreground capitalize">{userProfile?.subscriptionStatus || "inactive"}</span>
+                                </div>
+                              </div>
+                              {(() => {
+                                const expiry = userProfile?.addonCreditsExpiryAt
+                                  ? new Date(String(userProfile.addonCreditsExpiryAt))
+                                  : null;
+                                const isValid = expiry ? expiry.getTime() > Date.now() : false;
+                                const addonTotal = isValid ? (userProfile?.addonCredits || 0) : 0;
+                                const expiryLabel = expiry
+                                  ? isValid
+                                    ? expiry.toLocaleDateString()
+                                    : "Expired"
+                                  : "—";
+                                const baseLimit = userProfile?.wordLimit || 0;
+                                const totalUsed = userProfile?.creditsUsed || 0;
+                                const addonUsed = Math.max(0, totalUsed - baseLimit);
+                                const addonRemaining = Math.max(0, addonTotal - addonUsed);
+                                return (
+                                  <div className="space-y-2 text-sm">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground">Add-on credits</span>
+                                      <span className="font-semibold text-foreground">{addonTotal.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground">Add-on used</span>
+                                      <span className="font-semibold text-foreground">{addonUsed.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground">Add-on remaining</span>
+                                      <span className="font-semibold text-foreground">{addonRemaining.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground">Add-on expiry</span>
+                                      <span className="font-semibold text-foreground">{expiryLabel}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                               <Button 
                                 variant="outline" 
                                 className="w-full"
