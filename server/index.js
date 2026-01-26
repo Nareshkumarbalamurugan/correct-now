@@ -858,7 +858,7 @@ app.post("/api/razorpay/order", async (req, res) => {
     }
 
     const percent = Number(req.body?.discountPercent || 0);
-    const baseAmount = Number(req.body?.amount ?? 500);
+    const baseAmount = Number(req.body?.amount ?? 499);
     const amountInRupees = percent > 0
       ? Math.max(1, Number((baseAmount * (1 - percent / 100)).toFixed(2)))
       : baseAmount;
@@ -905,7 +905,7 @@ app.post("/api/razorpay/subscription", async (req, res) => {
       : "monthly";
     const interval = Math.max(1, Number(req.body?.interval ?? 1));
     const percent = Number(req.body?.discountPercent || 0);
-    const baseAmount = Number(req.body?.amount ?? 500);
+    const baseAmount = Number(req.body?.amount ?? 499);
     const amountInRupees = percent > 0
       ? Math.max(1, Number((baseAmount * (1 - percent / 100)).toFixed(2)))
       : baseAmount;
@@ -1083,7 +1083,7 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       mode: type === "credits" ? "payment" : "subscription",
       customer_email: userEmail,
       success_url: `${clientUrl}/?payment=success`,
-      cancel_url: `${clientUrl}/payment?payment=cancelled`,
+      cancel_url: `${clientUrl}/payment?payment=cancelled${type === "credits" ? "&mode=credits" : ""}`,
       metadata: {
         userId,
       },
@@ -1091,7 +1091,10 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
 
     if (type === "credits") {
       // One-time credit purchase
-      const creditAmount = Number(amount || 50);
+      const creditAmount = Number(amount);
+      if (!Number.isFinite(creditAmount) || creditAmount <= 0) {
+        return res.status(400).json({ message: "Invalid credit amount" });
+      }
       sessionConfig.line_items = [{
         price_data: {
           currency: String(currency || "inr").toLowerCase(),
@@ -1108,7 +1111,10 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
     } else {
       // Subscription
       const percent = Number(discountPercent || 0);
-      const baseAmount = Number(amount || 1);
+      const baseAmount = Number(amount);
+      if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+        return res.status(400).json({ message: "Invalid subscription amount" });
+      }
       const discountedAmount = percent > 0
         ? Math.max(1, Number((baseAmount * (1 - percent / 100)).toFixed(2)))
         : baseAmount;

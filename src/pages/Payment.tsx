@@ -230,11 +230,10 @@ const Payment = () => {
           throw new Error("Credits add-ons are available for active Pro plans only");
         }
 
-        const upiTestAmount = paymentMethod === "upi" ? 1 : creditPack.amount;
         const orderRes = await fetch(`${apiBase}/api/razorpay/order`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: upiTestAmount, credits: creditPack.credits }),
+          body: JSON.stringify({ amount: creditPack.amount, credits: creditPack.credits }),
         });
         if (!orderRes.ok) throw new Error("Unable to create order");
         const order = await orderRes.json();
@@ -286,8 +285,6 @@ const Payment = () => {
       const subscriptionAmount = Number.isFinite(baseProAmount) && baseProAmount > 0
         ? baseProAmount
         : Number(regionalPricing.amount || 0);
-      const subscriptionTestAmount = paymentMethod === "upi" ? 1 : subscriptionAmount;
-
       const subRes = await fetch(`${apiBase}/api/razorpay/subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -295,7 +292,7 @@ const Payment = () => {
           totalCount: 12,
           period: "monthly",
           interval: 1,
-          amount: subscriptionTestAmount,
+          amount: subscriptionAmount,
           couponCode: couponPercent ? couponCode : undefined,
           discountPercent: couponPercent || undefined,
         }),
