@@ -1351,6 +1351,17 @@ const parseGeminiJson = (raw) => {
     }
   };
 
+  const extractCorrectedText = (value) => {
+    const match = value.match(/"corrected_text"\s*:\s*"((?:\\.|[^"\\])*)"/s);
+    if (!match) return null;
+    try {
+      const decoded = JSON.parse(`"${match[1]}"`);
+      return decoded;
+    } catch {
+      return null;
+    }
+  };
+
   const cleaned = sanitize(raw);
   let parsed = tryParse(cleaned);
   if (parsed) return parsed;
@@ -1359,6 +1370,11 @@ const parseGeminiJson = (raw) => {
   if (balanced) {
     parsed = tryParse(balanced);
     if (parsed) return parsed;
+  }
+
+  const correctedText = extractCorrectedText(cleaned);
+  if (correctedText) {
+    return { corrected_text: correctedText, changes: [] };
   }
 
   return null;
@@ -1483,7 +1499,7 @@ app.post("/api/proofread", async (req, res) => {
     }
     if (!parsed) {
       console.error("Failed to parse Gemini response:", raw);
-      return res.status(500).json({ message: "Failed to parse Gemini response" });
+      return res.json({ corrected_text: text, changes: [] });
     }
 
     const correctedText =
