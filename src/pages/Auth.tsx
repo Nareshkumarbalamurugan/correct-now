@@ -219,18 +219,96 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background">
+      <header className="w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container max-w-none px-3 sm:px-4 md:px-0">
+          <div className="flex flex-col md:grid md:grid-cols-[1fr_auto_1fr] md:items-center gap-2 sm:gap-3 py-2 sm:py-4">
+            <div className="flex w-full md:w-auto items-center justify-center md:justify-start md:pl-6">
+              <Link to="/" className="flex items-center">
+                <img
+                  src="/Icon/correctnow logo final2.png"
+                  alt="CorrectNow"
+                  className="brand-logo"
+                  loading="eager"
+                />
+              </Link>
+            </div>
+
+            <nav className="hidden md:flex items-center justify-center gap-4 lg:gap-6">
+              <Link
+                to="/about"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                About Us
+              </Link>
+              <Link
+                to="/features"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Features
+              </Link>
+              <Link
+                to="/blog"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Blog
+              </Link>
+              <Link
+                to="/pricing"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Pricing
+              </Link>
+              <Link
+                to="/languages"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Languages
+              </Link>
+            </nav>
+
+            <div className="hidden md:flex items-center justify-end pr-6" />
+          </div>
+
+          <nav className="flex md:hidden items-center justify-center gap-3 overflow-x-auto scrollbar-hide pb-2 -mt-1">
+            <Link
+              to="/about"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            >
+              About Us
+            </Link>
+            <Link
+              to="/features"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            >
+              Features
+            </Link>
+            <Link
+              to="/blog"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            >
+              Blog
+            </Link>
+            <Link
+              to="/pricing"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            >
+              Pricing
+            </Link>
+            <Link
+              to="/languages"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            >
+              Languages
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      <div className="min-h-[calc(100vh-72px)] bg-background flex">
       {/* Left Panel - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-accent via-accent/90 to-primary/20 p-8 xl:p-12 flex-col justify-between">
-        <div>
-          <Link to="/" className="flex items-center gap-2 text-accent-foreground">
-            <img 
-              src="/Icon/correctnow logo final2.png" 
-              alt="CorrectNow"
-              className="brand-logo"
-            />
-          </Link>
-        </div>
+        <div />
         
         <div className="space-y-4 lg:space-y-6">
           <h1 className="text-2xl lg:text-3xl xl:text-4xl font-bold text-accent-foreground">
@@ -264,13 +342,6 @@ const Auth = () => {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-6 md:p-8">
         <div className="w-full max-w-md space-y-6 sm:space-y-8">
           <div className="lg:hidden flex flex-col items-center gap-3 sm:gap-4">
-            <Link to="/" className="flex items-center">
-              <img 
-                src="/Icon/correctnow logo final2.png" 
-                alt="CorrectNow"
-                className="brand-logo"
-              />
-            </Link>
             <Link to="/" className="flex items-center gap-2 text-foreground text-xs sm:text-sm">
               <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span>Back to home</span>
@@ -413,6 +484,8 @@ const Auth = () => {
             </button>
           </p>
         </div>
+      </div>
+
       </div>
 
       {/* Google Name Dialog */}

@@ -925,7 +925,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .map((change: Change) => ({ ...change, status: "pending" as const }))
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
-                if (!buildLooseRegex(change.original).test(normalizedInput)) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
                 return true;
               })
@@ -1006,7 +1005,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .map((change: Change) => ({ ...change, status: "pending" as const }))
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
-                if (!buildLooseRegex(change.original).test(normalizedInput)) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
                 return true;
               })
@@ -1316,12 +1314,19 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setInputText(updatedText);
     setBaseText(updatedText); // Keep baseText in sync with latest accepted text
     setCorrectedText(updatedText);
-    if (updated.filter((change) => change.status !== "accepted" && change.status !== "ignored").length === 0) {
+    const remaining = updated.filter(
+      (change) => change.status !== "accepted" && change.status !== "ignored"
+    ).length;
+    if (remaining === 0) {
+      const finalText = correctedText?.trim() ? correctedText : updatedText;
+      setInputText(finalText);
+      setBaseText(finalText);
+      setCorrectedText(finalText);
       setAcceptedTexts((prev) => {
-        const next = prev.filter((text) => text.trim() !== updatedText.trim());
-        return [...next, updatedText].slice(-50);
+        const next = prev.filter((text) => text.trim() !== finalText.trim());
+        return [...next, finalText].slice(-50);
       });
-      persistDoc(updatedText);
+      persistDoc(finalText);
     }
   };
 
@@ -1336,16 +1341,17 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const updated: Change[] = changes.map((change) => ({ ...change, status: "accepted" as const }));
     const base = baseText || inputText;
     const updatedText = applyAcceptedChanges(base, updated);
+    const finalText = correctedText?.trim() ? correctedText : updatedText;
     setChanges(reorderSuggestions(updated));
-    setInputText(updatedText);
-    setBaseText(updatedText);
-    setCorrectedText(updatedText);
+    setInputText(finalText);
+    setBaseText(finalText);
+    setCorrectedText(finalText);
     setSelectedWordDialog({ open: false, suggestions: [], original: "" });
     setAcceptedTexts((prev) => {
-      const next = prev.filter((text) => text.trim() !== updatedText.trim());
-      return [...next, updatedText].slice(-50);
+      const next = prev.filter((text) => text.trim() !== finalText.trim());
+      return [...next, finalText].slice(-50);
     });
-    persistDoc(updatedText);
+    persistDoc(finalText);
   };
 
   useEffect(() => {

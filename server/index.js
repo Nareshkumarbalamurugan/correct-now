@@ -1379,6 +1379,8 @@ Task: Correct ONLY grammar, spelling, and punctuation errors.
 Rules:
 - Fix errors without rewriting or changing meaning.
 - Preserve tone and wording; no extra facts.
+- Correct ALL issues in the text (spelling, casing, punctuation, spacing, slang like "u" -> "you").
+- Normalize repeated punctuation and excessive spaces.
 - For each change, give a clear, user-friendly reason (8-14 words) in the same language as the input.
 - Normalize repeated punctuation (e.g., "...", "!!", "??") when inappropriate.
 - Fix obvious casing errors, informal texting (e.g., "r" -> "are"), and common misspellings.
