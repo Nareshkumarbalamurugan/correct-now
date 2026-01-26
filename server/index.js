@@ -1452,6 +1452,18 @@ app.post("/api/proofread", async (req, res) => {
       parsed = parseGeminiJson(raw);
     }
     if (!parsed) {
+      const correctedMatch = raw.match(/"corrected_text"\s*:\s*"([\s\S]*?)"\s*,\s*"changes"/);
+      const fallbackText = correctedMatch?.[1]
+        ? correctedMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"')
+        : null;
+      if (fallbackText) {
+        const result = {
+          corrected_text: fallbackText,
+          changes: [],
+        };
+        setCache(`proofread:${cacheKey}`, result);
+        return res.json(result);
+      }
       console.error("Failed to parse Gemini response:", raw);
       return res.status(500).json({ message: "Failed to parse Gemini response" });
     }

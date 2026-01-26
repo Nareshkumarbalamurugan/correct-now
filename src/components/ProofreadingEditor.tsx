@@ -1657,7 +1657,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           setSelectedWordDialog({ open: false, suggestions: [], original: "" });
         }
       }}>
-        <DialogContent className="sm:max-w-xl w-full">
+        <DialogContent className="w-[92vw] max-w-sm sm:max-w-md p-4 sm:p-5 sm:top-24 sm:translate-y-0">
           <DialogHeader>
             <DialogTitle>
               {selectedWordDialog.suggestions.length > 1 ? "Suggestions" : "Suggestion"}
