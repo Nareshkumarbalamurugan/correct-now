@@ -925,7 +925,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .map((change: Change) => ({ ...change, status: "pending" as const }))
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
-                if (!normalizedInput.includes(change.original)) return false;
+                if (!buildLooseRegex(change.original).test(normalizedInput)) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
                 return true;
               })
@@ -1006,7 +1006,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .map((change: Change) => ({ ...change, status: "pending" as const }))
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
-                if (!normalizedInput.includes(change.original)) return false;
+                if (!buildLooseRegex(change.original).test(normalizedInput)) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
                 return true;
               })

@@ -24,7 +24,7 @@ import { addSuggestion } from "@/lib/suggestions";
 import { toast } from "sonner";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { deleteUser, onAuthStateChanged, signOut } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs as getFirestoreDocs, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs as getFirestoreDocs, onSnapshot, setDoc } from "firebase/firestore";
 import { clearSessionId } from "@/lib/session";
 
 const Index = () => {
@@ -50,10 +50,13 @@ const Index = () => {
   const [userProfile, setUserProfile] = useState<{
     plan: string;
     wordLimit: number;
+    credits: number;
     creditsUsed: number;
     subscriptionStatus: string;
     addonCredits: number;
     addonCreditsExpiryAt: string | null;
+    adminCredits: number;
+    adminCreditsExpiryAt: string | null;
   } | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -80,65 +83,83 @@ const Index = () => {
             setDocs([]);
           }
           
-          // Fetch user profile from Firestore
+          // Fetch user profile from Firestore with real-time updates
           if (user) {
             setIsLoadingProfile(true);
             const db = getFirebaseDb();
             if (db) {
-              try {
-                const userDoc = await getDoc(doc(db, "users", user.uid));
-                if (userDoc.exists()) {
-                  const data = userDoc.data();
-                  const planField = String(data?.plan || "").toLowerCase();
-                  const entitlementPlan =
-                    Number(data?.wordLimit) >= 5000 || planField === "pro";
-                  const status = String(data?.subscriptionStatus || "").toLowerCase();
-                  const hasStatus = Boolean(status);
-                  const updatedAt = data?.subscriptionUpdatedAt
-                    ? new Date(String(data.subscriptionUpdatedAt))
-                    : null;
-                  const isRecent = updatedAt
-                    ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
-                    : false;
-                  const isActive = status === "active" && (updatedAt ? isRecent : true);
-                  const effectivePlan = (hasStatus ? isActive && entitlementPlan : entitlementPlan)
-                    ? "pro"
-                    : "free";
+              // Set up real-time listener for user profile
+              const unsubscribeProfile = onSnapshot(
+                doc(db, "users", user.uid),
+                (userDoc) => {
+                  if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    const planField = String(data?.plan || "").toLowerCase();
+                    const entitlementPlan =
+                      Number(data?.wordLimit) >= 5000 || planField === "pro";
+                    const status = String(data?.subscriptionStatus || "").toLowerCase();
+                    const hasStatus = Boolean(status);
+                    const updatedAt = data?.subscriptionUpdatedAt
+                      ? new Date(String(data.subscriptionUpdatedAt))
+                      : null;
+                    const isRecent = updatedAt
+                      ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
+                      : false;
+                    const isActive = status === "active" && (updatedAt ? isRecent : true);
+                    const effectivePlan = (hasStatus ? isActive && entitlementPlan : entitlementPlan)
+                      ? "pro"
+                      : "free";
 
-                  setUserProfile({
-                    plan: effectivePlan,
-                    wordLimit: data.wordLimit || 1000,
-                    creditsUsed: data.creditsUsed || 0,
-                    subscriptionStatus: data.subscriptionStatus || "inactive",
-                    addonCredits: data.addonCredits || 0,
-                    addonCreditsExpiryAt: data.addonCreditsExpiryAt || null,
-                  });
-                } else {
-                  // User document doesn't exist, set defaults
-                  console.log("User document not found, using defaults");
+                    setUserProfile({
+                      plan: effectivePlan,
+                      wordLimit: data.wordLimit || 1000,
+                      credits: data.credits || 0,
+                      creditsUsed: data.creditsUsed || 0,
+                      subscriptionStatus: data.subscriptionStatus || "inactive",
+                      addonCredits: data.addonCredits || 0,
+                      addonCreditsExpiryAt: data.addonCreditsExpiryAt || null,
+                      adminCredits: data.adminCredits || 0,
+                      adminCreditsExpiryAt: data.adminCreditsExpiryAt || null,
+                    });
+                  } else {
+                    // User document doesn't exist, set defaults
+                    console.log("User document not found, using defaults");
+                    setUserProfile({
+                      plan: "free",
+                      wordLimit: 1000,
+                      credits: 0,
+                      creditsUsed: 0,
+                      subscriptionStatus: "inactive",
+                      addonCredits: 0,
+                      addonCreditsExpiryAt: null,
+                      adminCredits: 0,
+                      adminCreditsExpiryAt: null,
+                    });
+                  }
+                  setIsLoadingProfile(false);
+                },
+                (error) => {
+                  console.error("Error in profile listener:", error);
+                  // Set defaults on error
                   setUserProfile({
                     plan: "free",
                     wordLimit: 1000,
+                    credits: 0,
                     creditsUsed: 0,
                     subscriptionStatus: "inactive",
                     addonCredits: 0,
                     addonCreditsExpiryAt: null,
+                    adminCredits: 0,
+                    adminCreditsExpiryAt: null,
                   });
+                  setIsLoadingProfile(false);
                 }
-              } catch (error) {
-                console.error("Error fetching user profile:", error);
-                // Set defaults on error
-                setUserProfile({
-                  plan: "free",
-                  wordLimit: 1000,
-                  creditsUsed: 0,
-                  subscriptionStatus: "inactive",
-                  addonCredits: 0,
-                  addonCreditsExpiryAt: null,
-                });
-              } finally {
-                setIsLoadingProfile(false);
-              }
+              );
+              
+              // Return cleanup function
+              return () => {
+                unsubscribeProfile();
+              };
             }
           } else {
             setUserProfile(null);
@@ -516,25 +537,48 @@ const Index = () => {
                                 </div>
                               </div>
                               {(() => {
-                                const expiry = userProfile?.addonCreditsExpiryAt
+                                // Check purchased add-on credits (30-day expiry)
+                                const addonExpiry = userProfile?.addonCreditsExpiryAt
                                   ? new Date(String(userProfile.addonCreditsExpiryAt))
                                   : null;
-                                const isValid = expiry ? expiry.getTime() > Date.now() : false;
-                                const addonTotal = isValid ? (userProfile?.addonCredits || 0) : 0;
-                                const expiryLabel = expiry
-                                  ? isValid
-                                    ? expiry.toLocaleDateString()
-                                    : "Expired"
-                                  : "—";
-                                const baseLimit = userProfile?.wordLimit || 0;
+                                const addonValid = addonExpiry ? addonExpiry.getTime() > Date.now() : false;
+                                const addonTotal = addonValid ? (userProfile?.addonCredits || 0) : 0;
+                                
+                                // Check admin-granted credits (custom expiry date)
+                                const adminExpiry = userProfile?.adminCreditsExpiryAt
+                                  ? new Date(String(userProfile.adminCreditsExpiryAt))
+                                  : null;
+                                const adminValid = adminExpiry ? adminExpiry.getTime() > Date.now() : false;
+                                const adminTotal = adminValid ? (userProfile?.adminCredits || 0) : 0;
+                                
+                                // Calculate total available add-on credits
+                                const totalAvailable = addonTotal + adminTotal;
+                                
+                                // Calculate usage
+                                const baseLimit = userProfile?.credits || 0;
                                 const totalUsed = userProfile?.creditsUsed || 0;
                                 const addonUsed = Math.max(0, totalUsed - baseLimit);
-                                const addonRemaining = Math.max(0, addonTotal - addonUsed);
+                                const addonRemaining = Math.max(0, totalAvailable - addonUsed);
+                                
+                                // Format expiry display
+                                let expiryLabel = "—";
+                                if (addonValid && adminValid) {
+                                  // Both valid, show earliest expiry
+                                  const earliest = addonExpiry! < adminExpiry! ? addonExpiry : adminExpiry;
+                                  expiryLabel = earliest!.toLocaleDateString();
+                                } else if (addonValid) {
+                                  expiryLabel = addonExpiry!.toLocaleDateString();
+                                } else if (adminValid) {
+                                  expiryLabel = adminExpiry!.toLocaleDateString();
+                                } else if (addonExpiry || adminExpiry) {
+                                  expiryLabel = "Expired";
+                                }
+                                
                                 return (
                                   <div className="space-y-2 text-sm">
                                     <div className="flex items-center justify-between">
                                       <span className="text-muted-foreground">Add-on credits</span>
-                                      <span className="font-semibold text-foreground">{addonTotal.toLocaleString()}</span>
+                                      <span className="font-semibold text-foreground">{totalAvailable.toLocaleString()}</span>
                                     </div>
                                     <div className="flex items-center justify-between">
                                       <span className="text-muted-foreground">Add-on used</span>

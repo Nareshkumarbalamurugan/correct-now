@@ -1261,6 +1261,8 @@ Rules:
 - Preserve tone and wording; no extra facts.
 - For each change, give a clear, user-friendly reason (8-14 words) in the same language as the input.
 - Normalize repeated punctuation (e.g., "...", "!!", "??") when inappropriate.
+- Fix obvious casing errors, informal texting (e.g., "r" -> "are"), and common misspellings.
+- Ensure sentence boundaries are corrected when punctuation is missing or wrong.
 - If no changes, return original text and empty changes.
 Return ONLY valid JSON in this format:
 {
@@ -1369,6 +1371,65 @@ const parseGeminiJson = (raw) => {
     if (parsed) return parsed;
   }
 
+  const fallbackExtract = (value) => {
+    // Extract corrected_text - handle both complete and incomplete strings
+    let corrected_text = "";
+    const correctedMatch = value.match(/"corrected_text"\s*:\s*"([\s\S]*?)"\s*(?:,|\n|$)/);
+    if (correctedMatch) {
+      corrected_text = correctedMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    }
+    
+    // Extract changes array - be aggressive with incomplete entries
+    const changes = [];
+    
+    // Match complete change objects (all 3 fields present)
+    const completeRegex = /"original"\s*:\s*"([\s\S]*?)"\s*,\s*"corrected"\s*:\s*"([\s\S]*?)"\s*,\s*"explanation"\s*:\s*"([\s\S]*?)"\s*[,}]/g;
+    let match;
+    while ((match = completeRegex.exec(value)) !== null) {
+      changes.push({
+        original: match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
+        corrected: match[2].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
+        explanation: match[3].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
+      });
+    }
+    
+    // Try to extract incomplete change objects (2 fields only - missing explanation or cut off)
+    if (changes.length === 0) {
+      const partialRegex = /"original"\s*:\s*"([\s\S]*?)"\s*,\s*"corrected"\s*:\s*"([\s\S]*?)"\s*(?:,|$)/g;
+      let partialMatch;
+      while ((partialMatch = partialRegex.exec(value)) !== null) {
+        changes.push({
+          original: partialMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
+          corrected: partialMatch[2].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
+          explanation: "Grammar or spelling correction",
+        });
+      }
+    }
+    
+    // As last resort, try to extract at least the corrected_text by looking for the opening quote
+    if (!corrected_text && !changes.length) {
+      const textOnlyMatch = value.match(/"corrected_text"\s*:\s*"([\s\S]*)/);
+      if (textOnlyMatch) {
+        // Take everything after the opening quote, remove trailing incomplete JSON
+        let extracted = textOnlyMatch[1];
+        // Try to find the end quote (might not exist if truncated)
+        const endQuote = extracted.indexOf('",');
+        if (endQuote > -1) {
+          extracted = extracted.substring(0, endQuote);
+        }
+        corrected_text = extracted.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+      }
+    }
+    
+    if (corrected_text || changes.length) {
+      return { corrected_text, changes };
+    }
+    return null;
+  };
+
+  parsed = fallbackExtract(cleaned);
+  if (parsed) return parsed;
+
   return null;
 };
 
@@ -1462,27 +1523,28 @@ app.post("/api/proofread", async (req, res) => {
       return response;
     };
 
-    let response = await callGemini(2048);
+    let response = await callGemini(4096);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", errorText);
+      console.error("API error:", errorText);
       return res.status(500).json({ message: "API error" });
     }
 
     let data = await response.json();
     let raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!raw) {
-      console.error("Gemini response missing content:", JSON.stringify(data));
-      return res.status(500).json({ message: "Invalid Gemini response" });
+      console.error("API response missing content:", JSON.stringify(data));
+      return res.status(500).json({ message: "Invalid API response" });
     }
     let parsed = parseGeminiJson(raw);
     if (!parsed) {
-      // Retry once with a higher token limit in case the response was truncated
-      response = await callGemini(4096);
+      // Retry once with maximum token limit if parsing failed
+      console.log("First parse failed, retrying with 8192 tokens...");
+      response = await callGemini(8192);
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Gemini API error (retry):", errorText);
+        console.error("API error (retry):", errorText);
         return res.status(500).json({ message: "API error" });
       }
       data = await response.json();
@@ -1490,8 +1552,8 @@ app.post("/api/proofread", async (req, res) => {
       parsed = parseGeminiJson(raw);
     }
     if (!parsed) {
-      console.error("Failed to parse Gemini response:", raw);
-      return res.status(500).json({ message: "Failed to parse Gemini response" });
+      console.error("Failed to parse API response:", raw);
+      return res.status(500).json({ message: "Failed to parse API response" });
     }
 
     const correctedText =
@@ -1504,7 +1566,7 @@ app.post("/api/proofread", async (req, res) => {
           if (!change || typeof change !== "object") return false;
           if (typeof change.original !== "string" || change.original.length === 0) return false;
           if (typeof change.corrected !== "string") return false;
-          return text.includes(change.original);
+          return true;
         })
       : [];
 
