@@ -721,6 +721,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     value.toLowerCase().replace(/[.,!?;:()"'“”‘’]/g, "").trim();
 
   const scrollToSuggestion = (index: number) => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      return;
+    }
     const target = suggestionRefs.current[index];
     if (target) {
       setActiveSuggestionIndex(index);
