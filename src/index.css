@@ -220,6 +220,19 @@
     }
   }
 
+  @keyframes greenBlinkInput {
+    0%, 100% {
+      border-color: hsl(var(--border));
+      box-shadow: 0 0 0 0 transparent, inset 0 0 0 0 transparent;
+      background-color: hsl(var(--card));
+    }
+    50% {
+      border-color: hsl(var(--success));
+      box-shadow: 0 0 0 6px hsl(var(--success) / 0.25);
+      background-color: hsl(var(--success) / 0.12);
+    }
+  }
+
   /* Stronger green blink for action buttons */
   @keyframes greenBlinkStrong {
     0%, 100% {
@@ -236,7 +249,15 @@
     }
   }
 
-  .editor-textarea.blink-green,
+  .editor-textarea.blink-green {
+    animation: greenBlinkInput 3.2s ease-in-out 3;
+    animation-fill-mode: both;
+    border-width: 2px;
+    letter-spacing: inherit;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
   .blink-green {
     animation: greenBlink 3.2s ease-in-out 3;
     animation-fill-mode: both;
