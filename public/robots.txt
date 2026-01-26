@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://www.correctnow.in/sitemap.xml
+Sitemap: https://www.correctnow.app/sitemap.xml
