@@ -348,6 +348,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [language, setLanguage] = useState("");
   const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
   const [shouldBlinkInput, setShouldBlinkInput] = useState(false);
+  const [shouldBlinkLanguage, setShouldBlinkLanguage] = useState(false);
   const [shouldBlinkCheck, setShouldBlinkCheck] = useState(false);
   const [shouldBlinkNewDoc, setShouldBlinkNewDoc] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -443,8 +444,16 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   };
   
   useEffect(() => {
-    if (!language) {
-      setShowLanguageDialog(true);
+    if (typeof window !== "undefined") {
+      const storedLanguage = window.localStorage.getItem("correctnow:language");
+      if (storedLanguage) {
+        setLanguage(storedLanguage);
+        setLanguageMode(storedLanguage === "auto" ? "auto" : "manual");
+        setShouldBlinkLanguage(true);
+        window.setTimeout(() => setShouldBlinkLanguage(false), 6000);
+      } else {
+        setShowLanguageDialog(true);
+      }
     }
     // Clean old cache entries on mount
     cleanOldCache();
@@ -461,6 +470,9 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const handleLanguagePick = (value: string) => {
     setLanguage(value);
     setLanguageMode(value === "auto" ? "auto" : "manual");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("correctnow:language", value);
+    }
     setIsLanguageOpen(false);
     setShowLanguageDialog(false);
     setShowLanguageTooltip(false);
@@ -1348,6 +1360,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                         open={isLanguageOpen}
                         onOpenChange={setIsLanguageOpen}
                         showTooltip={showLanguageTooltip}
+                        highlight={shouldBlinkLanguage}
                         onChange={(value) => {
                           handleLanguagePick(value);
                         }}
@@ -1433,6 +1446,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                   <textarea
                     ref={textareaRef}
                     value={inputText}
+                    onPointerDown={() => setShouldBlinkLanguage(false)}
                     onChange={(e) => {
                       // Skip manual updates during voice recording to prevent duplication
                       if (isRecording) {
@@ -1451,6 +1465,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     }}
                     spellCheck={false}
                     onPaste={() => {
+                      setShouldBlinkInput(false);
                       window.setTimeout(() => {
                         const next = textareaRef.current?.value || "";
                         if (!next.trim()) return;

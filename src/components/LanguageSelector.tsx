@@ -224,7 +224,7 @@ const LanguageSelector = ({ value, onChange, open, onOpenChange, showTooltip = f
           aria-expanded={isOpen}
           className={cn(
             "w-full sm:w-[180px] justify-between bg-card",
-            highlight ? "blink-green" : ""
+            highlight ? "blink-green-slow" : ""
           )}
         >
           <span className="truncate">

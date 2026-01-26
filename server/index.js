@@ -1269,21 +1269,69 @@ ${text}
 
 const parseGeminiJson = (raw) => {
   if (!raw || typeof raw !== "string") return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start !== -1 && end !== -1 && end > start) {
-      const slice = raw.slice(start, end + 1);
-      try {
-        return JSON.parse(slice);
-      } catch {
-        return null;
+
+  const extractBalancedJson = (value) => {
+    const text = value;
+    const start = text.indexOf("{");
+    if (start === -1) return null;
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+    for (let i = start; i < text.length; i += 1) {
+      const ch = text[i];
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+      if (ch === "\\") {
+        if (inString) escapeNext = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === "{") depth += 1;
+      if (ch === "}") depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
       }
     }
     return null;
+  };
+
+  const sanitize = (value) => {
+    const noFence = value
+      .replace(/^\uFEFF/, "")
+      .replace(/```(?:json)?/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const noControlChars = noFence.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+    const withoutTrailingCommas = noControlChars.replace(/,(\s*[}\]])/g, "$1");
+    return withoutTrailingCommas;
+  };
+
+  const tryParse = (value) => {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  };
+
+  const cleaned = sanitize(raw);
+  let parsed = tryParse(cleaned);
+  if (parsed) return parsed;
+
+  const balanced = extractBalancedJson(cleaned);
+  if (balanced) {
+    parsed = tryParse(balanced);
+    if (parsed) return parsed;
   }
+
+  return null;
 };
 
 app.post("/api/proofread", async (req, res) => {
