@@ -1309,7 +1309,37 @@ const parseGeminiJson = (raw) => {
       .trim();
 
     const noControlChars = noFence.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
-    const withoutTrailingCommas = noControlChars.replace(/,(\s*[}\]])/g, "$1");
+    const escapeNewlinesInStrings = (text) => {
+      let out = "";
+      let inString = false;
+      let escapeNext = false;
+      for (let i = 0; i < text.length; i += 1) {
+        const ch = text[i];
+        if (escapeNext) {
+          out += ch;
+          escapeNext = false;
+          continue;
+        }
+        if (ch === "\\") {
+          out += ch;
+          if (inString) escapeNext = true;
+          continue;
+        }
+        if (ch === '"') {
+          inString = !inString;
+          out += ch;
+          continue;
+        }
+        if (inString && (ch === "\n" || ch === "\r")) {
+          out += "\\n";
+          continue;
+        }
+        out += ch;
+      }
+      return out;
+    };
+    const escaped = escapeNewlinesInStrings(noControlChars);
+    const withoutTrailingCommas = escaped.replace(/,(\s*[}\]])/g, "$1");
     return withoutTrailingCommas;
   };
 
@@ -1452,18 +1482,6 @@ app.post("/api/proofread", async (req, res) => {
       parsed = parseGeminiJson(raw);
     }
     if (!parsed) {
-      const correctedMatch = raw.match(/"corrected_text"\s*:\s*"([\s\S]*?)"\s*,\s*"changes"/);
-      const fallbackText = correctedMatch?.[1]
-        ? correctedMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"')
-        : null;
-      if (fallbackText) {
-        const result = {
-          corrected_text: fallbackText,
-          changes: [],
-        };
-        setCache(`proofread:${cacheKey}`, result);
-        return res.json(result);
-      }
       console.error("Failed to parse Gemini response:", raw);
       return res.status(500).json({ message: "Failed to parse Gemini response" });
     }
