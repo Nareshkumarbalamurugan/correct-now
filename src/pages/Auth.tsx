@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle, Mail, Lock, User, ArrowLeft } from "lucide-react";
+import { CheckCircle, Mail, Lock, User, ArrowLeft, Phone } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -14,7 +14,7 @@ import {
 } from "firebase/auth";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { writeSessionId } from "@/lib/session";
-import { doc as firestoreDoc, setDoc, getDoc } from "firebase/firestore";
+import { doc as firestoreDoc, setDoc, getDoc, getDocFromServer } from "firebase/firestore";
 import {
   Dialog,
   DialogContent,
@@ -29,10 +29,12 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const [showGoogleNameDialog, setShowGoogleNameDialog] = useState(false);
   const [googleName, setGoogleName] = useState("");
+  const [googlePhone, setGooglePhone] = useState("");
   const [googleUserData, setGoogleUserData] = useState<any>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,9 +87,36 @@ const Auth = () => {
         }
         toast.success("Signed in successfully");
       } else {
+        if (!name.trim()) {
+          toast.error("Please enter your name");
+          return;
+        }
+        const phoneValue = phone.trim();
+        const phoneRegex = /^\+?[0-9\s()\-]{7,20}$/;
+        if (phoneValue && !phoneRegex.test(phoneValue)) {
+          toast.error("Please enter a valid phone number");
+          return;
+        }
         const result = await createUserWithEmailAndPassword(auth, email, password);
         if (name.trim()) {
           await updateProfile(result.user, { displayName: name.trim() });
+        }
+        const db = getFirebaseDb();
+        if (db) {
+          const ref = firestoreDoc(db, `users/${result.user.uid}`);
+          await setDoc(
+            ref,
+            {
+              uid: result.user.uid,
+              name: name.trim(),
+              email: result.user.email || "",
+              phone: phoneValue || undefined,
+              status: "active",
+              updatedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
         }
         const verifyRes = await fetch(`${apiBase}/api/auth/send-verification`, {
           method: "POST",
@@ -111,6 +140,7 @@ const Auth = () => {
         setEmail("");
         setPassword("");
         setName("");
+        setPhone("");
         setIsLogin(true);
         navigate("/auth?mode=login");
         return;
@@ -138,7 +168,7 @@ const Auth = () => {
       
       if (db) {
         const ref = firestoreDoc(db, `users/${result.user.uid}`);
-        const userDoc = await getDoc(ref);
+        const userDoc = await getDocFromServer(ref).catch(() => getDoc(ref));
 
         if (userDoc.exists() && userDoc.data()?.status === "deactivated") {
           await auth.signOut();
@@ -146,11 +176,15 @@ const Auth = () => {
           return;
         }
         
-        // Check if user exists and has a name
-        if (!userDoc.exists() || !userDoc.data()?.name) {
-          // New user or user without name - prompt for name
+        const existingName = String(userDoc.data()?.name || "").trim();
+        const existingPhone = String(userDoc.data()?.phone || "").trim();
+        const profileCompleted = Boolean(userDoc.data()?.profileCompleted);
+        // Check if user exists and completed profile
+        if (!userDoc.exists() || !profileCompleted) {
+          // New user or missing profile completion - prompt for completion (phone optional)
           setGoogleUserData(result.user);
-          setGoogleName(result.user.displayName || "");
+          setGoogleName(existingName || result.user.displayName || "");
+          setGooglePhone(existingPhone || "");
           setShowGoogleNameDialog(true);
           setIsLoading(false);
           return;
@@ -163,6 +197,7 @@ const Auth = () => {
             uid: result.user.uid,
             name: userDoc.data()?.name || result.user.displayName || "",
             email: result.user.email || "",
+            profileCompleted: true,
             status: "active",
             updatedAt: new Date().toISOString(),
           },
@@ -184,6 +219,12 @@ const Auth = () => {
       toast.error("Please enter your name");
       return;
     }
+    const phoneValue = googlePhone.trim();
+    const phoneRegex = /^\+?[0-9\s()\-]{7,20}$/;
+    if (phoneValue && !phoneRegex.test(phoneValue)) {
+      toast.error("Please enter a valid phone number");
+      return;
+    }
     
     setIsLoading(true);
     try {
@@ -196,6 +237,8 @@ const Auth = () => {
             uid: googleUserData.uid,
             name: googleName.trim(),
             email: googleUserData.email || "",
+            phone: phoneValue || undefined,
+            profileCompleted: true,
             status: "active",
             updatedAt: new Date().toISOString(),
             createdAt: new Date().toISOString(),
@@ -394,6 +437,23 @@ const Auth = () => {
               </div>
             </div>
 
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number (optional)</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
@@ -494,7 +554,7 @@ const Auth = () => {
           <DialogHeader>
             <DialogTitle>Welcome to CorrectNow!</DialogTitle>
             <DialogDescription>
-              Please tell us your name to complete your profile.
+              Please provide your name to complete your profile.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -506,6 +566,21 @@ const Auth = () => {
                 placeholder="Enter your name"
                 value={googleName}
                 onChange={(e) => setGoogleName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && googleName.trim() && googlePhone.trim()) {
+                    handleSaveGoogleName();
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="google-phone">Phone Number (optional)</Label>
+              <Input
+                id="google-phone"
+                type="tel"
+                placeholder="+91 98765 43210"
+                value={googlePhone}
+                onChange={(e) => setGooglePhone(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && googleName.trim()) {
                     handleSaveGoogleName();

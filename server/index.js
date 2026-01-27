@@ -846,10 +846,16 @@ app.post("/api/set-admin", async (req, res) => {
 // Create new user (admin only)
 app.post("/api/admin/create-user", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, phone, password } = req.body;
     
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email, and password are required" });
+    }
+
+    const phoneValue = String(phone || "").trim();
+    const phoneRegex = /^\+?[0-9\s()\-]{7,20}$/;
+    if (phoneValue && !phoneRegex.test(phoneValue)) {
+      return res.status(400).json({ error: "Invalid phone number" });
     }
 
     if (!adminDb) {
@@ -898,6 +904,7 @@ app.post("/api/admin/create-user", async (req, res) => {
       uid: userRecord.uid,
       email: email,
       name: name,
+      phone: phoneValue || undefined,
       plan: "free",
       wordLimit: 200,
       credits: 0,
@@ -915,7 +922,8 @@ app.post("/api/admin/create-user", async (req, res) => {
       message: `User created successfully: ${email}`,
       uid: userRecord.uid,
       email: email,
-      name: name
+      name: name,
+      phone: phoneValue || undefined
     });
   } catch (error) {
     console.error("Create user error:", error);

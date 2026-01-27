@@ -71,6 +71,7 @@ type AdminUser = {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   plan: string;
   wordLimit?: number;
   credits?: number;
@@ -165,6 +166,7 @@ const Admin = () => {
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPhone, setNewUserPhone] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [creatingUser, setCreatingUser] = useState(false);
 
@@ -416,6 +418,7 @@ const Admin = () => {
           name: data?.name || "User",
           email: data?.email || "",
           plan: effectivePlan,
+          phone: data?.phone,
           wordLimit: data?.wordLimit,
           credits: data?.credits,
           creditsUsed: data?.creditsUsed,
@@ -660,10 +663,10 @@ const Admin = () => {
   const downloadSampleCSV = () => {
     // Create sample CSV content with timestamp to avoid duplicates
     const timestamp = Date.now();
-    const csvContent = `name,email,password
-John Doe,john${timestamp}@example.com,password123
-Jane Smith,jane${timestamp}@example.com,password456
-Bob Wilson,bob${timestamp}@example.com,password789`;
+    const csvContent = `name,email,phone,password
+John Doe,john${timestamp}@example.com,+919876543210,password123
+Jane Smith,jane${timestamp}@example.com,+919812345678,password456
+Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
     
     // Create blob and download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -716,6 +719,13 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
       return;
     }
 
+    const phoneValue = newUserPhone.trim();
+    const phoneRegex = /^\+?[0-9\s()\-]{7,20}$/;
+    if (phoneValue && !phoneRegex.test(phoneValue)) {
+      toast.error("Please enter a valid phone number");
+      return;
+    }
+
     // Password validation (minimum 6 characters)
     if (newUserPassword.length < 6) {
       toast.error("Password must be at least 6 characters long");
@@ -730,6 +740,7 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
         body: JSON.stringify({
           name: newUserName.trim(),
           email: newUserEmail.trim(),
+          phone: phoneValue || undefined,
           password: newUserPassword,
         }),
       });
@@ -746,6 +757,7 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
           id: data.uid,
           name: data.name,
           email: data.email,
+          phone: data.phone,
           plan: "free",
           wordLimit: 200,
           credits: 0,
@@ -763,6 +775,7 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
       setIsCreateUserOpen(false);
       setNewUserName("");
       setNewUserEmail("");
+      setNewUserPhone("");
       setNewUserPassword("");
     } catch (error) {
       console.error("Failed to create user:", error);
@@ -809,7 +822,7 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
 
       // Skip header if it exists (check for common header keywords)
       const firstLine = lines[0].toLowerCase();
-      const hasHeader = firstLine.includes('name') || firstLine.includes('email') || firstLine.includes('password');
+      const hasHeader = firstLine.includes('name') || firstLine.includes('email') || firstLine.includes('phone') || firstLine.includes('password');
       const startIndex = hasHeader ? 1 : 0;
       const userLines = lines.slice(startIndex);
       
@@ -839,11 +852,14 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
         
         if (parts.length < 3) {
           results.failed++;
-          results.errors.push(`Line ${i + startIndex + 1}: Invalid format (expected: name,email,password) - got ${parts.length} field(s)`);
+          results.errors.push(`Line ${i + startIndex + 1}: Invalid format (expected: name,email,password or name,email,phone,password) - got ${parts.length} field(s)`);
           continue;
         }
 
-        const [name, email, password] = parts;
+        const [name, email, third, fourth] = parts;
+        const hasPhone = parts.length >= 4;
+        const phone = hasPhone ? third : "";
+        const password = hasPhone ? fourth : third;
 
         if (!name || !email || !password) {
           results.failed++;
@@ -851,11 +867,18 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
           continue;
         }
 
+        const phoneRegex = /^\+?[0-9\s()\-]{7,20}$/;
+        if (phone && !phoneRegex.test(phone)) {
+          results.failed++;
+          results.errors.push(`Line ${i + startIndex + 1}: Invalid phone number (${phone})`);
+          continue;
+        }
+
         try {
           const response = await fetch("/api/admin/create-user", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, password }),
+            body: JSON.stringify({ name, email, phone: phone || undefined, password }),
           });
 
           const data = await response.json();
@@ -872,6 +895,7 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
               id: data.uid,
               name: data.name,
               email: data.email,
+              phone: data.phone,
               plan: "free",
               wordLimit: 200,
               credits: 0,
@@ -1006,15 +1030,18 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
         updates.wordLimit = 999999;
         updates.credits = 999999;
         updates.plan = "pro";
+        updates.status = "active";
       } else if (limitType === "disabled") {
         updates.wordLimit = 0;
         updates.credits = 0;
         updates.plan = "free";
+        updates.status = "deactivated";
       } else {
         const wordLimit = parseInt(wordLimitValue);
         const credits = parseInt(creditsValue);
         updates.wordLimit = isNaN(wordLimit) ? 2000 : wordLimit;
         updates.credits = isNaN(credits) ? 50000 : credits;
+        updates.status = "active";
       }
 
       updates.updatedAt = new Date().toISOString();
@@ -1026,17 +1053,37 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
       const snap = await getDocs(collection(db, "users"));
       const list: AdminUser[] = snap.docs.map((docSnap) => {
         const data = docSnap.data() as Record<string, any>;
+        const planField = String(data?.plan || "").toLowerCase();
+        const entitlementPlan =
+          Number(data?.wordLimit) >= 5000 || planField === "pro";
+        const status = String(data?.subscriptionStatus || "").toLowerCase();
+        const hasStatus = Boolean(status);
+        const updatedAt = data?.subscriptionUpdatedAt
+          ? new Date(String(data.subscriptionUpdatedAt))
+          : null;
+        const isRecent = updatedAt
+          ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31
+          : false;
+        const isActive = status === "active" && (updatedAt ? isRecent : true);
+        const effectivePlan = (hasStatus ? isActive && entitlementPlan : entitlementPlan)
+          ? "Pro"
+          : "Free";
         return {
           id: docSnap.id,
           name: data?.name || "User",
           email: data?.email || "",
-          plan: String(data?.plan || "free").toLowerCase() === "pro" ? "Pro" : "Free",
+          phone: data?.phone,
+          plan: effectivePlan,
           wordLimit: data?.wordLimit,
           credits: data?.credits,
           creditsUsed: data?.creditsUsed,
+          addonCredits: data?.addonCredits,
+          addonCreditsExpiryAt: data?.addonCreditsExpiryAt,
           subscriptionStatus: data?.subscriptionStatus,
+          subscriptionUpdatedAt: data?.subscriptionUpdatedAt,
           updatedAt: data?.updatedAt,
           createdAt: data?.createdAt,
+          status: data?.status || "active",
         };
       });
       setUsers(list);
@@ -1658,6 +1705,9 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
                             User
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Phone
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Plan
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
@@ -1737,6 +1787,9 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
                                   </div>
                                 </div>
                               </div>
+                            </td>
+                            <td className="py-4 px-6 text-sm text-muted-foreground">
+                              {user.phone || "—"}
                             </td>
                             <td className="py-4 px-6">
                               <Badge
@@ -2037,6 +2090,19 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
 
                       <div>
                         <label className="block text-sm font-medium mb-2">
+                          Phone Number (optional)
+                        </label>
+                        <Input
+                          type="tel"
+                          value={newUserPhone}
+                          onChange={(e) => setNewUserPhone(e.target.value)}
+                          placeholder="+91 98765 43210"
+                          disabled={creatingUser}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
                           Password
                         </label>
                         <Input
@@ -2070,6 +2136,7 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
                           setIsCreateUserOpen(false);
                           setNewUserName("");
                           setNewUserEmail("");
+                          setNewUserPhone("");
                           setNewUserPassword("");
                         }}
                         disabled={creatingUser}
@@ -2092,7 +2159,7 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
                     <DialogHeader>
                       <DialogTitle>Bulk Upload Users</DialogTitle>
                       <DialogDescription>
-                        Upload a CSV file (NOT Excel .xlsx) to create multiple users. Format: name,email,password
+                        Upload a CSV file (NOT Excel .xlsx) to create multiple users. Format: name,email,password (phone optional)
                       </DialogDescription>
                     </DialogHeader>
 
@@ -2114,7 +2181,7 @@ Bob Wilson,bob${timestamp}@example.com,password789`;
                         </div>
                         <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
                           <li>• File must be .csv format (not .xlsx Excel file)</li>
-                          <li>• Each line: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">name,email,password</code></li>
+                          <li>• Each line: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">name,email,password</code> (phone optional)</li>
                           <li>• Optional header row (will be skipped if detected)</li>
                           <li>• Example: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">John Doe,john@example.com,pass123</code></li>
                           <li>• Download sample CSV above, edit it with your users, and upload</li>

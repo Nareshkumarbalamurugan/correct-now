@@ -4,6 +4,7 @@ import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { toast } from "sonner";
 
 const SESSION_KEY = "correctnow:sessionId";
+const SESSION_CREATED_AT_KEY = "correctnow:sessionCreatedAt";
 
 const createSessionId = () =>
   (typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -12,20 +13,29 @@ const createSessionId = () =>
 
 export const getSessionId = () => {
   const existing = window.localStorage.getItem(SESSION_KEY);
-  if (existing) return existing;
+  if (existing) {
+    const createdAt = window.localStorage.getItem(SESSION_CREATED_AT_KEY);
+    if (!createdAt) {
+      window.localStorage.setItem(SESSION_CREATED_AT_KEY, Date.now().toString());
+    }
+    return existing;
+  }
   const id = createSessionId();
   window.localStorage.setItem(SESSION_KEY, id);
+  window.localStorage.setItem(SESSION_CREATED_AT_KEY, Date.now().toString());
   return id;
 };
 
 export const rotateSessionId = () => {
   const id = createSessionId();
   window.localStorage.setItem(SESSION_KEY, id);
+  window.localStorage.setItem(SESSION_CREATED_AT_KEY, Date.now().toString());
   return id;
 };
 
 export const clearSessionId = () => {
   window.localStorage.removeItem(SESSION_KEY);
+  window.localStorage.removeItem(SESSION_CREATED_AT_KEY);
 };
 
 export const writeSessionId = async (user: User, forceNew = false) => {
@@ -94,6 +104,22 @@ export const startSessionEnforcement = () => {
       }
 
       if (data.sessionId && data.sessionId !== localSessionId && !isAdmin) {
+        const createdAtRaw = window.localStorage.getItem(SESSION_CREATED_AT_KEY);
+        const createdAt = createdAtRaw ? Number(createdAtRaw) : 0;
+        const isRecentLocal = createdAt && Date.now() - createdAt < 30_000;
+
+        if (isRecentLocal) {
+          await setDoc(
+            ref,
+            {
+              sessionId: localSessionId,
+              sessionUpdatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+          return;
+        }
+
         await signOut(auth);
         toast.error("You were signed out because your account was used on another device.");
         return;
