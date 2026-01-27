@@ -684,6 +684,57 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
     toast.success("Sample CSV downloaded! Edit emails before uploading.");
   };
 
+  const exportUsersCsv = () => {
+    const rows = (filteredUsers.length ? filteredUsers : users).map((user) => [
+      user.name || "",
+      user.email || "",
+      user.phone || "",
+      user.plan || "",
+      user.status || "",
+      user.wordLimit ?? "",
+      user.credits ?? "",
+      user.creditsUsed ?? "",
+      user.addonCredits ?? "",
+      user.addonCreditsExpiryAt || "",
+      user.createdAt || user.updatedAt || "",
+    ]);
+
+    const header = [
+      "name",
+      "email",
+      "phone",
+      "plan",
+      "status",
+      "wordLimit",
+      "credits",
+      "creditsUsed",
+      "addonCredits",
+      "addonCreditsExpiryAt",
+      "joined",
+    ];
+
+    const escapeCsv = (value: string | number | null | undefined) => {
+      const text = String(value ?? "");
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+
+    const csvContent = [header, ...rows]
+      .map((row) => row.map(escapeCsv).join(","))
+      .join("\n");
+
+    const blob = new Blob(["\uFEFF", csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "users_export.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("Users exported successfully!");
+  };
+
   const handleEditUser = (userId: string, userData: AdminUser) => {
     setEditingUserId(userId);
     setWordLimitValue(String(userData.wordLimit || 2000));
@@ -1663,7 +1714,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                         Delete Selected ({selectedUsers.size})
                       </Button>
                     )}
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={exportUsersCsv}>
                       <Download className="w-4 h-4 mr-2" />
                       Export Users
                     </Button>
