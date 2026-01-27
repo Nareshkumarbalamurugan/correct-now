@@ -15,6 +15,12 @@ export default defineConfig(({ mode }) => ({
         target: "http://localhost:8787",
         changeOrigin: true,
       },
+      "/blog-wp": {
+        target: "https://blog.correctnow.app",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/blog-wp/, ""),
+      },
     },
   },
   plugins: [react()],

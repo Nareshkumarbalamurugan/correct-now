@@ -9,6 +9,7 @@ import Stripe from "stripe";
 import crypto from "crypto";
 import admin from "firebase-admin";
 import nodemailer from "nodemailer";
+import { createProxyMiddleware } from "http-proxy-middleware";
 
 dotenv.config();
 
@@ -1797,6 +1798,20 @@ if (existsSync(distPath)) {
       : path.join(publicPath, "robots.txt");
     return res.sendFile(robotsPath);
   });
+
+  // WordPress blog proxy (served inside the React /blog page iframe)
+  const BLOG_PROXY_TARGET = process.env.BLOG_PROXY_TARGET || "https://blog.correctnow.app";
+  app.use(
+    "/blog-wp",
+    createProxyMiddleware({
+      target: BLOG_PROXY_TARGET,
+      changeOrigin: true,
+      secure: true,
+      pathRewrite: {
+        "^/blog-wp": "",
+      },
+    })
+  );
 
   app.use(express.static(distPath));
 
