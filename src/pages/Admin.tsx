@@ -72,6 +72,7 @@ type AdminUser = {
   name: string;
   email: string;
   phone?: string;
+  category?: string;
   plan: string;
   wordLimit?: number;
   credits?: number;
@@ -167,8 +168,15 @@ const Admin = () => {
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPhone, setNewUserPhone] = useState("");
+  const [newUserCategory, setNewUserCategory] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [creatingUser, setCreatingUser] = useState(false);
+
+  const [editUserName, setEditUserName] = useState("");
+  const [editUserPhone, setEditUserPhone] = useState("");
+  const [editUserCategory, setEditUserCategory] = useState("");
+
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   // Bulk user upload
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
@@ -188,11 +196,19 @@ const Admin = () => {
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
 
   // All hooks must be called before any conditional returns
-  const filteredUsers = users.filter(
-    (user) =>
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const normalizedCategory = (user.category || "uncategorized").toLowerCase();
+    const matchesCategory =
+      categoryFilter === "all"
+        ? true
+        : categoryFilter === "uncategorized"
+        ? normalizedCategory === "uncategorized"
+        : normalizedCategory === categoryFilter.toLowerCase();
+    return matchesSearch && matchesCategory;
+  });
 
   const filteredSuggestions = useMemo(() => {
     if (!suggestionSearch.trim()) return suggestions;
@@ -417,6 +433,7 @@ const Admin = () => {
           id: docSnap.id,
           name: data?.name || "User",
           email: data?.email || "",
+          category: data?.category,
           plan: effectivePlan,
           phone: data?.phone,
           wordLimit: data?.wordLimit,
@@ -663,10 +680,10 @@ const Admin = () => {
   const downloadSampleCSV = () => {
     // Create sample CSV content with timestamp to avoid duplicates
     const timestamp = Date.now();
-    const csvContent = `name,email,phone,password
-John Doe,john${timestamp}@example.com,+919876543210,password123
-Jane Smith,jane${timestamp}@example.com,+919812345678,password456
-Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
+    const csvContent = `name,email,phone,category,password
+John Doe,john${timestamp}@example.com,+919876543210,College,password123
+Jane Smith,jane${timestamp}@example.com,+919812345678,Friends,password456
+Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
     
     // Create blob and download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -689,6 +706,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
       user.name || "",
       user.email || "",
       user.phone || "",
+      user.category || "",
       user.plan || "",
       user.status || "",
       user.wordLimit ?? "",
@@ -703,6 +721,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
       "name",
       "email",
       "phone",
+      "category",
       "plan",
       "status",
       "wordLimit",
@@ -739,6 +758,9 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
     setEditingUserId(userId);
     setWordLimitValue(String(userData.wordLimit || 2000));
     setCreditsValue(String(userData.credits || 50000));
+    setEditUserName(userData.name || "");
+    setEditUserPhone(userData.phone || "");
+    setEditUserCategory(userData.category || "");
     if (userData.wordLimit === 999999) {
       setLimitType("unlimited");
     } else if (userData.wordLimit === 0) {
@@ -771,6 +793,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
     }
 
     const phoneValue = newUserPhone.trim();
+    const categoryValue = newUserCategory.trim();
     const phoneRegex = /^\+?[0-9\s()\-]{7,20}$/;
     if (phoneValue && !phoneRegex.test(phoneValue)) {
       toast.error("Please enter a valid phone number");
@@ -792,6 +815,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
           name: newUserName.trim(),
           email: newUserEmail.trim(),
           phone: phoneValue || undefined,
+          category: categoryValue || undefined,
           password: newUserPassword,
         }),
       });
@@ -809,6 +833,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
           name: data.name,
           email: data.email,
           phone: data.phone,
+          category: data.category,
           plan: "free",
           wordLimit: 200,
           credits: 0,
@@ -827,6 +852,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
       setNewUserName("");
       setNewUserEmail("");
       setNewUserPhone("");
+      setNewUserCategory("");
       setNewUserPassword("");
     } catch (error) {
       console.error("Failed to create user:", error);
@@ -903,14 +929,16 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
         
         if (parts.length < 3) {
           results.failed++;
-          results.errors.push(`Line ${i + startIndex + 1}: Invalid format (expected: name,email,password or name,email,phone,password) - got ${parts.length} field(s)`);
+          results.errors.push(`Line ${i + startIndex + 1}: Invalid format (expected: name,email,password or name,email,phone,category,password) - got ${parts.length} field(s)`);
           continue;
         }
 
-        const [name, email, third, fourth] = parts;
-        const hasPhone = parts.length >= 4;
-        const phone = hasPhone ? third : "";
-        const password = hasPhone ? fourth : third;
+        const [name, email, third, fourth, fifth] = parts;
+        const hasFive = parts.length >= 5;
+        const hasFour = parts.length >= 4;
+        const phone = hasFive || hasFour ? third : "";
+        const category = hasFive ? fourth : "";
+        const password = hasFive ? fifth : hasFour ? fourth : third;
 
         if (!name || !email || !password) {
           results.failed++;
@@ -929,7 +957,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
           const response = await fetch("/api/admin/create-user", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, phone: phone || undefined, password }),
+            body: JSON.stringify({ name, email, phone: phone || undefined, category: category || undefined, password }),
           });
 
           const data = await response.json();
@@ -947,6 +975,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
               name: data.name,
               email: data.email,
               phone: data.phone,
+              category: data.category,
               plan: "free",
               wordLimit: 200,
               credits: 0,
@@ -1097,6 +1126,17 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
 
       updates.updatedAt = new Date().toISOString();
 
+        const phoneValue = editUserPhone.trim();
+        const phoneRegex = /^\+?[0-9\s()\-]{7,20}$/;
+        if (phoneValue && !phoneRegex.test(phoneValue)) {
+          toast.error("Please enter a valid phone number");
+          return;
+        }
+
+        updates.name = editUserName.trim() || "User";
+        updates.phone = phoneValue || undefined;
+        updates.category = editUserCategory.trim() || undefined;
+
       const userRef = doc(db, "users", editingUserId);
       await updateDoc(userRef, updates);
 
@@ -1124,6 +1164,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
           name: data?.name || "User",
           email: data?.email || "",
           phone: data?.phone,
+          category: data?.category,
           plan: effectivePlan,
           wordLimit: data?.wordLimit,
           credits: data?.credits,
@@ -1722,7 +1763,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                 </div>
 
                 {/* Search & Filter */}
-                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex flex-col sm:flex-row gap-4">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -1732,10 +1773,16 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                       className="pl-10"
                     />
                   </div>
-                  <Button variant="outline">
-                    <Filter className="w-4 h-4 mr-2" />
-                    Filters
-                  </Button>
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground"
+                    >
+                      <option value="all">All Categories</option>
+                      <option value="college">College</option>
+                      <option value="friends">Friends</option>
+                      <option value="uncategorized">Uncategorized</option>
+                    </select>
                 </div>
 
                 {/* Users Table */}
@@ -1757,6 +1804,9 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Phone
+                          </th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
+                            Category
                           </th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">
                             Plan
@@ -1823,7 +1873,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                                         className="h-6 px-2 text-xs"
                                         onClick={() => handleEditUser(user.id, user)}
                                       >
-                                        Manage Plan
+                                        Edit
                                       </Button>
                                       <Button 
                                         variant="ghost" 
@@ -1841,6 +1891,9 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                             </td>
                             <td className="py-4 px-6 text-sm text-muted-foreground">
                               {user.phone || "—"}
+                            </td>
+                            <td className="py-4 px-6 text-sm text-muted-foreground">
+                              {user.category || "—"}
                             </td>
                             <td className="py-4 px-6">
                               <Badge
@@ -1949,6 +2002,39 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                       </h3>
 
                       <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Full Name</label>
+                          <Input
+                            type="text"
+                            value={editUserName}
+                            onChange={(e) => setEditUserName(e.target.value)}
+                            placeholder="User name"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Phone Number</label>
+                          <Input
+                            type="tel"
+                            value={editUserPhone}
+                            onChange={(e) => setEditUserPhone(e.target.value)}
+                            placeholder="+91 98765 43210"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Category</label>
+                          <select
+                            value={editUserCategory}
+                            onChange={(e) => setEditUserCategory(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground"
+                          >
+                            <option value="">Uncategorized</option>
+                            <option value="College">College</option>
+                            <option value="Friends">Friends</option>
+                          </select>
+                        </div>
+
                         <div>
                           <label className="block text-sm font-medium mb-2">Limit Type</label>
                           <select
@@ -2154,6 +2240,22 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
 
                       <div>
                         <label className="block text-sm font-medium mb-2">
+                          Category
+                        </label>
+                        <select
+                          value={newUserCategory}
+                          onChange={(e) => setNewUserCategory(e.target.value)}
+                          disabled={creatingUser}
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground"
+                        >
+                          <option value="">Uncategorized</option>
+                          <option value="College">College</option>
+                          <option value="Friends">Friends</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
                           Password
                         </label>
                         <Input
@@ -2188,6 +2290,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                           setNewUserName("");
                           setNewUserEmail("");
                           setNewUserPhone("");
+                          setNewUserCategory("");
                           setNewUserPassword("");
                         }}
                         disabled={creatingUser}
@@ -2210,7 +2313,7 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                     <DialogHeader>
                       <DialogTitle>Bulk Upload Users</DialogTitle>
                       <DialogDescription>
-                        Upload a CSV file (NOT Excel .xlsx) to create multiple users. Format: name,email,password (phone optional)
+                        Upload a CSV file (NOT Excel .xlsx) to create multiple users. Format: name,email,password (phone and category optional)
                       </DialogDescription>
                     </DialogHeader>
 
@@ -2232,9 +2335,9 @@ Bob Wilson,bob${timestamp}@example.com,+919800112233,password789`;
                         </div>
                         <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
                           <li>• File must be .csv format (not .xlsx Excel file)</li>
-                          <li>• Each line: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">name,email,password</code> (phone optional)</li>
+                          <li>• Each line: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">name,email,password</code> (phone and category optional)</li>
                           <li>• Optional header row (will be skipped if detected)</li>
-                          <li>• Example: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">John Doe,john@example.com,pass123</code></li>
+                          <li>• Example: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">John Doe,john@example.com,+919876543210,College,pass123</code></li>
                           <li>• Download sample CSV above, edit it with your users, and upload</li>
                         </ul>
                       </div>

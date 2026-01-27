@@ -847,7 +847,7 @@ app.post("/api/set-admin", async (req, res) => {
 // Create new user (admin only)
 app.post("/api/admin/create-user", async (req, res) => {
   try {
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, category, password } = req.body;
     
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email, and password are required" });
@@ -906,6 +906,7 @@ app.post("/api/admin/create-user", async (req, res) => {
       email: email,
       name: name,
       phone: phoneValue || undefined,
+      category: category ? String(category).trim() : undefined,
       plan: "free",
       wordLimit: 200,
       credits: 0,
@@ -924,7 +925,8 @@ app.post("/api/admin/create-user", async (req, res) => {
       uid: userRecord.uid,
       email: email,
       name: name,
-      phone: phoneValue || undefined
+      phone: phoneValue || undefined,
+      category: category ? String(category).trim() : undefined
     });
   } catch (error) {
     console.error("Create user error:", error);
