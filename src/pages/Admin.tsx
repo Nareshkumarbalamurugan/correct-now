@@ -176,7 +176,7 @@ const Admin = () => {
   const [editUserPhone, setEditUserPhone] = useState("");
   const [editUserCategory, setEditUserCategory] = useState("");
 
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("");
 
   // Bulk user upload
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
@@ -201,12 +201,10 @@ const Admin = () => {
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
     const normalizedCategory = (user.category || "uncategorized").toLowerCase();
-    const matchesCategory =
-      categoryFilter === "all"
-        ? true
-        : categoryFilter === "uncategorized"
-        ? normalizedCategory === "uncategorized"
-        : normalizedCategory === categoryFilter.toLowerCase();
+    const normalizedFilter = categoryFilter.trim().toLowerCase();
+    const matchesCategory = normalizedFilter
+      ? normalizedCategory === normalizedFilter
+      : true;
     return matchesSearch && matchesCategory;
   });
 
@@ -899,7 +897,7 @@ Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
 
       // Skip header if it exists (check for common header keywords)
       const firstLine = lines[0].toLowerCase();
-      const hasHeader = firstLine.includes('name') || firstLine.includes('email') || firstLine.includes('phone') || firstLine.includes('password');
+      const hasHeader = firstLine.includes('name') || firstLine.includes('email') || firstLine.includes('phone') || firstLine.includes('category') || firstLine.includes('password');
       const startIndex = hasHeader ? 1 : 0;
       const userLines = lines.slice(startIndex);
       
@@ -1773,16 +1771,20 @@ Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
                       className="pl-10"
                     />
                   </div>
-                    <select
-                      value={categoryFilter}
-                      onChange={(e) => setCategoryFilter(e.target.value)}
-                      className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground"
-                    >
-                      <option value="all">All Categories</option>
-                      <option value="college">College</option>
-                      <option value="friends">Friends</option>
-                      <option value="uncategorized">Uncategorized</option>
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        list="admin-category-filter"
+                        placeholder="Filter category..."
+                        value={categoryFilter}
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        className="h-10 w-48"
+                      />
+                      <datalist id="admin-category-filter">
+                        <option value="College" />
+                        <option value="Friends" />
+                        <option value="Uncategorized" />
+                      </datalist>
+                    </div>
                 </div>
 
                 {/* Users Table */}
@@ -2024,15 +2026,17 @@ Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
 
                         <div>
                           <label className="block text-sm font-medium mb-2">Category</label>
-                          <select
+                          <Input
+                            list="admin-category-edit"
                             value={editUserCategory}
                             onChange={(e) => setEditUserCategory(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground"
-                          >
-                            <option value="">Uncategorized</option>
-                            <option value="College">College</option>
-                            <option value="Friends">Friends</option>
-                          </select>
+                            placeholder="College, Friends, or custom"
+                          />
+                          <datalist id="admin-category-edit">
+                            <option value="College" />
+                            <option value="Friends" />
+                            <option value="Uncategorized" />
+                          </datalist>
                         </div>
 
                         <div>
@@ -2242,16 +2246,18 @@ Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
                         <label className="block text-sm font-medium mb-2">
                           Category
                         </label>
-                        <select
+                        <Input
+                          list="admin-category-create"
                           value={newUserCategory}
                           onChange={(e) => setNewUserCategory(e.target.value)}
                           disabled={creatingUser}
-                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground"
-                        >
-                          <option value="">Uncategorized</option>
-                          <option value="College">College</option>
-                          <option value="Friends">Friends</option>
-                        </select>
+                          placeholder="College, Friends, or custom"
+                        />
+                        <datalist id="admin-category-create">
+                          <option value="College" />
+                          <option value="Friends" />
+                          <option value="Uncategorized" />
+                        </datalist>
                       </div>
 
                       <div>
