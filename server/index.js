@@ -1376,16 +1376,23 @@ const buildPrompt = (text, language) => {
   return `You are a strict grammar and spelling correction assistant.
 ${languageInstruction}
 Task: Correct ONLY grammar, spelling, and punctuation errors.
+
+CRITICAL REQUIREMENTS:
+- You MUST analyze EVERY SINGLE LINE from the first line to the last line of the text.
+- Do NOT stop after finding a few errors - continue processing ALL remaining lines.
+- Process line by line systematically - scan the ENTIRE text for all errors.
+
 Rules:
 - Fix errors without rewriting or changing meaning.
 - Preserve tone and wording; no extra facts.
-- Correct ALL issues in the text (spelling, casing, punctuation, spacing, slang like "u" -> "you").
-- Normalize repeated punctuation and excessive spaces.
+- Correct ALL issues in the text (spelling, casing, punctuation, spacing, slang like "u" -> "you", "r" -> "are").
+- Normalize repeated punctuation (e.g., "...", "!!", "??", ",,", ":::", ";;;") when inappropriate.
+- Remove excessive spaces and normalize spacing between words.
 - For each change, give a clear, user-friendly reason (8-14 words) in the same language as the input.
-- Normalize repeated punctuation (e.g., "...", "!!", "??") when inappropriate.
-- Fix obvious casing errors, informal texting (e.g., "r" -> "are"), and common misspellings.
+- Fix obvious casing errors, informal texting, and common misspellings.
 - Ensure sentence boundaries are corrected when punctuation is missing or wrong.
 - If no changes, return original text and empty changes.
+
 Return ONLY valid JSON in this format:
 {
   "corrected_text": "...",
@@ -1393,6 +1400,7 @@ Return ONLY valid JSON in this format:
     { "original": "...", "corrected": "...", "explanation": "..." }
   ]
 }
+
 Text:
 """
 ${text}
@@ -1610,15 +1618,6 @@ app.post("/api/proofread", async (req, res) => {
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const prompt = buildPrompt(text, language);
-    const cacheKey = crypto
-      .createHash("sha256")
-      .update(`${model}|${language || "auto"}|${prompt}`)
-      .digest("hex");
-
-    const cached = getCache(`proofread:${cacheKey}`);
-    if (cached) {
-      return res.json(cached);
-    }
 
     const callGemini = async (maxTokens) => {
       const response = await fetch(endpoint, {
@@ -1638,14 +1637,14 @@ app.post("/api/proofread", async (req, res) => {
             maxOutputTokens: maxTokens,
           },
           systemInstruction: {
-            parts: [{ text: "Return ONLY valid JSON. Do not add extra text." }],
+            parts: [{ text: "Return ONLY valid JSON. Analyze EVERY line of the input text thoroughly. Do not add extra text." }],
           },
         }),
       });
       return response;
     };
 
-    let response = await callGemini(4096);
+    let response = await callGemini(8192);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1662,8 +1661,8 @@ app.post("/api/proofread", async (req, res) => {
     let parsed = parseGeminiJson(raw);
     if (!parsed) {
       // Retry once with maximum token limit if parsing failed
-      console.log("First parse failed, retrying with 8192 tokens...");
-      response = await callGemini(8192);
+      console.log("First parse failed, retrying with 16384 tokens...");
+      response = await callGemini(16384);
       if (!response.ok) {
         const errorText = await response.text();
         console.error("API error (retry):", errorText);
@@ -1696,7 +1695,6 @@ app.post("/api/proofread", async (req, res) => {
       corrected_text: correctedText,
       changes,
     };
-    setCache(`proofread:${cacheKey}`, result);
     return res.json(result);
   } catch (err) {
     console.error("Server error:", err);
