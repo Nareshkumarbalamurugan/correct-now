@@ -1799,16 +1799,16 @@ if (existsSync(distPath)) {
     return res.sendFile(robotsPath);
   });
 
-  // WordPress blog proxy (served inside the React /blog page iframe)
+  // WordPress blog proxy (serve directly at /blog for SEO)
   const BLOG_PROXY_TARGET = process.env.BLOG_PROXY_TARGET || "https://blog.correctnow.app";
   app.use(
-    "/blog-wp",
+    "/blog",
     createProxyMiddleware({
       target: BLOG_PROXY_TARGET,
       changeOrigin: true,
       secure: true,
       pathRewrite: {
-        "^/blog-wp": "",
+        "^/blog": "",
       },
     })
   );
