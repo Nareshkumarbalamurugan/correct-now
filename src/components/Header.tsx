@@ -181,34 +181,34 @@ const Header = () => {
           </div>
         </div>
 
-        <nav className="flex md:hidden items-center justify-center gap-3 overflow-x-auto scrollbar-hide pb-2 -mt-1">
+        <nav className="flex md:hidden flex-wrap items-center justify-center gap-2 sm:gap-3 pb-2 -mt-1">
           <Link
             to="/about"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-full bg-muted/40 hover:bg-muted"
           >
             About Us
           </Link>
           <Link
             to="/features"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-full bg-muted/40 hover:bg-muted"
           >
             Features
           </Link>
           <Link
             to="/blog"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-full bg-muted/40 hover:bg-muted"
           >
             Blog
           </Link>
           <Link
             to="/pricing"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-full bg-muted/40 hover:bg-muted"
           >
             Pricing
           </Link>
           <Link
             to="/languages"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-full bg-muted/40 hover:bg-muted"
           >
             Languages
           </Link>
