@@ -178,10 +178,9 @@ const Auth = () => {
         
         const existingName = String(userDoc.data()?.name || "").trim();
         const existingPhone = String(userDoc.data()?.phone || "").trim();
-        const profileCompleted = Boolean(userDoc.data()?.profileCompleted);
-        // Check if user exists and completed profile
-        if (!userDoc.exists() || !profileCompleted) {
-          // New user or missing profile completion - prompt for completion (phone optional)
+        // Ask only for first-time Google registration
+        if (!userDoc.exists()) {
+          // New user - prompt for completion (phone optional)
           setGoogleUserData(result.user);
           setGoogleName(existingName || result.user.displayName || "");
           setGooglePhone(existingPhone || "");
@@ -197,7 +196,6 @@ const Auth = () => {
             uid: result.user.uid,
             name: userDoc.data()?.name || result.user.displayName || "",
             email: result.user.email || "",
-            profileCompleted: true,
             status: "active",
             updatedAt: new Date().toISOString(),
           },
