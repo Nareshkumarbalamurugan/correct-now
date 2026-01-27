@@ -495,6 +495,16 @@ const Index = () => {
                       </div>
                     ) : (
                       <div className="max-w-2xl space-y-6">
+                        {isAuthenticated && userProfile?.plan === "free" && (
+                          <Card>
+                            <CardContent className="p-6">
+                              <h3 className="text-base font-semibold text-foreground mb-2">Free daily limit</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Free users can check up to 300 words per day. You can continue tomorrow.
+                              </p>
+                            </CardContent>
+                          </Card>
+                        )}
                         <Card>
                           <CardContent className="p-6">
                             <h3 className="text-base font-semibold text-foreground mb-4">Profile Information</h3>

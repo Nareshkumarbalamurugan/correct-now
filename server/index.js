@@ -164,6 +164,8 @@ const updateUsersBySubscriptionId = async (subscriptionId, updates) => {
 const ipCheckCount = new Map(); // { ip: { count: number, resetAt: timestamp } }
 const IP_CHECK_LIMIT = 5;
 const IP_RESET_HOURS = 24;
+// Daily word limit for logged-in free users (also enforced per IP)
+const freeIpWordCount = new Map(); // { key: { count: number, resetAt: timestamp } }
 
 app.use(cors());
 
@@ -1578,12 +1580,12 @@ app.post("/api/proofread", async (req, res) => {
   try {
     const { text, language, userId } = req.body || {};
     
+    const clientIp = req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.headers["x-real-ip"] ||
+      req.socket.remoteAddress;
+
     // Rate limiting for non-authenticated users
     if (!userId) {
-      const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
-                       req.headers['x-real-ip'] || 
-                       req.socket.remoteAddress;
-      
       const now = Date.now();
       const ipData = ipCheckCount.get(clientIp);
       
@@ -1637,10 +1639,20 @@ app.post("/api/proofread", async (req, res) => {
             const usedToday = storedDay === todayKey ? storedUsed : 0;
             const remaining = Math.max(0, FREE_DAILY_WORD_LIMIT - usedToday);
 
-            if (words.length > remaining) {
+            const ipKey = `${clientIp || "unknown"}|${todayKey}`;
+            const ipEntry = freeIpWordCount.get(ipKey);
+            const now = Date.now();
+            if (ipEntry && now > ipEntry.resetAt) {
+              freeIpWordCount.delete(ipKey);
+            }
+            const currentIp = freeIpWordCount.get(ipKey);
+            const ipUsed = currentIp ? currentIp.count : 0;
+            const ipRemaining = Math.max(0, FREE_DAILY_WORD_LIMIT - ipUsed);
+
+            if (words.length > remaining || words.length > ipRemaining) {
               res.setHeader("X-Daily-Words-Remaining", "0");
               return res.status(429).json({
-                message: "Daily free limit reached. You can continue tomorrow.",
+                message: "Daily 300 words per day for free users",
                 requiresUpgrade: true,
                 dailyRemaining: 0,
               });
@@ -1651,6 +1663,8 @@ app.post("/api/proofread", async (req, res) => {
               todayKey,
               usedNext: usedToday + words.length,
               remainingNext: Math.max(0, FREE_DAILY_WORD_LIMIT - (usedToday + words.length)),
+              ipKey,
+              ipUsedNext: ipUsed + words.length,
             };
             res.setHeader("X-Daily-Words-Remaining", remaining.toString());
           }
@@ -1754,6 +1768,11 @@ app.post("/api/proofread", async (req, res) => {
         },
         { merge: true }
       );
+      const resetAt = Date.now() + (IP_RESET_HOURS * 60 * 60 * 1000);
+      freeIpWordCount.set(freeDailyContext.ipKey, {
+        count: freeDailyContext.ipUsedNext,
+        resetAt,
+      });
       res.setHeader("X-Daily-Words-Remaining", String(freeDailyContext.remainingNext));
     }
     return res.json(result);

@@ -338,6 +338,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [creditsUsed, setCreditsUsed] = useState(0);
   const [addonCredits, setAddonCredits] = useState(0);
   const [addonExpiry, setAddonExpiry] = useState<string | null>(null);
+  const [dailyRemaining, setDailyRemaining] = useState<number | null>(null);
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [inputText, setInputText] = useState("");
@@ -485,6 +486,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         setWordLimit(FREE_WORD_LIMIT);
         setCredits(0);
         setCreditsUsed(0);
+        setDailyRemaining(null);
         setUserName("");
         setUserEmail("");
         setCurrentUserId(null);
@@ -562,6 +564,16 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
           setAddonCredits(Number.isFinite(validAddonCredits) ? validAddonCredits : 0);
           setAddonExpiry(addonValid ? addonExpiryDate : null);
           setCreditsUsed(Number.isFinite(usedValue) ? usedValue : 0);
+          if (plan === "Free") {
+            const todayKey = new Date().toISOString().slice(0, 10);
+            const storedDay = String(data?.freeDailyDate || "");
+            const storedUsed = Number(data?.freeDailyUsed || 0);
+            const usedToday = storedDay === todayKey ? storedUsed : 0;
+            const remaining = Math.max(0, 300 - usedToday);
+            setDailyRemaining(remaining);
+          } else {
+            setDailyRemaining(null);
+          }
         });
       } catch {
         setPlanName("Free");
@@ -866,6 +878,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         if (remaining <= 2 && remaining > 0) {
           toast.warning(`Only ${remaining} free check${remaining === 1 ? '' : 's'} remaining. Sign in for unlimited checks!`);
         }
+      }
+
+      const dailyRemainingHeader = response.headers.get("X-Daily-Words-Remaining");
+      if (dailyRemainingHeader !== null) {
+        const remaining = parseInt(dailyRemainingHeader, 10);
+        setDailyRemaining(Number.isFinite(remaining) ? remaining : null);
       }
 
       if (!response.ok) {
@@ -1315,6 +1333,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     </div>
                     <div className="flex flex-col items-start gap-0.5 sm:gap-1 w-full sm:w-auto">
                       <WordCounter count={wordCount} limit={wordLimit} />
+                      {planName === "Free" && currentUserId && (
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">
+                          Dialy 300 words per day for free users
+                          {dailyRemaining !== null ? ` • Remaining: ${dailyRemaining}` : ""}
+                        </div>
+                      )}
                       {creditsLimitEnabled && (
                         <div className="text-[10px] sm:text-xs text-muted-foreground">
                           Credits left: {creditsRemaining?.toLocaleString()}
