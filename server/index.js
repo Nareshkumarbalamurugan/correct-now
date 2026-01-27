@@ -797,6 +797,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 app.use(express.json({ limit: "1mb" }));
 
 const WORD_LIMIT = 5000;
+const FREE_DAILY_WORD_LIMIT = 300;
 
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
@@ -1618,6 +1619,45 @@ app.post("/api/proofread", async (req, res) => {
       return res.status(400).json({ message: `Text exceeds ${WORD_LIMIT} words` });
     }
 
+    let freeDailyContext = null;
+    if (userId && adminDb) {
+      try {
+        const userRef = adminDb.collection("users").doc(String(userId));
+        const userSnap = await userRef.get();
+        if (userSnap.exists) {
+          const data = userSnap.data() || {};
+          const planField = String(data.plan || "").toLowerCase();
+          const isPro = planField === "pro" || Number(data.wordLimit) >= 5000;
+          if (!isPro) {
+            const todayKey = new Date().toISOString().slice(0, 10);
+            const storedDay = String(data.freeDailyDate || "");
+            const storedUsed = Number(data.freeDailyUsed || 0);
+            const usedToday = storedDay === todayKey ? storedUsed : 0;
+            const remaining = Math.max(0, FREE_DAILY_WORD_LIMIT - usedToday);
+
+            if (words.length > remaining) {
+              res.setHeader("X-Daily-Words-Remaining", "0");
+              return res.status(429).json({
+                message: "Daily free limit reached. You can continue tomorrow.",
+                requiresUpgrade: true,
+                dailyRemaining: 0,
+              });
+            }
+
+            freeDailyContext = {
+              userRef,
+              todayKey,
+              usedNext: usedToday + words.length,
+              remainingNext: Math.max(0, FREE_DAILY_WORD_LIMIT - (usedToday + words.length)),
+            };
+            res.setHeader("X-Daily-Words-Remaining", remaining.toString());
+          }
+        }
+      } catch (error) {
+        console.error("Failed to enforce free daily limit:", error);
+      }
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ message: "Missing GEMINI_API_KEY" });
@@ -1703,6 +1743,17 @@ app.post("/api/proofread", async (req, res) => {
       corrected_text: correctedText,
       changes,
     };
+    if (freeDailyContext) {
+      await freeDailyContext.userRef.set(
+        {
+          freeDailyDate: freeDailyContext.todayKey,
+          freeDailyUsed: freeDailyContext.usedNext,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      res.setHeader("X-Daily-Words-Remaining", String(freeDailyContext.remainingNext));
+    }
     return res.json(result);
   } catch (err) {
     console.error("Server error:", err);
