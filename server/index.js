@@ -799,6 +799,20 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 
 app.use(express.json({ limit: "1mb" }));
 
+// WordPress blog proxy (serve directly at /blog for SEO)
+const BLOG_PROXY_TARGET = process.env.BLOG_PROXY_TARGET || "https://blog.correctnow.app";
+app.use(
+  "/blog",
+  createProxyMiddleware({
+    target: BLOG_PROXY_TARGET,
+    changeOrigin: true,
+    secure: true,
+    pathRewrite: {
+      "^/blog": "",
+    },
+  })
+);
+
 const WORD_LIMIT = 5000;
 const FREE_DAILY_WORD_LIMIT = 300;
 
@@ -1798,20 +1812,6 @@ if (existsSync(distPath)) {
       : path.join(publicPath, "robots.txt");
     return res.sendFile(robotsPath);
   });
-
-  // WordPress blog proxy (serve directly at /blog for SEO)
-  const BLOG_PROXY_TARGET = process.env.BLOG_PROXY_TARGET || "https://blog.correctnow.app";
-  app.use(
-    "/blog",
-    createProxyMiddleware({
-      target: BLOG_PROXY_TARGET,
-      changeOrigin: true,
-      secure: true,
-      pathRewrite: {
-        "^/blog": "",
-      },
-    })
-  );
 
   app.use(express.static(distPath));
 
