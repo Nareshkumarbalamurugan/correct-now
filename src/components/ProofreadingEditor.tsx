@@ -456,8 +456,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [baseText, setBaseText] = useState("");
   const [correctedText, setCorrectedText] = useState("");
   const [changes, setChanges] = useState<Change[]>([]);
-  // Map to track original indices - avoids O(n) findIndex on every render
-  const changeIndexMapRef = useRef(new Map<Change, number>());
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState("");
   const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
@@ -1102,14 +1100,19 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
               .filter((change) => {
                 if (!change.original || !change.corrected) return false;
                 if (normalizeText(change.original) === normalizeText(change.corrected)) return false;
+                // CRITICAL: Only include suggestions whose original text actually exists in the input
+                // This prevents crashes when accepting suggestions that can't be found
+                if (!normalizedInput.includes(change.original)) {
+                  // Try case-insensitive search as fallback
+                  const lowerInput = normalizedInput.toLowerCase();
+                  const lowerOriginal = change.original.toLowerCase();
+                  if (!lowerInput.includes(lowerOriginal)) {
+                    return false;
+                  }
+                }
                 return true;
               })
           : [];
-        // Initialize index map for O(1) lookups during rendering
-        changeIndexMapRef.current.clear();
-        nextChanges.forEach((change, idx) => {
-          changeIndexMapRef.current.set(change, idx);
-        });
         setBaseText(normalizedInput);
         setChanges(nextChanges);
       }
@@ -1362,13 +1365,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setEditorDraft(target.innerText);
   };
 
-  const reorderSuggestions = (list: Change[]) => {
-    // Filter out accepted and ignored suggestions to hide them
-    return list.filter(
-      (change) => change.status !== "accepted" && change.status !== "ignored"
-    );
-  };
-
   const handleExportPdf = async () => {
     const target = modalEditorRef.current;
     if (!target) return;
@@ -1401,20 +1397,31 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     // which can freeze the browser on long texts.
     const updatedText = applySingleAcceptedChange(inputText, acceptedChange);
 
-    const remaining = updated.filter(
+    // CRITICAL: After applying the change, re-validate all pending suggestions
+    // to check if their original text still exists in the updated text.
+    // This prevents showing/accepting orphaned suggestions after text changes.
+    const revalidated = updated.map((change) => {
+      if (change.status !== "pending") return change;
+      
+      // Check if this pending suggestion's original text still exists
+      if (!change.original || !updatedText.includes(change.original)) {
+        // Try case-insensitive as fallback
+        const lowerText = updatedText.toLowerCase();
+        const lowerOriginal = change.original?.toLowerCase() || "";
+        if (!lowerText.includes(lowerOriginal)) {
+          // Original text no longer exists - mark as ignored to hide it
+          return { ...change, status: "ignored" as const };
+        }
+      }
+      return change;
+    });
+
+    const remaining = revalidated.filter(
       (change) => change.status !== "accepted" && change.status !== "ignored"
     ).length;
 
-    // Use startTransition to mark updates as non-urgent, keeping UI responsive
-    startTransition(() => {
-      const reordered = reorderSuggestions(updated);
-      // Rebuild index map for fast lookups
-      changeIndexMapRef.current.clear();
-      updated.forEach((change, idx) => {
-        changeIndexMapRef.current.set(change, idx);
-      });
-      setChanges(reordered);
-    });
+    // Keep the full list - don't filter. The UI skips rendering accepted/ignored items.
+    setChanges(revalidated);
     
     // Batch text updates to trigger only one re-render
     setInputText(updatedText);
@@ -1448,15 +1455,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const updated: Change[] = changes.map((change, idx) =>
       idx === index ? { ...change, status: "ignored" as const } : change
     );
-    startTransition(() => {
-      const reordered = reorderSuggestions(updated);
-      // Rebuild index map
-      changeIndexMapRef.current.clear();
-      updated.forEach((change, idx) => {
-        changeIndexMapRef.current.set(change, idx);
-      });
-      setChanges(reordered);
-    });
+    setChanges(updated);
   }, [changes]);
 
   const handleAcceptAll = () => {
@@ -1467,7 +1466,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     const finalText = trimmedCorrected && trimmedCorrected !== base.trim()
       ? trimmedCorrected
       : updatedText;
-    setChanges(reorderSuggestions(updated));
+    setChanges(updated);
     setInputText(finalText);
     setBaseText(finalText);
     setCorrectedText(finalText);
@@ -1781,19 +1780,18 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                   </div>
                 ) : (
                   <div className="space-y-4 max-h-[520px] overflow-auto pr-1">
-                    {visibleChanges.map((change) => {
-                      // Use cached index map instead of O(n) findIndex
-                      const originalIndex = changeIndexMapRef.current.get(change) ?? -1;
-                      if (originalIndex === -1) return null;
+                    {changes.map((change, index) => {
+                      // Skip accepted and ignored suggestions
+                      if (change.status === "accepted" || change.status === "ignored") return null;
                       return (
                         <SuggestionCard
-                          key={`${originalIndex}-${change.original}-${change.corrected}`}
+                          key={index}
                           change={change}
-                          index={originalIndex}
-                          isActive={activeSuggestionIndex === originalIndex}
+                          index={index}
+                          isActive={activeSuggestionIndex === index}
                           onAccept={handleAccept}
                           onIgnore={handleIgnore}
-                          setRef={(el) => (suggestionRefs.current[originalIndex] = el)}
+                          setRef={(el) => (suggestionRefs.current[index] = el)}
                         />
                       );
                     })}
