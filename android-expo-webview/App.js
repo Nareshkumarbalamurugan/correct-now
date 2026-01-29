@@ -1,23 +1,24 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { BackHandler, StyleSheet, View, Text, ActivityIndicator, Platform, SafeAreaView, StatusBar as RNStatusBar, Linking } from 'react-native';
+import { BackHandler, StyleSheet, View, Text, ActivityIndicator, Platform, StatusBar as RNStatusBar, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 const START_URL = 'https://correctnow.app/';
 const EXTERNAL_GOOGLE_URL = 'https://correctnow.app/auth?mode=login&autoGoogle=1';
 
-const APP_SCHEME = 'correctnow://';
-const GOOGLE_LOGIN_SCHEME = 'correctnow://google-login';
-
 const isAllowedUrl = (url) => {
+  // Block custom scheme to prevent "Can't open url" warnings
+  if (url.startsWith('correctnow://')) {
+    return false;
+  }
   return (
     url.startsWith('https://') ||
     url.startsWith('http://') ||
     url.startsWith('about:blank') ||
     url.startsWith('blob:') ||
     url.startsWith('data:') ||
-    url.startsWith('file:') ||
-    url.startsWith(APP_SCHEME)
+    url.startsWith('file:')
   );
 };
 
@@ -76,8 +77,9 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" translucent={false} backgroundColor="#fff" />
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+        <StatusBar style="dark" translucent={false} backgroundColor="#fff" />
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0000ff" />
@@ -94,6 +96,14 @@ export default function App() {
       <WebView
         ref={webViewRef}
         source={{ uri: START_URL }}
+        injectedJavaScript={`
+          window.ReactNativeWebView = {
+            postMessage: function(message) {
+              window.postMessage(message, '*');
+            }
+          };
+          true;
+        `}
         onNavigationStateChange={(navState) => {
           canGoBackRef.current = navState.canGoBack;
         }}
@@ -115,8 +125,8 @@ export default function App() {
           if (!request?.url) {
             return false;
           }
-          if (request.url.startsWith(GOOGLE_LOGIN_SCHEME)) {
-            Linking.openURL(EXTERNAL_GOOGLE_URL);
+          // Block custom scheme navigation - handled by onMessage instead
+          if (request.url.startsWith('correctnow://')) {
             return false;
           }
           return isAllowedUrl(request.url);
@@ -128,6 +138,22 @@ export default function App() {
           setError(nativeEvent.description || 'Unknown error');
           setLoading(false);
         }}
+        onMessage={(event) => {
+          const data = event?.nativeEvent?.data || '';
+          console.log('WebView message received:', data);
+          if (data === 'google-login') {
+            console.log('Opening browser for Google login:', EXTERNAL_GOOGLE_URL);
+            Linking.canOpenURL(EXTERNAL_GOOGLE_URL)
+              .then((supported) => {
+                if (supported) {
+                  return Linking.openURL(EXTERNAL_GOOGLE_URL);
+                } else {
+                  console.error('Cannot open URL:', EXTERNAL_GOOGLE_URL);
+                }
+              })
+              .catch((err) => console.error('Error opening URL:', err));
+          }
+        }}
         onHttpError={(syntheticEvent) => {
           console.error('HTTP error:', syntheticEvent.nativeEvent);
         }}
@@ -138,10 +164,12 @@ export default function App() {
         setSupportMultipleWindows={false}
         allowsBackForwardNavigationGestures
         cacheEnabled={false}
+        incognito={false}
         mixedContentMode="compatibility"
         style={styles.webview}
       />
-    </SafeAreaView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 

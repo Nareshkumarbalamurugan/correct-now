@@ -3,6 +3,7 @@
     "name": "correctnow",
     "slug": "correctnow",
     "version": "1.0.0",
+    "scheme": "correctnow",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,6 +18,20 @@
     },
     "android": {
       "package": "com.correctnow.webview",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "correctnow"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

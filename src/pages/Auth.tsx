@@ -240,7 +240,17 @@ const Auth = () => {
         return;
       }
       if (isWebView()) {
-        window.location.href = "correctnow://google-login";
+        const rnBridge = (window as any)?.ReactNativeWebView;
+        console.log('WebView detected, ReactNativeWebView available:', !!rnBridge);
+        if (rnBridge?.postMessage) {
+          console.log('Sending postMessage to app: google-login');
+          rnBridge.postMessage("google-login");
+          toast.info("Opening browser for Google sign-in...");
+        } else {
+          console.error('ReactNativeWebView.postMessage not available');
+          toast.error("Please open this in the mobile app to sign in with Google.");
+        }
+        setIsLoading(false);
         return;
       }
       const provider = new GoogleAuthProvider();
