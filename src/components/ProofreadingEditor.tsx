@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Send, Copy, Check, RotateCcw, FileText, Bold, Italic, Underline, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -810,6 +810,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       }, text);
   };
 
+  const applySingleAcceptedChange = (text: string, change: Change) => {
+    if (!change.original || !change.corrected) return text;
+    const regex = buildLooseRegex(change.original);
+    return text.replace(regex, change.corrected);
+  };
+
   const updateInputWithAccepted = (updatedChanges: Change[]) => {
     const base = baseText || inputText;
     const updatedText = applyAcceptedChanges(base, updatedChanges);
@@ -1222,18 +1228,21 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       return change;
     });
     setChanges(reorderSuggestions(updated));
-    // Use baseText as the source of truth for applying changes
-    const source = baseText || inputText;
-    const updatedText = applyAcceptedChanges(source, updated);
+
+    // Apply ONLY the newly accepted change.
+    // Previously this re-applied every accepted change over the full document on each click,
+    // which can freeze the browser on long texts.
+    const updatedText = applySingleAcceptedChange(inputText, acceptedChange);
+
     // Update all text states to reflect the accepted change
     setInputText(updatedText);
-    setBaseText(updatedText); // Keep baseText in sync with latest accepted text
+    setBaseText(updatedText);
     setCorrectedText(updatedText);
     const remaining = updated.filter(
       (change) => change.status !== "accepted" && change.status !== "ignored"
     ).length;
     if (remaining === 0) {
-      const finalText = correctedText?.trim() ? correctedText : updatedText;
+      const finalText = updatedText;
       setInputText(finalText);
       setBaseText(finalText);
       setCorrectedText(finalText);
@@ -1291,6 +1300,16 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       modalEditorRef.current.innerHTML = editorHtml;
     }
   }, [editorHtml]);
+
+  const visibleChanges = useMemo(
+    () => changes.filter((change) => change.status !== "accepted" && change.status !== "ignored"),
+    [changes]
+  );
+
+  const highlightHtml = useMemo(
+    () => highlightText(inputText, visibleChanges),
+    [inputText, visibleChanges]
+  );
 
   return (
     <section
@@ -1404,10 +1423,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                     onMouseMove={handleHighlightMouseMove}
                     onMouseLeave={handleHighlightMouseLeave}
                     dangerouslySetInnerHTML={{
-                      __html: highlightText(
-                        inputText,
-                        changes.filter((change) => change.status !== "accepted" && change.status !== "ignored")
-                      ),
+                      __html: highlightHtml,
                     }}
                   />
                   <textarea
