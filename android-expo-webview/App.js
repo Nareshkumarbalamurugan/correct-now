@@ -1,9 +1,13 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { BackHandler, StyleSheet, View, Text, ActivityIndicator, Platform, SafeAreaView, StatusBar as RNStatusBar } from 'react-native';
+import { BackHandler, StyleSheet, View, Text, ActivityIndicator, Platform, SafeAreaView, StatusBar as RNStatusBar, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 
 const START_URL = 'https://correctnow.app/';
+const EXTERNAL_GOOGLE_URL = 'https://correctnow.app/auth?mode=login&autoGoogle=1';
+
+const APP_SCHEME = 'correctnow://';
+const GOOGLE_LOGIN_SCHEME = 'correctnow://google-login';
 
 const isAllowedUrl = (url) => {
   return (
@@ -12,7 +16,8 @@ const isAllowedUrl = (url) => {
     url.startsWith('about:blank') ||
     url.startsWith('blob:') ||
     url.startsWith('data:') ||
-    url.startsWith('file:')
+    url.startsWith('file:') ||
+    url.startsWith(APP_SCHEME)
   );
 };
 
@@ -108,6 +113,10 @@ export default function App() {
         }}
         onShouldStartLoadWithRequest={(request) => {
           if (!request?.url) {
+            return false;
+          }
+          if (request.url.startsWith(GOOGLE_LOGIN_SCHEME)) {
+            Linking.openURL(EXTERNAL_GOOGLE_URL);
             return false;
           }
           return isAllowedUrl(request.url);

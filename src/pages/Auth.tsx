@@ -8,7 +8,9 @@ import { toast } from "sonner";
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
+  getRedirectResult,
   signInWithPopup,
+  signInWithRedirect,
   signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
@@ -39,12 +41,45 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";
+  const [hasAutoTriggeredGoogle, setHasAutoTriggeredGoogle] = useState(false);
+
+  const isWebView = () => {
+    const ua = navigator.userAgent || "";
+    const isAndroidWebView = /\bwv\b|WebView/i.test(ua);
+    const isIOSWebView = /iPhone|iPad|iPod/i.test(ua) && !/Safari/i.test(ua);
+    return isAndroidWebView || isIOSWebView;
+  };
+
+  const shouldUseRedirect = () => {
+    const ua = navigator.userAgent || "";
+    return /Android|iPhone|iPad|iPod/i.test(ua);
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
     setIsLogin(mode !== "register");
   }, [location.search]);
+
+  useEffect(() => {
+    const runRedirectResult = async () => {
+      const auth = getFirebaseAuth();
+      if (!auth) return;
+      const result = await getRedirectResult(auth).catch(() => null);
+      if (!result?.user) return;
+      await handleGoogleResult(result);
+    };
+    runRedirectResult();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const autoGoogle = params.get("autoGoogle");
+    if (autoGoogle === "1" && !hasAutoTriggeredGoogle && !isWebView()) {
+      setHasAutoTriggeredGoogle(true);
+      handleGoogleSignIn(true);
+    }
+  }, [location.search, hasAutoTriggeredGoogle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,7 +189,49 @@ const Auth = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleResult = async (result: any) => {
+    const db = getFirebaseDb();
+
+    if (db) {
+      const ref = firestoreDoc(db, `users/${result.user.uid}`);
+      const userDoc = await getDocFromServer(ref).catch(() => getDoc(ref));
+
+      if (userDoc.exists() && userDoc.data()?.status === "deactivated") {
+        const auth = getFirebaseAuth();
+        await auth?.signOut();
+        toast.error("Your account is deactivated. Contact support to reactivate.");
+        return;
+      }
+
+      const existingName = String(userDoc.data()?.name || "").trim();
+      const existingPhone = String(userDoc.data()?.phone || "").trim();
+      if (!userDoc.exists()) {
+        setGoogleUserData(result.user);
+        setGoogleName(existingName || result.user.displayName || "");
+        setGooglePhone(existingPhone || "");
+        setShowGoogleNameDialog(true);
+        setIsLoading(false);
+        return;
+      }
+
+      await setDoc(
+        ref,
+        {
+          uid: result.user.uid,
+          name: userDoc.data()?.name || result.user.displayName || "",
+          email: result.user.email || "",
+          status: "active",
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      await writeSessionId(result.user, true);
+    }
+    toast.success("Signed in with Google");
+    navigate("/");
+  };
+
+  const handleGoogleSignIn = async (forceRedirect = false) => {
     setIsLoading(true);
     try {
       const auth = getFirebaseAuth();
@@ -162,49 +239,17 @@ const Auth = () => {
         toast.error("Firebase is not configured yet.");
         return;
       }
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const db = getFirebaseDb();
-      
-      if (db) {
-        const ref = firestoreDoc(db, `users/${result.user.uid}`);
-        const userDoc = await getDocFromServer(ref).catch(() => getDoc(ref));
-
-        if (userDoc.exists() && userDoc.data()?.status === "deactivated") {
-          await auth.signOut();
-          toast.error("Your account is deactivated. Contact support to reactivate.");
-          return;
-        }
-        
-        const existingName = String(userDoc.data()?.name || "").trim();
-        const existingPhone = String(userDoc.data()?.phone || "").trim();
-        // Ask only for first-time Google registration
-        if (!userDoc.exists()) {
-          // New user - prompt for completion (phone optional)
-          setGoogleUserData(result.user);
-          setGoogleName(existingName || result.user.displayName || "");
-          setGooglePhone(existingPhone || "");
-          setShowGoogleNameDialog(true);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Existing user with name - just update timestamp
-        await setDoc(
-          ref,
-          {
-            uid: result.user.uid,
-            name: userDoc.data()?.name || result.user.displayName || "",
-            email: result.user.email || "",
-            status: "active",
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-        await writeSessionId(result.user, true);
+      if (isWebView()) {
+        window.location.href = "correctnow://google-login";
+        return;
       }
-      toast.success("Signed in with Google");
-      navigate("/");
+      const provider = new GoogleAuthProvider();
+      if (forceRedirect || shouldUseRedirect()) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      const result = await signInWithPopup(auth, provider);
+      await handleGoogleResult(result);
     } catch (error: any) {
       toast.error(error?.message ?? "Google sign-in failed");
     } finally {
@@ -508,7 +553,7 @@ const Auth = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            <Button variant="outline" type="button" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
+            <Button variant="outline" type="button" className="w-full" onClick={() => handleGoogleSignIn()} disabled={isLoading}>
               <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
