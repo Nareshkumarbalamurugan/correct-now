@@ -46,6 +46,7 @@ import { getFirebaseAuth, getFirebaseDb, getFirebaseStorage } from "@/lib/fireba
 import {
   collection,
   collectionGroup,
+  deleteField,
   getDocs,
   getDoc,
   doc,
@@ -1109,17 +1110,27 @@ Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
         updates.credits = 999999;
         updates.plan = "pro";
         updates.status = "active";
+        updates.subscriptionStatus = "active";
+        updates.subscriptionUpdatedAt = new Date().toISOString();
       } else if (limitType === "disabled") {
         updates.wordLimit = 0;
         updates.credits = 0;
         updates.plan = "free";
         updates.status = "deactivated";
+        updates.subscriptionStatus = "inactive";
+        updates.subscriptionUpdatedAt = new Date().toISOString();
       } else {
         const wordLimit = parseInt(wordLimitValue);
         const credits = parseInt(creditsValue);
         updates.wordLimit = isNaN(wordLimit) ? 2000 : wordLimit;
         updates.credits = isNaN(credits) ? 50000 : credits;
         updates.status = "active";
+
+        // Keep plan/status consistent when using custom limits
+        const inferredPro = (updates.wordLimit ?? 0) >= 5000;
+        updates.plan = inferredPro ? "pro" : "free";
+        updates.subscriptionStatus = inferredPro ? "active" : "inactive";
+        updates.subscriptionUpdatedAt = new Date().toISOString();
       }
 
       updates.updatedAt = new Date().toISOString();
@@ -1132,8 +1143,8 @@ Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
         }
 
         updates.name = editUserName.trim() || "User";
-        updates.phone = phoneValue || undefined;
-        updates.category = editUserCategory.trim() || undefined;
+        updates.phone = phoneValue ? phoneValue : deleteField();
+        updates.category = editUserCategory.trim() ? editUserCategory.trim() : deleteField();
 
       const userRef = doc(db, "users", editingUserId);
       await updateDoc(userRef, updates);

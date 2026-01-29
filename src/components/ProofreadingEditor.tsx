@@ -886,6 +886,14 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         setDailyRemaining(Number.isFinite(remaining) ? remaining : null);
       }
 
+      const creditsUsedHeader = response.headers.get("X-Credits-Used");
+      if (creditsUsedHeader !== null) {
+        const used = parseInt(creditsUsedHeader, 10);
+        if (Number.isFinite(used)) {
+          setCreditsUsed(used);
+        }
+      }
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         
@@ -932,18 +940,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         setChanges(nextChanges);
       }
       persistDoc(normalizedInput);
-      const auth = getFirebaseAuth();
-      const db = getFirebaseDb();
-      if (auth?.currentUser && db && creditsLimitEnabled) {
-        const usedNext = creditsUsed + overrideWordCount;
-        setCreditsUsed(usedNext);
-        const ref = firestoreDoc(db, `users/${auth.currentUser.uid}`);
-        await updateDoc(ref, {
-          creditsUsed: usedNext,
-          creditsUpdatedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-      }
       setHasResults(true);
       if (typeof window !== "undefined" && window.innerWidth < 768) {
         window.setTimeout(() => {

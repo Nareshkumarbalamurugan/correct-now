@@ -20,6 +20,7 @@ import { FileText, Search, Star, LogOut, User, Menu } from "lucide-react";
 import { formatUpdated, getDocs, sectionForDate } from "@/lib/docs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { getEffectivePlan } from "@/lib/entitlements";
 import { addSuggestion } from "@/lib/suggestions";
 import { toast } from "sonner";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
@@ -495,7 +496,10 @@ const Index = () => {
                       </div>
                     ) : (
                       <div className="max-w-2xl space-y-6">
-                        {isAuthenticated && userProfile?.plan === "free" && (
+                        {(() => {
+                          const effective = getEffectivePlan(userProfile);
+                          return isAuthenticated && effective.planKey === "free";
+                        })() && (
                           <Card>
                             <CardContent className="p-6">
                               <h3 className="text-base font-semibold text-foreground mb-2">Free daily limit</h3>
@@ -554,14 +558,21 @@ const Index = () => {
                             <h3 className="text-base font-semibold text-foreground mb-4">Subscription</h3>
                             <div className="space-y-3">
                               <div className="space-y-2 text-sm">
+                                {(() => {
+                                  const effective = getEffectivePlan(userProfile);
+                                  return (
+                                    <>
                                 <div className="flex items-center justify-between">
                                   <span className="text-muted-foreground">Plan</span>
-                                  <span className="font-semibold text-foreground capitalize">{userProfile?.plan || "free"}</span>
+                                  <span className="font-semibold text-foreground">{effective.planLabel}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
                                   <span className="text-muted-foreground">Status</span>
-                                  <span className="font-semibold text-foreground capitalize">{userProfile?.subscriptionStatus || "inactive"}</span>
+                                  <span className="font-semibold text-foreground capitalize">{effective.subscriptionStatus || "inactive"}</span>
                                 </div>
+                                    </>
+                                  );
+                                })()}
                               </div>
                               {(() => {
                                 // Check purchased add-on credits (30-day expiry)

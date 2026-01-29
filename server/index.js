@@ -1639,6 +1639,7 @@ app.post("/api/proofread", async (req, res) => {
     }
 
     let freeDailyContext = null;
+    let creditsContext = null;
     if (userId && adminDb) {
       try {
         const userRef = adminDb.collection("users").doc(String(userId));
@@ -1647,6 +1648,24 @@ app.post("/api/proofread", async (req, res) => {
           const data = userSnap.data() || {};
           const planField = String(data.plan || "").toLowerCase();
           const isPro = planField === "pro" || Number(data.wordLimit) >= 5000;
+
+          const nowMs = Date.now();
+          const storedCreditsUsed = Number(data.creditsUsed || 0);
+          const creditsUsed = Number.isFinite(storedCreditsUsed) ? storedCreditsUsed : 0;
+          const baseCreditsRaw = data.credits ?? (isPro ? 50000 : 0);
+          const baseCredits = Number.isFinite(Number(baseCreditsRaw)) ? Number(baseCreditsRaw) : 0;
+          const rawAddonCredits = Number(data.addonCredits || 0);
+          const addonExpiry = data.addonCreditsExpiryAt
+            ? new Date(String(data.addonCreditsExpiryAt))
+            : null;
+          const addonValid = addonExpiry && !Number.isNaN(addonExpiry.getTime())
+            ? addonExpiry.getTime() > nowMs
+            : false;
+          const validAddonCredits = addonValid && Number.isFinite(rawAddonCredits) ? rawAddonCredits : 0;
+          const totalCredits = baseCredits + validAddonCredits;
+          const creditsRemaining = totalCredits > 0 ? Math.max(0, totalCredits - creditsUsed) : null;
+          const canSpendCredits = totalCredits > 0;
+
           if (!isPro) {
             const todayKey = new Date().toISOString().slice(0, 10);
             const storedDay = String(data.freeDailyDate || "");
@@ -1656,8 +1675,8 @@ app.post("/api/proofread", async (req, res) => {
 
             const ipKey = `${clientIp || "unknown"}|${todayKey}`;
             const ipEntry = freeIpWordCount.get(ipKey);
-            const now = Date.now();
-            if (ipEntry && now > ipEntry.resetAt) {
+            const ipNow = Date.now();
+            if (ipEntry && ipNow > ipEntry.resetAt) {
               freeIpWordCount.delete(ipKey);
             }
             const currentIp = freeIpWordCount.get(ipKey);
@@ -1665,23 +1684,62 @@ app.post("/api/proofread", async (req, res) => {
             const ipRemaining = Math.max(0, FREE_DAILY_WORD_LIMIT - ipUsed);
 
             if (words.length > remaining || words.length > ipRemaining) {
-              res.setHeader("X-Daily-Words-Remaining", "0");
-              return res.status(429).json({
-                message: "Daily 300 words per day for free users",
-                requiresUpgrade: true,
-                dailyRemaining: 0,
-              });
+              // After the daily free quota is exhausted, allow add-on credits to be used.
+              if (canSpendCredits) {
+                if (words.length > (creditsRemaining ?? 0)) {
+                  res.setHeader("X-Daily-Words-Remaining", "0");
+                  res.setHeader("X-Credits-Remaining", String(creditsRemaining ?? 0));
+                  return res.status(429).json({
+                    message: "Not enough credits. Please buy add-on credits to continue.",
+                    requiresUpgrade: true,
+                    dailyRemaining: 0,
+                    creditsRemaining: creditsRemaining ?? 0,
+                  });
+                }
+                creditsContext = {
+                  userRef,
+                  creditsUsedNext: creditsUsed + words.length,
+                  creditsRemainingNext: Math.max(0, totalCredits - (creditsUsed + words.length)),
+                };
+                res.setHeader("X-Daily-Words-Remaining", "0");
+                res.setHeader("X-Credits-Remaining", String(creditsRemaining));
+              } else {
+                res.setHeader("X-Daily-Words-Remaining", "0");
+                return res.status(429).json({
+                  message: "Daily 300 words per day for free users",
+                  requiresUpgrade: true,
+                  dailyRemaining: 0,
+                });
+              }
+            } else {
+              freeDailyContext = {
+                userRef,
+                todayKey,
+                usedNext: usedToday + words.length,
+                remainingNext: Math.max(0, FREE_DAILY_WORD_LIMIT - (usedToday + words.length)),
+                ipKey,
+                ipUsedNext: ipUsed + words.length,
+              };
+              res.setHeader("X-Daily-Words-Remaining", remaining.toString());
             }
-
-            freeDailyContext = {
-              userRef,
-              todayKey,
-              usedNext: usedToday + words.length,
-              remainingNext: Math.max(0, FREE_DAILY_WORD_LIMIT - (usedToday + words.length)),
-              ipKey,
-              ipUsedNext: ipUsed + words.length,
-            };
-            res.setHeader("X-Daily-Words-Remaining", remaining.toString());
+          } else {
+            // Pro users: enforce their credit pool if present.
+            if (canSpendCredits) {
+              if (words.length > (creditsRemaining ?? 0)) {
+                res.setHeader("X-Credits-Remaining", String(creditsRemaining ?? 0));
+                return res.status(429).json({
+                  message: "Not enough credits. Please buy add-on credits to continue.",
+                  requiresUpgrade: true,
+                  creditsRemaining: creditsRemaining ?? 0,
+                });
+              }
+              creditsContext = {
+                userRef,
+                creditsUsedNext: creditsUsed + words.length,
+                creditsRemainingNext: Math.max(0, totalCredits - (creditsUsed + words.length)),
+              };
+              res.setHeader("X-Credits-Remaining", String(creditsRemaining));
+            }
           }
         }
       } catch (error) {
@@ -1789,6 +1847,19 @@ app.post("/api/proofread", async (req, res) => {
         resetAt,
       });
       res.setHeader("X-Daily-Words-Remaining", String(freeDailyContext.remainingNext));
+    }
+
+    if (creditsContext) {
+      await creditsContext.userRef.set(
+        {
+          creditsUsed: creditsContext.creditsUsedNext,
+          creditsUpdatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      res.setHeader("X-Credits-Used", String(creditsContext.creditsUsedNext));
+      res.setHeader("X-Credits-Remaining", String(creditsContext.creditsRemainingNext));
     }
     return res.json(result);
   } catch (err) {
