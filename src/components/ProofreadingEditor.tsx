@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useDeferredValue, useCallback, startTransition } from "react";
 import { Send, Copy, Check, RotateCcw, FileText, Bold, Italic, Underline, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -260,14 +260,53 @@ const detectLanguageLocal = (text: string): string => {
 };
 
 const countWords = (text: string): number => {
-  return text.trim().split(/\s+/).filter(Boolean).length;
+  // Avoid allocating large arrays (`split`) on big documents.
+  let count = 0;
+  let inWord = false;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    const isWhitespace =
+      code === 32 || // space
+      code === 9 || // \t
+      code === 10 || // \n
+      code === 13 || // \r
+      code === 12 || // \f
+      code === 11 || // \v
+      code === 160; // \u00A0
+    if (isWhitespace) {
+      inWord = false;
+      continue;
+    }
+    if (!inWord) {
+      count++;
+      inWord = true;
+    }
+  }
+  return count;
 };
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const normalizeText = (value: string) => value.trim().normalize("NFC");
 
+// Fast non-cryptographic hash for caching/duplicate detection.
+// Using a hash avoids persisting huge full texts in localStorage (which can freeze the UI).
+const fnv1a32 = (value: string) => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16);
+};
+
+// Cache regex patterns to avoid rebuilding on every accept (expensive operation)
+const regexCache = new Map<string, RegExp>();
+
 const buildLooseRegex = (value: string) => {
+  const cached = regexCache.get(value);
+  if (cached) return cached;
+  
   const chars = value.split("");
   const parts = chars.map((char, index) => {
     if (/\s/.test(char)) return "\\s+";
@@ -276,7 +315,15 @@ const buildLooseRegex = (value: string) => {
       ? escapeRegExp(char)
       : `${escapeRegExp(char)}[^\\p{L}\\p{N}]*`;
   });
-  return new RegExp(parts.join(""), "giu");
+  const regex = new RegExp(parts.join(""), "giu");
+  
+  // Cap cache size to prevent memory leaks
+  if (regexCache.size > 500) {
+    const firstKey = regexCache.keys().next().value;
+    if (firstKey) regexCache.delete(firstKey);
+  }
+  regexCache.set(value, regex);
+  return regex;
 };
 
 const escapeHtml = (value: string) =>
@@ -300,10 +347,14 @@ const highlightText = (text: string, changeList: Change[]) => {
   let safeText = formatText(text);
   if (!changeList.length) return safeText;
 
+  // Highlighting is expensive for very large suggestion sets.
+  // Cap highlights to keep the UI responsive; the full list still appears in the sidebar.
+  const MAX_HIGHLIGHT_CHANGES = 250;
+
   // Sort changes by length (longest first) to avoid partial replacements
   const sortedChanges = [...changeList].sort((a, b) => 
     (b.original?.length || 0) - (a.original?.length || 0)
-  );
+  ).slice(0, MAX_HIGHLIGHT_CHANGES);
 
   sortedChanges.forEach((change) => {
     const target = change.original;
@@ -331,6 +382,66 @@ declare global {
   }
 }
 
+// Memoized suggestion card to prevent re-rendering all cards on each accept
+const SuggestionCard = React.memo(({ 
+  change, 
+  index, 
+  isActive, 
+  onAccept, 
+  onIgnore,
+  setRef 
+}: { 
+  change: Change; 
+  index: number; 
+  isActive: boolean; 
+  onAccept: (idx: number) => void; 
+  onIgnore: (idx: number) => void;
+  setRef: (el: HTMLDivElement | null) => void;
+}) => {
+  return (
+    <div
+      ref={setRef}
+      className={`rounded-lg border bg-card p-4 transition-all ${
+        isActive
+          ? "border-2 border-accent shadow-lg ring-4 ring-accent/20"
+          : "border-border"
+      }`}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground mb-1">Original</div>
+          <div className="text-base font-medium text-foreground">{change.original}</div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground mb-1">Suggestion</div>
+          <div className="text-base font-medium text-success">{change.corrected}</div>
+        </div>
+      </div>
+      <div className="mt-3 text-sm text-muted-foreground">
+        {change.explanation}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {change.status === "accepted" ? (
+          <span className="text-xs font-semibold text-success">Accepted</span>
+        ) : change.status === "ignored" ? (
+          <span className="text-xs font-semibold text-muted-foreground">Ignored</span>
+        ) : (
+          <>
+            <Button size="sm" variant="accent" onClick={() => onAccept(index)}>
+              Accept
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => onIgnore(index)}>
+              Ignore
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+});
+
+SuggestionCard.displayName = 'SuggestionCard';
+
 const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: ProofreadingEditorProps) => {
   const [planName, setPlanName] = useState<"Free" | "Pro">("Free");
   const [wordLimit, setWordLimit] = useState(FREE_WORD_LIMIT);
@@ -345,6 +456,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [baseText, setBaseText] = useState("");
   const [correctedText, setCorrectedText] = useState("");
   const [changes, setChanges] = useState<Change[]>([]);
+  // Map to track original indices - avoids O(n) findIndex on every render
+  const changeIndexMapRef = useRef(new Map<Change, number>());
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState("");
   const [languageMode, setLanguageMode] = useState<"auto" | "manual">("auto");
@@ -357,7 +470,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editorDraft, setEditorDraft] = useState("");
   const [editorHtml, setEditorHtml] = useState("");
-  const [acceptedTexts, setAcceptedTexts] = useState<string[]>([]);
+  const [acceptedTextHashes, setAcceptedTextHashes] = useState<string[]>([]);
   const [lastDetectText, setLastDetectText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -462,12 +575,34 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   }, [hasResults, isLoading]);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("correctnow:acceptedTexts");
-    if (stored) {
+    // Prefer hashes (fast + small). Also migrate from legacy full-text storage if present.
+    const storedHashes = window.localStorage.getItem("correctnow:acceptedTextHashes");
+    if (storedHashes) {
       try {
-        const parsed = JSON.parse(stored);
+        const parsed = JSON.parse(storedHashes);
         if (Array.isArray(parsed)) {
-          setAcceptedTexts(parsed);
+          setAcceptedTextHashes(parsed.map((x) => String(x)).slice(-200));
+          return;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const legacy = window.localStorage.getItem("correctnow:acceptedTexts");
+    if (legacy) {
+      try {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed)) {
+          const migrated = parsed
+            .map((text) => fnv1a32(normalizeText(String(text))))
+            .filter(Boolean);
+          setAcceptedTextHashes(migrated.slice(-200));
+          window.localStorage.setItem(
+            "correctnow:acceptedTextHashes",
+            JSON.stringify(migrated.slice(-200))
+          );
+          window.localStorage.removeItem("correctnow:acceptedTexts");
         }
       } catch {
         // ignore
@@ -591,15 +726,15 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   }, []);
 
   useEffect(() => {
-    if (acceptedTexts.length) {
+    if (acceptedTextHashes.length) {
       window.localStorage.setItem(
-        "correctnow:acceptedTexts",
-        JSON.stringify(acceptedTexts.slice(-50))
+        "correctnow:acceptedTextHashes",
+        JSON.stringify(acceptedTextHashes.slice(-200))
       );
     } else {
-      window.localStorage.removeItem("correctnow:acceptedTexts");
+      window.localStorage.removeItem("correctnow:acceptedTextHashes");
     }
-  }, [acceptedTexts]);
+  }, [acceptedTextHashes]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -646,7 +781,20 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [checksRemaining, setChecksRemaining] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const wordCount = countWords(inputText);
+  const visibleChanges = useMemo(
+    () => changes.filter((change) => change.status !== "accepted" && change.status !== "ignored"),
+    [changes]
+  );
+
+  const deferredInputText = useDeferredValue(inputText);
+  const deferredVisibleChanges = useDeferredValue(visibleChanges);
+
+  const highlightHtml = useMemo(
+    () => highlightText(deferredInputText, deferredVisibleChanges),
+    [deferredInputText, deferredVisibleChanges]
+  );
+
+  const wordCount = useMemo(() => countWords(inputText), [inputText]);
   const isOverLimit = wordCount > wordLimit;
   const totalCredits = credits + addonCredits;
   const creditsLimitEnabled = totalCredits > 0;
@@ -655,7 +803,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     : null;
   const isOverCredits = creditsLimitEnabled && wordCount > (creditsRemaining ?? 0);
   const isOutOfCredits = creditsLimitEnabled && (creditsRemaining ?? 0) <= 0;
-  const pendingCount = changes.filter((change) => change.status !== "accepted" && change.status !== "ignored").length;
+  const pendingCount = visibleChanges.length;
   const accuracyScore = hasResults && wordCount
     ? Math.max(0, Math.min(100, Math.round((1 - pendingCount / wordCount) * 100)))
     : 0;
@@ -812,6 +960,12 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
   const applySingleAcceptedChange = (text: string, change: Change) => {
     if (!change.original || !change.corrected) return text;
+    // For single replacements, try simple indexOf first (much faster)
+    const idx = text.indexOf(change.original);
+    if (idx !== -1) {
+      return text.slice(0, idx) + change.corrected + text.slice(idx + change.original.length);
+    }
+    // Fall back to regex only if exact match not found
     const regex = buildLooseRegex(change.original);
     return text.replace(regex, change.corrected);
   };
@@ -850,7 +1004,8 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setIsLoading(true);
     setHasResults(false);
     const normalizedInput = textToCheck.normalize("NFC");
-    if (acceptedTexts.some((text) => text.trim() === normalizedInput)) {
+    const inputHash = fnv1a32(normalizeText(normalizedInput));
+    if (acceptedTextHashes.includes(inputHash)) {
       setCorrectedText(normalizedInput);
       setBaseText(normalizedInput);
       setChanges([]);
@@ -927,9 +1082,10 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
         setCorrectedText(normalizedInput);
         setBaseText(normalizedInput);
         setChanges([]);
-        setAcceptedTexts((prev) => {
-          const next = prev.filter((text) => text.trim() !== normalizedInput);
-          return [...next, normalizedInput].slice(-50);
+        const inputHash = fnv1a32(normalizeText(normalizedInput));
+        setAcceptedTextHashes((prev) => {
+          const next = prev.filter((hash) => hash !== inputHash);
+          return [...next, inputHash].slice(-200);
         });
       } else {
         setCorrectedText(normalizedCorrected);
@@ -942,6 +1098,11 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                 return true;
               })
           : [];
+        // Initialize index map for O(1) lookups during rendering
+        changeIndexMapRef.current.clear();
+        nextChanges.forEach((change, idx) => {
+          changeIndexMapRef.current.set(change, idx);
+        });
         setBaseText(normalizedInput);
         setChanges(nextChanges);
       }
@@ -1214,7 +1375,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     await html2pdf().set(options).from(target).save();
   };
 
-  const handleAccept = (index: number) => {
+  const handleAccept = useCallback((index: number) => {
     const acceptedChange = changes[index];
     const updated: Change[] = changes.map((change, idx) => {
       // Accept the selected suggestion
@@ -1227,39 +1388,56 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       }
       return change;
     });
-    setChanges(reorderSuggestions(updated));
 
     // Apply ONLY the newly accepted change.
     // Previously this re-applied every accepted change over the full document on each click,
     // which can freeze the browser on long texts.
     const updatedText = applySingleAcceptedChange(inputText, acceptedChange);
 
-    // Update all text states to reflect the accepted change
-    setInputText(updatedText);
-    setBaseText(updatedText);
-    setCorrectedText(updatedText);
     const remaining = updated.filter(
       (change) => change.status !== "accepted" && change.status !== "ignored"
     ).length;
-    if (remaining === 0) {
-      const finalText = updatedText;
-      setInputText(finalText);
-      setBaseText(finalText);
-      setCorrectedText(finalText);
-      setAcceptedTexts((prev) => {
-        const next = prev.filter((text) => text.trim() !== finalText.trim());
-        return [...next, finalText].slice(-50);
-      });
-      persistDoc(finalText);
-    }
-  };
 
-  const handleIgnore = (index: number) => {
+    // Use startTransition to mark updates as non-urgent, keeping UI responsive
+    startTransition(() => {
+      const reordered = reorderSuggestions(updated);
+      // Rebuild index map for fast lookups
+      changeIndexMapRef.current.clear();
+      updated.forEach((change, idx) => {
+        changeIndexMapRef.current.set(change, idx);
+      });
+      setChanges(reordered);
+    });
+    
+    setInputText(updatedText);
+    setBaseText(updatedText);
+    setCorrectedText(updatedText);
+
+    if (remaining === 0) {
+      const finalHash = fnv1a32(normalizeText(updatedText));
+      setAcceptedTextHashes((prev) => {
+        const next = prev.filter((hash) => hash !== finalHash);
+        return [...next, finalHash].slice(-200);
+      });
+      // Defer expensive doc persistence to next frame to unblock UI
+      requestAnimationFrame(() => persistDoc(updatedText));
+    }
+  }, [changes, inputText]);
+
+  const handleIgnore = useCallback((index: number) => {
     const updated: Change[] = changes.map((change, idx) =>
       idx === index ? { ...change, status: "ignored" as const } : change
     );
-    setChanges(reorderSuggestions(updated));
-  };
+    startTransition(() => {
+      const reordered = reorderSuggestions(updated);
+      // Rebuild index map
+      changeIndexMapRef.current.clear();
+      updated.forEach((change, idx) => {
+        changeIndexMapRef.current.set(change, idx);
+      });
+      setChanges(reordered);
+    });
+  }, [changes]);
 
   const handleAcceptAll = () => {
     const updated: Change[] = changes.map((change) => ({ ...change, status: "accepted" as const }));
@@ -1274,25 +1452,30 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setBaseText(finalText);
     setCorrectedText(finalText);
     setSelectedWordDialog({ open: false, suggestions: [], original: "" });
-    setAcceptedTexts((prev) => {
-      const next = prev.filter((text) => text.trim() !== finalText.trim());
-      return [...next, finalText].slice(-50);
+    const finalHash = fnv1a32(normalizeText(finalText));
+    setAcceptedTextHashes((prev) => {
+      const next = prev.filter((hash) => hash !== finalHash);
+      return [...next, finalHash].slice(-200);
     });
     persistDoc(finalText);
   };
 
   useEffect(() => {
-    // Auto-resize textarea and sync highlight height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.max(
-        200,
-        textareaRef.current.scrollHeight
-      )}px`;
-    }
-    if (highlightRef.current && textareaRef.current) {
-      highlightRef.current.style.height = textareaRef.current.style.height;
-    }
+    // Auto-resize textarea and sync highlight height (batched to avoid layout thrash)
+    const id = window.requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${Math.max(
+          200,
+          textareaRef.current.scrollHeight
+        )}px`;
+      }
+      if (highlightRef.current && textareaRef.current) {
+        highlightRef.current.style.height = textareaRef.current.style.height;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(id);
   }, [inputText]);
 
   useEffect(() => {
@@ -1300,16 +1483,6 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       modalEditorRef.current.innerHTML = editorHtml;
     }
   }, [editorHtml]);
-
-  const visibleChanges = useMemo(
-    () => changes.filter((change) => change.status !== "accepted" && change.status !== "ignored"),
-    [changes]
-  );
-
-  const highlightHtml = useMemo(
-    () => highlightText(inputText, visibleChanges),
-    [inputText, visibleChanges]
-  );
 
   return (
     <section
@@ -1558,7 +1731,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                   <div className="text-sm font-semibold text-foreground">
-                    {changes.length} suggestion{changes.length === 1 ? "" : "s"} found
+                    {pendingCount} suggestion{pendingCount === 1 ? "" : "s"} remaining
                   </div>
                   <Button
                     variant="accent"
@@ -1570,54 +1743,29 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                   </Button>
                   </div>
 
-                  {hasResults && changes.length === 0 ? (
+                  {hasResults && pendingCount === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <p className="text-lg font-medium text-success mb-1">Looks great.</p>
                     <p className="text-sm">No corrections needed.</p>
                   </div>
                 ) : (
                   <div className="space-y-4 max-h-[520px] overflow-auto pr-1">
-                    {changes.map((change, index) => (
-                      <div
-                        key={index}
-                        ref={(el) => (suggestionRefs.current[index] = el)}
-                        className={`rounded-lg border bg-card p-4 transition-all ${
-                          activeSuggestionIndex === index
-                            ? "border-2 border-accent shadow-lg ring-4 ring-accent/20"
-                            : "border-border"
-                        }`}
-                      >
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div>
-                            <div className="text-xs font-semibold text-muted-foreground mb-1">Original</div>
-                            <div className="text-base font-medium text-foreground">{change.original}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-muted-foreground mb-1">Suggestion</div>
-                            <div className="text-base font-medium text-success">{change.corrected}</div>
-                          </div>
-                        </div>
-                        <div className="mt-3 text-sm text-muted-foreground">
-                          {change.explanation}
-                        </div>
-                        <div className="mt-4 flex flex-wrap items-center gap-2">
-                          {change.status === "accepted" ? (
-                            <span className="text-xs font-semibold text-success">Accepted</span>
-                          ) : change.status === "ignored" ? (
-                            <span className="text-xs font-semibold text-muted-foreground">Ignored</span>
-                          ) : (
-                            <>
-                              <Button size="sm" variant="accent" onClick={() => handleAccept(index)}>
-                                Accept
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleIgnore(index)}>
-                                Ignore
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                    {visibleChanges.map((change) => {
+                      // Use cached index map instead of O(n) findIndex
+                      const originalIndex = changeIndexMapRef.current.get(change) ?? -1;
+                      if (originalIndex === -1) return null;
+                      return (
+                        <SuggestionCard
+                          key={`${originalIndex}-${change.original}-${change.corrected}`}
+                          change={change}
+                          index={originalIndex}
+                          isActive={activeSuggestionIndex === originalIndex}
+                          onAccept={handleAccept}
+                          onIgnore={handleIgnore}
+                          setRef={(el) => (suggestionRefs.current[originalIndex] = el)}
+                        />
+                      );
+                    })}
                   </div>
                   )}
                 </div>
