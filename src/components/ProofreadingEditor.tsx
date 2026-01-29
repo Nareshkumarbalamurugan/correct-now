@@ -752,8 +752,14 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
   const persistDoc = (text: string) => {
     if (!text.trim()) return;
-    const saved = upsertDoc(text, docId);
-    setDocId(saved.id);
+    // Wrap in try-catch and make it fully async/non-blocking
+    try {
+      const saved = upsertDoc(text, docId);
+      setDocId(saved.id);
+    } catch (error) {
+      console.warn('Failed to persist document:', error);
+      // Don't block UI on persistence errors
+    }
   };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -780,6 +786,7 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
   const [hoveredError, setHoveredError] = useState<string | null>(null);
   const [checksRemaining, setChecksRemaining] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const finalOperationsTimerRef = useRef<number | null>(null);
 
   const visibleChanges = useMemo(
     () => changes.filter((change) => change.status !== "accepted" && change.status !== "ignored"),
@@ -1409,18 +1416,31 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
       setChanges(reordered);
     });
     
+    // Batch text updates to trigger only one re-render
     setInputText(updatedText);
     setBaseText(updatedText);
     setCorrectedText(updatedText);
 
+    // Debounce expensive final operations (hash, localStorage)
+    // Only execute once after user stops accepting (not on every accept)
     if (remaining === 0) {
-      const finalHash = fnv1a32(normalizeText(updatedText));
-      setAcceptedTextHashes((prev) => {
-        const next = prev.filter((hash) => hash !== finalHash);
-        return [...next, finalHash].slice(-200);
-      });
-      // Defer expensive doc persistence to next frame to unblock UI
-      requestAnimationFrame(() => persistDoc(updatedText));
+      if (finalOperationsTimerRef.current) {
+        clearTimeout(finalOperationsTimerRef.current);
+      }
+      finalOperationsTimerRef.current = window.setTimeout(() => {
+        // These operations are expensive on large texts
+        const finalHash = fnv1a32(normalizeText(updatedText));
+        setAcceptedTextHashes((prev) => {
+          const next = prev.filter((hash) => hash !== finalHash);
+          return [...next, finalHash].slice(-200);
+        });
+        // Defer doc persistence to idle time
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => persistDoc(updatedText), { timeout: 2000 });
+        } else {
+          requestAnimationFrame(() => persistDoc(updatedText));
+        }
+      }, 300); // Wait 300ms after last accept
     }
   }, [changes, inputText]);
 
@@ -1452,12 +1472,23 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
     setBaseText(finalText);
     setCorrectedText(finalText);
     setSelectedWordDialog({ open: false, suggestions: [], original: "" });
-    const finalHash = fnv1a32(normalizeText(finalText));
-    setAcceptedTextHashes((prev) => {
-      const next = prev.filter((hash) => hash !== finalHash);
-      return [...next, finalHash].slice(-200);
-    });
-    persistDoc(finalText);
+    
+    // Debounce expensive operations for Accept All too
+    if (finalOperationsTimerRef.current) {
+      clearTimeout(finalOperationsTimerRef.current);
+    }
+    finalOperationsTimerRef.current = window.setTimeout(() => {
+      const finalHash = fnv1a32(normalizeText(finalText));
+      setAcceptedTextHashes((prev) => {
+        const next = prev.filter((hash) => hash !== finalHash);
+        return [...next, finalHash].slice(-200);
+      });
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => persistDoc(finalText), { timeout: 2000 });
+      } else {
+        requestAnimationFrame(() => persistDoc(finalText));
+      }
+    }, 300);
   };
 
   useEffect(() => {
