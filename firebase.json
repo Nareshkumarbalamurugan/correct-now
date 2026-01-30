@@ -10,18 +10,6 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "redirects": [
-      {
-        "source": "/blog",
-        "destination": "https://blog.correctnow.app",
-        "type": 301
-      },
-      {
-        "source": "/blog/**",
-        "destination": "https://blog.correctnow.app",
-        "type": 301
-      }
-    ],
     "rewrites": [
       {
         "source": "**",

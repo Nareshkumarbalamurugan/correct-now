@@ -1,7 +1,11 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { Link } from "react-router-dom";
+import { getAllBlogPosts } from "@/lib/blog";
 
 const Blog = () => {
+  const posts = getAllBlogPosts();
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
@@ -22,14 +26,32 @@ const Blog = () => {
 
         <section className="py-6 md:py-8">
           <div className="container max-w-6xl">
-            <div className="rounded-xl border border-border overflow-hidden bg-background">
-              <iframe
-                title="CorrectNow Blog"
-                src="/blog-wp"
-                className="w-full h-[80vh] md:h-[85vh]"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
+            <div className="grid gap-4">
+              {posts.length === 0 ? (
+                <div className="rounded-xl border border-border p-6 text-muted-foreground">
+                  No posts yet.
+                </div>
+              ) : (
+                posts.map((p) => (
+                  <Link
+                    key={p.slug}
+                    to={`/blog/${p.slug}`}
+                    className="rounded-xl border border-border p-5 bg-background hover:bg-accent/10 transition"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-lg font-semibold text-foreground">{p.title}</h2>
+                        {p.excerpt ? (
+                          <p className="mt-1 text-sm text-muted-foreground">{p.excerpt}</p>
+                        ) : null}
+                      </div>
+                      <div className="text-xs text-muted-foreground whitespace-nowrap">
+                        {p.date || ""}
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
             </div>
           </div>
         </section>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CorrectNow</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="header">
+        <div class="title">CorrectNow</div>
+        <div class="subtitle">Grammar & style checker</div>
+      </header>
+
+      <div class="card">
+        <label class="row">
+          <span>Enabled</span>
+          <input id="enabled" type="checkbox" />
+        </label>
+
+        <label class="row">
+          <span>Auto-check</span>
+          <input id="autoCheck" type="checkbox" />
+        </label>
+
+        <label class="field">
+          <span>Language</span>
+          <select id="language">
+            <option value="auto">Auto</option>
+            <option value="English">English</option>
+            <option value="Tamil">Tamil</option>
+            <option value="Hindi">Hindi</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>API Base URL</span>
+          <input id="apiBaseUrl" type="text" spellcheck="false" />
+          <div class="hint">Use http://localhost:8787 (dev) or your deployed API host. Do not use blog.correctnow.app</div>
+        </label>
+
+        <label class="field">
+          <span>API Key (optional)</span>
+          <input id="apiKey" type="password" spellcheck="false" />
+          <div class="hint">If configured on the server, this bypasses the free-limit for extension calls.</div>
+        </label>
+
+        <div class="actions">
+          <button id="save">Save</button>
+        </div>
+
+        <div id="status" class="status" aria-live="polite"></div>
+      </div>
+
+      <footer class="footer">v0.1.0</footer>
+    </div>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

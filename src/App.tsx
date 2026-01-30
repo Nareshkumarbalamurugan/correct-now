@@ -19,6 +19,8 @@ import Disclaimer from "./pages/Disclaimer";
 import RefundPolicy from "./pages/RefundPolicy";
 import FeaturesPage from "./pages/FeaturesPage";
 import Terms from "./pages/Terms";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
 import NotFound from "./pages/NotFound";
 import Languages from "./pages/Languages";
 import { initDocsSync } from "@/lib/docs";
@@ -72,31 +74,8 @@ const App = () => {
             <Route path="/features" element={<FeaturesPage />} />
             <Route path="/languages" element={<Languages />} />
             <Route path="/terms" element={<Terms />} />
-            {/* Redirect /blog to blog subdomain */}
-            <Route
-              path="/blog"
-              element={
-                <div
-                  ref={(el) => {
-                    if (el) {
-                      window.location.replace("https://blog.correctnow.app");
-                    }
-                  }}
-                />
-              }
-            />
-            <Route
-              path="/blog/*"
-              element={
-                <div
-                  ref={(el) => {
-                    if (el) {
-                      window.location.replace("https://blog.correctnow.app");
-                    }
-                  }}
-                />
-              }
-            />
+            <Route path="/blog" element={<Blog />} />
+            <Route path="/blog/:slug" element={<BlogPost />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

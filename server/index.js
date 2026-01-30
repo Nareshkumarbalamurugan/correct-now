@@ -799,16 +799,17 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 
 app.use(express.json({ limit: "1mb" }));
 
-// WordPress blog proxy (serve directly at /blog for SEO)
+// Optional WordPress blog proxy (legacy). Keep it off `/blog` so the SPA can own `/blog`.
+// If you still need WordPress, it will be reachable at `/blog-wp`.
 const BLOG_PROXY_TARGET = process.env.BLOG_PROXY_TARGET || "https://blog.correctnow.app";
 app.use(
-  "/blog",
+  "/blog-wp",
   createProxyMiddleware({
     target: BLOG_PROXY_TARGET,
     changeOrigin: true,
     secure: true,
     pathRewrite: {
-      "^/blog": "",
+      "^/blog-wp": "",
     },
   })
 );
@@ -1401,7 +1402,36 @@ const buildPrompt = (text, language) => {
       ? `Language: ${language}.`
       : "Auto-detect language.";
 
-  return `You are the Senior Editor and Linguistic Engine for CorrectNow.app. Your goal is to provide flawless, professional-grade text corrections with Grammarly-level intelligence across all languages.
+  return `You are the World's Most Advanced AI Proofreader, comparable to Grammarly Premium.
+
+CORE MISSION:
+- Analyze the provided text and return a flawless, professional-grade version.
+- Improve readability WITHOUT changing original intent or meaning.
+- Be strict about grammar, spelling/typos, native fluency, and punctuation.
+
+Focus on:
+1. PERFECT GRAMMAR: Fix syntax, tense, and subject-verb agreement errors.
+2. SPELLING & TYPOS: Identify and correct subtle spelling mistakes.
+3. NATIVE FLUENCY: Make it sound natural to a native speaker.
+4. PUNCTUATION: Fix missing/mismatched quotes, brackets, commas.
+5. CONTEXTUAL FLOW: Improve flow while preserving meaning.
+
+SPECIFIC FOR TAMIL:
+- Strictly follow 'Valinam Migum/Miga' rules.
+- Fix run-on words (Otrumizhal) (e.g., 'இன்னும்கடுமையாக' -> 'இன்னும் கடுமையாக').
+
+OUTPUT FORMAT (MANDATORY):
+Return ONLY a valid JSON object in this exact shape:
+{
+  "corrected_text": "...",
+  "changes": [
+    { "original": "...", "corrected": "...", "explanation": "Brief reason in the same language as input" }
+  ]
+}
+
+---
+
+You are the Senior Editor and Linguistic Engine for CorrectNow.app. Your goal is to provide flawless, professional-grade text corrections with Grammarly-level intelligence across all languages.
 
 ${languageInstruction}
 
@@ -1754,13 +1784,17 @@ const addMissingQuoteChecks = (text, changes) => {
 app.post("/api/proofread", async (req, res) => {
   try {
     const { text, language, userId } = req.body || {};
+
+    const extensionKey = String(req.headers["x-correctnow-api-key"] || "").trim();
+    const expectedKey = String(process.env.CORRECTNOW_EXTENSION_API_KEY || "").trim();
+    const bypassFreeLimit = !!expectedKey && extensionKey === expectedKey;
     
     const clientIp = req.headers["x-forwarded-for"]?.split(",")[0] ||
       req.headers["x-real-ip"] ||
       req.socket.remoteAddress;
 
-    // Rate limiting for non-authenticated users
-    if (!userId) {
+    // Rate limiting for non-authenticated users (extension key can bypass)
+    if (!userId && !bypassFreeLimit) {
       const now = Date.now();
       const ipData = ipCheckCount.get(clientIp);
       
