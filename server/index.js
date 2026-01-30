@@ -1415,7 +1415,8 @@ UNIVERSAL LINGUISTIC RULES (Apply to ALL languages):
 2. STRUCTURAL INTEGRITY (Word Joining/Splitting):
    - Fix errors where words are incorrectly merged or separated.
    - Tamil Sandhi: "செய்வதற்கு சமம்" → "செய்வதற்குச் சமம்" (hard consonant doubling)
-   - Tamil Case Endings: "எடப்பாடி உடன்" → "எடப்பாடியுடன்" (join postpositions)
+  - Tamil Case Endings / Postpositions: "எடப்பாடி உடன்" → "எடப்பாடியுடன்" (join postpositions)
+  - Tamil Sandhi/Clitics: "என்று எல்லாம்" → "என்றெல்லாம்" (join natural clitics)
    - English: "alot" → "a lot", "cannot" (keep as one word)
 
 3. PUNCTUATION SYMMETRY & INTEGRITY:
@@ -1431,6 +1432,9 @@ UNIVERSAL LINGUISTIC RULES (Apply to ALL languages):
 5. GRAMMATICAL PRECISION:
    - Fix subject-verb agreement, tense inconsistencies, and case endings/suffixes.
    - Tamil Vibhakti: Ensure nouns and postpositions are joined per morphophonology rules.
+  - Tamil Accusative before comparisons: If using "போல/மாதிரி" for comparison,
+    apply the required case ending when needed.
+    Example: "பகையாளி போல" → "பகையாளியைப் போல" (ஐ-வேற்றுமை)
 
 6. WORD SPACING (Otrumizhal):
    - Separate run-on words and normalize spacing.
@@ -1441,6 +1445,12 @@ UNIVERSAL LINGUISTIC RULES (Apply to ALL languages):
    - Tamil: Apply Valinam Migum/Miga rules (hard consonants: க், ச், த், ப்)
    - English: Fix slang ("u" → "you", "r" → "are"), contractions, and informal texting.
    - Apply proper capitalization, sentence boundaries, and common misspellings.
+
+8. CONTEXTUAL WORD CHOICE (Domain-appropriate wording):
+  - Prefer the most natural, commonly used term in the given domain/context.
+  - Do NOT invent facts; only improve word choice when meaning is preserved.
+  - Tamil (politics): "கூட்டு" → "கூட்டணி" when referring to political alliances.
+  - English collocation: "do a mistake" → "make a mistake".
 
 CRITICAL EXECUTION REQUIREMENTS:
 - You MUST analyze EVERY SINGLE LINE from first to last - scan the ENTIRE text systematically.
