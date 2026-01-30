@@ -336,6 +336,22 @@ const buildLooseRegex = (value: string) => {
   return regex;
 };
 
+const isLikelyNameCorrection = (change: Pick<Change, "original" | "corrected" | "explanation">) => {
+  const original = String(change.original || "").trim();
+  const corrected = String(change.corrected || "").trim();
+  if (!original || !corrected) return false;
+  if (/\s/.test(original) || /\s/.test(corrected)) return false; // single token only
+  if (original.length < 2 || original.length > 48) return false;
+  if (corrected.length < 2 || corrected.length > 64) return false;
+  // Must be mostly letters (works for Latin + Tamil + other scripts)
+  if (!/\p{L}/u.test(original) || !/\p{L}/u.test(corrected)) return false;
+
+  const startsWithUpper = /^[A-Z]/.test(original) || /^[A-Z]/.test(corrected);
+  const hasTamil = /[\u0B80-\u0BFF]/.test(original + corrected);
+  // Name corrections are often title-cased or Tamil proper nouns.
+  return startsWithUpper || hasTamil;
+};
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, "&amp;")
@@ -975,12 +991,21 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
 
   const applySingleAcceptedChange = (text: string, change: Change) => {
     if (!change.original || !change.corrected) return text;
-    // For single replacements, try simple indexOf first (much faster)
+
+    // If it's likely a name correction (or the same token repeats), apply globally for consistency.
+    const occurrences = change.original ? (text.split(change.original).length - 1) : 0;
+    if (isLikelyNameCorrection(change) || occurrences > 1) {
+      const regex = buildLooseRegex(change.original);
+      return text.replace(regex, change.corrected);
+    }
+
+    // Otherwise apply a single occurrence (fast path).
     const idx = text.indexOf(change.original);
     if (idx !== -1) {
       return text.slice(0, idx) + change.corrected + text.slice(idx + change.original.length);
     }
-    // Fall back to regex only if exact match not found
+
+    // Fall back to regex when exact match not found (handles quote variants/punctuation).
     const regex = buildLooseRegex(change.original);
     return text.replace(regex, change.corrected);
   };
