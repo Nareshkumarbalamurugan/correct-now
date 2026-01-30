@@ -1,0 +1,226 @@
+/* CorrectNow Blog Header - Exact Match to Main Site */
+/* Mobile-First Responsive Design */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --cn-background: 0 0% 100%;
+  --cn-foreground: 217 19% 18%;
+  --cn-primary: 221 83% 54%;
+  --cn-primary-foreground: 0 0% 100%;
+  --cn-muted: 220 14% 96%;
+  --cn-muted-foreground: 215 16% 47%;
+  --cn-accent: 221 83% 54%;
+  --cn-border: 220 13% 91%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* Main Header Container - MOBILE FIRST */
+.cn-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  border-bottom: 1px solid hsl(var(--cn-border));
+  background: hsla(var(--cn-background), 0.95);
+  backdrop-filter: blur(8px);
+}
+
+.cn-container {
+  max-width: 100%;
+  padding: 0.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Logo Section - Mobile */
+.cn-logo-section {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.cn-logo-link {
+  display: flex;
+  align-items: center;
+}
+
+.cn-brand-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Desktop Navigation - Hidden on Mobile */
+.cn-nav-desktop {
+  display: none;
+}
+
+/* CTA Buttons - Mobile */
+.cn-cta-section {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.cn-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  text-decoration: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.cn-btn-ghost {
+  color: hsl(var(--cn-foreground));
+  background: transparent;
+}
+
+.cn-btn-ghost:hover {
+  background: hsl(var(--cn-muted));
+}
+
+.cn-btn-accent {
+  color: hsl(var(--cn-primary-foreground));
+  background: hsl(var(--cn-accent));
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.cn-btn-accent:hover {
+  opacity: 0.9;
+}
+
+/* Mobile Navigation - Visible on Mobile */
+.cn-nav-mobile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  width: 100%;
+}
+
+.cn-nav-link-mobile {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--cn-muted-foreground));
+  text-decoration: none;
+  padding: 0.4rem 0.75rem;
+  border-radius: 9999px;
+  background: hsla(var(--cn-muted), 0.4);
+  transition: all 0.2s;
+}
+
+.cn-nav-link-mobile:hover {
+  color: hsl(var(--cn-foreground));
+  background: hsl(var(--cn-muted));
+}
+
+.cn-nav-link-mobile.cn-nav-mobile-active {
+  color: hsl(var(--cn-foreground));
+  background: hsl(var(--cn-muted));
+}
+
+/* Tablet - 600px+ */
+@media (min-width: 600px) {
+  .cn-container {
+    padding: 0.75rem 1.5rem;
+  }
+
+  .cn-brand-logo {
+    height: 42px;
+  }
+
+  .cn-btn {
+    font-size: 0.875rem;
+  }
+
+  .cn-nav-link-mobile {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.875rem;
+  }
+}
+
+/* Desktop - 768px+ */
+@media (min-width: 768px) {
+  .cn-container {
+    padding: 1rem 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 1rem;
+    flex-direction: row;
+  }
+
+  .cn-logo-section {
+    justify-content: flex-start;
+    padding-left: 1.5rem;
+  }
+
+  .cn-brand-logo {
+    height: 45px;
+  }
+
+  /* Show desktop nav, hide mobile nav */
+  .cn-nav-desktop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .cn-nav-link {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--cn-muted-foreground));
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .cn-nav-link:hover {
+    color: hsl(var(--cn-foreground));
+  }
+
+  .cn-nav-link.cn-nav-active {
+    color: hsl(var(--cn-foreground));
+  }
+
+  .cn-cta-section {
+    justify-content: flex-end;
+  }
+
+  .cn-btn {
+    height: 2.25rem;
+    font-size: 0.875rem;
+  }
+
+  .cn-nav-mobile {
+    display: none;
+  }
+}
+
+/* Large Desktop - 1024px+ */
+@media (min-width: 1024px) {
+  .cn-nav-desktop {
+    gap: 1.5rem;
+  }
+}

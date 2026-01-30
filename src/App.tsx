@@ -72,6 +72,19 @@ const App = () => {
             <Route path="/features" element={<FeaturesPage />} />
             <Route path="/languages" element={<Languages />} />
             <Route path="/terms" element={<Terms />} />
+            {/* Redirect /blog to blog subdomain */}
+            <Route
+              path="/blog"
+              element={
+                <div
+                  ref={(el) => {
+                    if (el) {
+                      window.location.replace("https://blog.correctnow.app");
+                    }
+                  }}
+                />
+              }
+            />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
