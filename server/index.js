@@ -1416,9 +1416,17 @@ Focus on:
 4. PUNCTUATION: Fix missing/mismatched quotes, brackets, commas.
 5. CONTEXTUAL FLOW: Improve flow while preserving meaning.
 
+PROPER NOUNS / NAMES (CRITICAL, NEWS-GRADE):
+- Identify proper nouns (people, places, parties, brands, orgs) and preserve them.
+- BUT: If a proper noun is clearly misspelled (a typo), you MUST suggest the corrected spelling.
+  Example: "naesh" → "naresh" (typo correction, not translation).
+- Never translate/transliterate names. Keep the same script and casing style.
+- If you are NOT confident it is a misspelling, do NOT change it.
+
 SPECIFIC FOR TAMIL:
 - Strictly follow 'Valinam Migum/Miga' rules.
 - Fix run-on words (Otrumizhal) (e.g., 'இன்னும்கடுமையாக' -> 'இன்னும் கடுமையாக').
+- Join postpositions correctly when natural (e.g., "எடப்பாடியுடன்", "என்றெல்லாம்").
 
 OUTPUT FORMAT (MANDATORY):
 Return ONLY a valid JSON object in this exact shape:
