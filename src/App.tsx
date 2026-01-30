@@ -73,8 +73,30 @@ const App = () => {
             <Route path="/languages" element={<Languages />} />
             <Route path="/terms" element={<Terms />} />
             {/* Redirect /blog to blog subdomain */}
-            <Route path="/blog" element={<Navigate to="https://blog.correctnow.app" replace />} />
-            <Route path="/blog/*" element={<Navigate to="https://blog.correctnow.app" replace />} />
+            <Route
+              path="/blog"
+              element={
+                <div
+                  ref={(el) => {
+                    if (el) {
+                      window.location.replace("https://blog.correctnow.app");
+                    }
+                  }}
+                />
+              }
+            />
+            <Route
+              path="/blog/*"
+              element={
+                <div
+                  ref={(el) => {
+                    if (el) {
+                      window.location.replace("https://blog.correctnow.app");
+                    }
+                  }}
+                />
+              }
+            />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
