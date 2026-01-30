@@ -1441,12 +1441,22 @@ UNIVERSAL LINGUISTIC RULES (Apply to ALL languages):
    - Tamil: "இன்னும்கடுமையாக" → "இன்னும் கடுமையாக"
    - Remove excessive spaces between words.
 
-7. LANGUAGE-SPECIFIC REFINEMENTS:
+7. TYPO / SPELLING & TRUNCATION DETECTION (All languages):
+  - Actively look for obvious typos, missing letters, swapped letters, and clipped words.
+  - If a word looks incomplete or nonstandard in context, correct it to the most likely intended word.
+  - Examples (English): "definately" → "definitely", "teh" → "the".
+  - Examples (Tamil):
+    - "மழ்ச்சியையும்" → "மகிழ்ச்சியையும்" (typo in common word)
+    - "சிறந் வசனம்" → "சிறந்த வசனம்" (clipped adjective)
+    - "சிறந்தத படம்" → "சிறந்த படம்" (remove stray suffix/extra letter)
+    - "இதைடுத்து" → "இதையடுத்து" (orthographic join)
+
+8. LANGUAGE-SPECIFIC REFINEMENTS:
    - Tamil: Apply Valinam Migum/Miga rules (hard consonants: க், ச், த், ப்)
    - English: Fix slang ("u" → "you", "r" → "are"), contractions, and informal texting.
    - Apply proper capitalization, sentence boundaries, and common misspellings.
 
-8. CONTEXTUAL WORD CHOICE (Domain-appropriate wording):
+9. CONTEXTUAL WORD CHOICE (Domain-appropriate wording):
   - Prefer the most natural, commonly used term in the given domain/context.
   - Do NOT invent facts; only improve word choice when meaning is preserved.
   - Tamil (politics): "கூட்டு" → "கூட்டணி" when referring to political alliances.
