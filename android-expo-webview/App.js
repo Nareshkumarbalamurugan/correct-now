@@ -5,7 +5,7 @@ import { WebView } from 'react-native-webview';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 const START_URL = 'https://correctnow.app/';
-const EXTERNAL_GOOGLE_URL = 'https://correctnow.app/auth?mode=login&autoGoogle=1';
+const EXTERNAL_GOOGLE_URL = 'https://correctnow.app/auth?mode=login&autoGoogle=1&returnToApp=true';
 
 const isAllowedUrl = (url) => {
   // Block custom scheme to prevent "Can't open url" warnings
@@ -67,6 +67,32 @@ export default function App() {
     }
   }, [onAndroidBackPress]);
 
+  // Handle deep link redirects from browser after login
+  React.useEffect(() => {
+    const handleDeepLink = (event) => {
+      console.log('[DeepLink] Received:', event.url);
+      if (event.url.startsWith('correctnow://')) {
+        console.log('[DeepLink] Auth success - reloading WebView');
+        if (webViewRef.current) {
+          webViewRef.current.reload();
+        }
+      }
+    };
+
+    // Listen for deep links
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    
+    // Check if app was opened via deep link
+    Linking.getInitialURL().then(url => {
+      if (url) {
+        console.log('[DeepLink] Initial URL:', url);
+        handleDeepLink({ url });
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   if (Platform.OS === 'web') {
     return (
       <View style={styles.errorContainer}>
@@ -97,14 +123,19 @@ export default function App() {
         ref={webViewRef}
         source={{ uri: START_URL }}
         injectedJavaScript={`
-          window.ReactNativeWebView = {
-            postMessage: function(message) {
-              window.postMessage(message, '*');
+          (function() {
+            console.log('[Injected] Checking native bridge...');
+            if (window.ReactNativeWebView) {
+              console.log('[Injected] ✓ Native bridge exists!');
+              console.log('[Injected] Bridge type:', typeof window.ReactNativeWebView.postMessage);
+            } else {
+              console.error('[Injected] ✗ Native bridge missing!');
             }
-          };
-          true;
+            true;
+          })();
         `}
         onNavigationStateChange={(navState) => {
+          console.log('[Navigation]', navState.url);
           canGoBackRef.current = navState.canGoBack;
         }}
         onLoadStart={() => {
@@ -139,19 +170,26 @@ export default function App() {
           setLoading(false);
         }}
         onMessage={(event) => {
+          console.log('[onMessage] ===== EVENT RECEIVED =====');
+          console.log('[onMessage] Full event:', JSON.stringify(event));
           const data = event?.nativeEvent?.data || '';
-          console.log('WebView message received:', data);
+          console.log('[onMessage] Data extracted:', data, 'Type:', typeof data);
+          
           if (data === 'google-login') {
-            console.log('Opening browser for Google login:', EXTERNAL_GOOGLE_URL);
-            Linking.canOpenURL(EXTERNAL_GOOGLE_URL)
-              .then((supported) => {
-                if (supported) {
-                  return Linking.openURL(EXTERNAL_GOOGLE_URL);
-                } else {
-                  console.error('Cannot open URL:', EXTERNAL_GOOGLE_URL);
-                }
+            console.log('[onMessage] ✓ Google login message matched!');
+            console.log('[onMessage] Target URL:', EXTERNAL_GOOGLE_URL);
+            
+            Linking.openURL(EXTERNAL_GOOGLE_URL)
+              .then(() => {
+                console.log('[Linking] ✓ SUCCESS! Browser opened');
               })
-              .catch((err) => console.error('Error opening URL:', err));
+              .catch(error => {
+                console.error('[Linking] ✗ ERROR:', error);
+                console.error('[Linking] Error name:', error?.name);
+                console.error('[Linking] Error message:', error?.message);
+              });
+          } else {
+            console.log('[onMessage] ✗ Message mismatch. Expected: \"google-login\", Got:', JSON.stringify(data));
           }
         }}
         onHttpError={(syntheticEvent) => {

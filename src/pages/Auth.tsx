@@ -228,6 +228,18 @@ const Auth = () => {
       await writeSessionId(result.user, true);
     }
     toast.success("Signed in with Google");
+    
+    // Check if we need to return to the app
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("returnToApp") === "true") {
+      console.log('[Auth] returnToApp detected - redirecting to app');
+      toast.success("Login successful! Returning to app...", { duration: 2000 });
+      setTimeout(() => {
+        window.location.href = "correctnow://auth-success";
+      }, 1000);
+      return;
+    }
+    
     navigate("/");
   };
 
@@ -240,14 +252,23 @@ const Auth = () => {
         return;
       }
       if (isWebView()) {
+        console.log('[Auth] ===== WEBVIEW DETECTED =====');
         const rnBridge = (window as any)?.ReactNativeWebView;
-        console.log('WebView detected, ReactNativeWebView available:', !!rnBridge);
+        console.log('[Auth] Bridge exists:', !!rnBridge);
+        console.log('[Auth] postMessage exists:', !!(rnBridge?.postMessage));
+        
         if (rnBridge?.postMessage) {
-          console.log('Sending postMessage to app: google-login');
-          rnBridge.postMessage("google-login");
-          toast.info("Opening browser for Google sign-in...");
+          console.log('[Auth] ✓ Calling postMessage(\"google-login\")');
+          try {
+            rnBridge.postMessage("google-login");
+            console.log('[Auth] ✓ postMessage call completed');
+            toast.info("Opening browser for Google sign-in...");
+          } catch (error) {
+            console.error('[Auth] ✗ postMessage error:', error);
+            toast.error("Failed to communicate with app.");
+          }
         } else {
-          console.error('ReactNativeWebView.postMessage not available');
+          console.error('[Auth] ✗ postMessage not available');
           toast.error("Please open this in the mobile app to sign in with Google.");
         }
         setIsLoading(false);
