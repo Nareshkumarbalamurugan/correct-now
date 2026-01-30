@@ -1396,13 +1396,60 @@ Text:\n"""${text}"""`;
   }
 });
 
-const buildPrompt = (text, language) => {
+const buildPrompt = (text, language, options = {}) => {
   const languageInstruction =
     language && language !== "auto"
       ? `Language: ${language}.`
       : "Auto-detect language.";
 
-  return `You are the World's Most Advanced AI Proofreader, comparable to Grammarly Premium.
+  const nameCorrectionsRaw = options?.nameCorrections;
+  const nameCorrections = (() => {
+    // Accept either { "Rajiv": "Raajiv" } or [{ from, to }, ...]
+    if (Array.isArray(nameCorrectionsRaw)) {
+      return nameCorrectionsRaw
+        .map((x) => ({ from: String(x?.from || "").trim(), to: String(x?.to || "").trim() }))
+        .filter((x) => x.from && x.to && x.from !== x.to);
+    }
+    if (nameCorrectionsRaw && typeof nameCorrectionsRaw === "object") {
+      return Object.entries(nameCorrectionsRaw)
+        .map(([from, to]) => ({ from: String(from || "").trim(), to: String(to || "").trim() }))
+        .filter((x) => x.from && x.to && x.from !== x.to);
+    }
+    return [];
+  })();
+
+  const nameCorrectionsBlock = nameCorrections.length
+    ? `
+AUTHORITATIVE NAME SPELLINGS (MUST ENFORCE):
+- The following name spellings are authoritative. If the input contains the "from" form, you MUST suggest the "to" form.
+- This is NOT translation/transliteration; it's a strict spelling correction.
+- Apply the correction consistently across the entire text.
+
+Name corrections list:
+${nameCorrections.map((p) => `- ${p.from} -> ${p.to}`).join("\n")}
+`
+    : "";
+
+  return `You are a World-Class Linguistic Expert for CorrectNow.app. Your mission is to fix grammar and spelling with NEWS-GRADE precision.
+
+STRICT INSTRUCTIONS:
+1) NO FACT CHANGES: Never alter factual meaning, numbers, dates, or claims.
+2) EDUCATIONAL EXPLANATIONS: Provide a brief professional reason for each fix (8-14 words).
+   - Avoid confusing symbols like '+' in explanations.
+   - Explanation language must match the input language.
+3) NO HALLUCINATION: If you don't recognize a specific noun/entity, assume it's correct.
+
+PROPER NOUNS / NAMES (CRITICAL):
+- Identify proper nouns (people, places, parties, brands, organizations) and protect them.
+- Do NOT translate/transliterate names.
+- Do NOT "normalize" name spellings just because you prefer another spelling.
+- EXCEPTION (allowed and required): If a proper noun is clearly misspelled (a typo) OR an authoritative name correction list is provided, you MUST suggest the corrected spelling.
+  Example typo: "naesh" -> "naresh" (typo correction, not translation).
+${nameCorrectionsBlock}
+
+---
+
+You are the World's Most Advanced AI Proofreader, comparable to Grammarly Premium.
 
 CORE MISSION:
 - Analyze the provided text and return a flawless, professional-grade version.
@@ -1956,7 +2003,9 @@ app.post("/api/proofread", async (req, res) => {
 
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const prompt = buildPrompt(text, language);
+    const prompt = buildPrompt(text, language, {
+      nameCorrections: req.body?.nameCorrections,
+    });
 
     const callGemini = async (maxTokens) => {
       const response = await fetch(endpoint, {
