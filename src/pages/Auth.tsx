@@ -235,7 +235,22 @@ const Auth = () => {
       console.log('[Auth] returnToApp detected - redirecting to app');
       toast.success("Login successful! Returning to app...", { duration: 2000 });
       setTimeout(() => {
-        window.location.href = "correctnow://auth-success";
+        // Try multiple methods to return to the app
+        const deepLink = "correctnow://auth-success";
+        
+        // Method 1: Direct window.location
+        window.location.href = deepLink;
+        
+        // Method 2: Fallback with intent URI (for Android browsers)
+        setTimeout(() => {
+          const intentUri = `intent://auth-success#Intent;scheme=correctnow;package=com.correctnow.webview;end`;
+          window.location.href = intentUri;
+        }, 500);
+        
+        // Method 3: Show manual close instruction if nothing works
+        setTimeout(() => {
+          toast.info("Please close this browser tab to return to the app", { duration: 5000 });
+        }, 2000);
       }, 1000);
       return;
     }
