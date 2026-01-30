@@ -289,6 +289,16 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 
 const normalizeText = (value: string) => value.trim().normalize("NFC");
 
+// Normalize common typography variants so suggestions can match the input reliably
+// even when the model emits straight quotes but the text contains smart quotes (or vice versa).
+// IMPORTANT: Keep this as mostly 1:1 character mapping to preserve indices.
+const normalizeForSearch = (value: string) =>
+  value
+    .normalize("NFC")
+    .replace(/[\u201C\u201D\u201E\u201F\u00AB\u00BB]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B\u2039\u203A]/g, "'")
+    .replace(/\u00A0/g, " ");
+
 // Fast non-cryptographic hash for caching/duplicate detection.
 // Using a hash avoids persisting huge full texts in localStorage (which can freeze the UI).
 const fnv1a32 = (value: string) => {
@@ -1103,12 +1113,20 @@ const ProofreadingEditor = ({ editorRef, initialText, initialDocId }: Proofreadi
                 // CRITICAL: Only include suggestions whose original text actually exists in the input
                 // This prevents crashes when accepting suggestions that can't be found
                 if (!normalizedInput.includes(change.original)) {
-                  // Try case-insensitive search as fallback
-                  const lowerInput = normalizedInput.toLowerCase();
-                  const lowerOriginal = change.original.toLowerCase();
-                  if (!lowerInput.includes(lowerOriginal)) {
-                    return false;
+                  // Try a tolerant search that normalizes smart quotes / apostrophes (common mismatch)
+                  const inputSearch = normalizeForSearch(normalizedInput);
+                  const originalSearch = normalizeForSearch(change.original);
+
+                  let idx = inputSearch.indexOf(originalSearch);
+                  if (idx === -1) {
+                    idx = inputSearch.toLowerCase().indexOf(originalSearch.toLowerCase());
                   }
+
+                  if (idx === -1) return false;
+
+                  // Map change.original to the exact substring from the user's input so accept/ignore/highlight works.
+                  // This is especially important for punctuation-only fixes (quotes) where codepoint differs.
+                  change.original = normalizedInput.slice(idx, idx + change.original.length);
                 }
                 return true;
               })

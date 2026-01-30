@@ -1412,36 +1412,70 @@ UNIVERSAL LINGUISTIC RULES (Apply to ALL languages):
    - Examples: "return back" → "return", "free gift" → "gift"
    - Tamil: "A-um B-um iruvarum" → Remove "iruvarum" (both + both = redundant)
 
-2. STRUCTURAL INTEGRITY (Word Joining/Splitting):
+2. FLOW & COHERENCE (Connector Words / Discourse Markers):
+  - Improve text flow by adding missing or weak connector words BETWEEN consecutive sentences/clauses
+    when the logical relationship is clear but not explicitly signposted.
+  - Look for these relationships: continuation, addition, contrast, cause–effect, conclusion, time sequence.
+  - Suggest only when it clearly improves readability; avoid overusing connectors.
+  - Preserve meaning: do NOT introduce new claims, opinions, or facts.
+  - Match tone/register:
+    - News/academic/formal: prefer formal connectors.
+    - Casual/informal: allow conversational connectors.
+  - IMPORTANT: For every connector-word suggestion, include a category label in the explanation as one of:
+    Addition | Contrast | Cause–Effect | Continuation
+    (Map conclusion/time-sequence/continuation into Continuation when needed.)
+  - Example (Tamil): "அவர் கடுமையாக விமர்சித்தார். அவர் பின்னர் அழைப்பு ஏற்றார்." →
+    "அவர் கடுமையாக விமர்சித்தார். ஆனால், அவர் பின்னர் அழைப்பு ஏற்றார்." (Contrast)
+
+3. STRUCTURAL INTEGRITY (Word Joining/Splitting):
    - Fix errors where words are incorrectly merged or separated.
    - Tamil Sandhi: "செய்வதற்கு சமம்" → "செய்வதற்குச் சமம்" (hard consonant doubling)
   - Tamil Case Endings / Postpositions: "எடப்பாடி உடன்" → "எடப்பாடியுடன்" (join postpositions)
   - Tamil Sandhi/Clitics: "என்று எல்லாம்" → "என்றெல்லாம்" (join natural clitics)
    - English: "alot" → "a lot", "cannot" (keep as one word)
 
-3. PUNCTUATION SYMMETRY & INTEGRITY:
-   - Ensure all quotes (" "), parentheses, and brackets are perfectly balanced.
-   - Tamil: If sentence starts with ", close it before attribution verb: "..." என்று பேசினார்
-   - Add comma after introductory conjunctions: "ஆனால்," "எனவே," "But," "However,"
-   - Normalize repeated punctuation (e.g., "...", "!!", "??") when inappropriate.
+4. PUNCTUATION, QUOTES & TYPOGRAPHY (Be STRICT):
+   - Treat punctuation and quotation correctness as critical (do NOT skip).
+   - MANDATORY FIRST STEP: Count opening vs closing quotes/brackets in the ENTIRE text.
+     * Count: " (opening) vs " (closing), ' vs ', ( vs ), [ vs ], { vs }
+     * If counts don't match, you MUST flag it as an error.
+     * Example: Text ending with stray " but no opening → suggest removing it.
+     * Example input: 'அவர் பின்னர் அழைப்பு ஏற்றார்."' (1 closing quote, 0 opening)
+       → Suggest: 'அவர் பின்னர் அழைப்பு ஏற்றார்.' (remove the unmatched ")
+   - Ensure ALL quotes, parentheses, and brackets are perfectly balanced and properly nested.
+   - Fix duplicated/mismatched quote marks and broken nesting.
+     Examples: "''கர்ணன்''" → "'கர்ணன்'" (avoid double-single-quote artifacts)
+   - Enforce clean punctuation spacing rules:
+     - No extra spaces before punctuation (",", ".", ":", ";", "?", "!")
+     - Exactly one space after sentence punctuation where the language uses spaces.
+     - No doubled punctuation unless stylistically required; normalize "!!", "??", "..." when inappropriate.
+   - Ensure sentences have appropriate ending punctuation (missing full stop/question mark).
+   - Ensure commas/colons are used correctly for apposition and lists.
+     Example: "சென்னை:" is acceptable for dateline style; otherwise prefer "சென்னை -" or "சென்னை:" consistently.
+   - Tamil-specific strictness:
+     - If a sentence opens a quote, ensure it closes before attribution verb:
+       "..." என்று கூறினார் / "..." என்று பேசினார்
+     - Add comma after formal discourse markers when appropriate: "ஆனால்,", "எனவே,", "மேலும்,"
+   - English-specific strictness:
+     - Add comma after formal discourse markers when appropriate: "However,", "Therefore,", "Moreover,"
 
-4. VOCABULARY VARIATION (Repetition Avoidance):
+5. VOCABULARY VARIATION (Repetition Avoidance):
    - Identify and replace repetitive verbs/adjectives in adjacent sentences with contextually appropriate synonyms.
    - Example: If "பேசியிருந்தார்" appears twice nearby, suggest "விமர்சித்திருந்தார்" for second instance.
 
-5. GRAMMATICAL PRECISION:
+6. GRAMMATICAL PRECISION:
    - Fix subject-verb agreement, tense inconsistencies, and case endings/suffixes.
    - Tamil Vibhakti: Ensure nouns and postpositions are joined per morphophonology rules.
   - Tamil Accusative before comparisons: If using "போல/மாதிரி" for comparison,
     apply the required case ending when needed.
     Example: "பகையாளி போல" → "பகையாளியைப் போல" (ஐ-வேற்றுமை)
 
-6. WORD SPACING (Otrumizhal):
+7. WORD SPACING (Otrumizhal):
    - Separate run-on words and normalize spacing.
    - Tamil: "இன்னும்கடுமையாக" → "இன்னும் கடுமையாக"
    - Remove excessive spaces between words.
 
-7. TYPO / SPELLING & TRUNCATION DETECTION (All languages):
+8. TYPO / SPELLING & TRUNCATION DETECTION (All languages):
   - Actively look for obvious typos, missing letters, swapped letters, and clipped words.
   - If a word looks incomplete or nonstandard in context, correct it to the most likely intended word.
   - Examples (English): "definately" → "definitely", "teh" → "the".
@@ -1451,12 +1485,12 @@ UNIVERSAL LINGUISTIC RULES (Apply to ALL languages):
     - "சிறந்தத படம்" → "சிறந்த படம்" (remove stray suffix/extra letter)
     - "இதைடுத்து" → "இதையடுத்து" (orthographic join)
 
-8. LANGUAGE-SPECIFIC REFINEMENTS:
+9. LANGUAGE-SPECIFIC REFINEMENTS:
    - Tamil: Apply Valinam Migum/Miga rules (hard consonants: க், ச், த், ப்)
    - English: Fix slang ("u" → "you", "r" → "are"), contractions, and informal texting.
    - Apply proper capitalization, sentence boundaries, and common misspellings.
 
-9. CONTEXTUAL WORD CHOICE (Domain-appropriate wording):
+10. CONTEXTUAL WORD CHOICE (Domain-appropriate wording):
   - Prefer the most natural, commonly used term in the given domain/context.
   - Do NOT invent facts; only improve word choice when meaning is preserved.
   - Tamil (politics): "கூட்டு" → "கூட்டணி" when referring to political alliances.
@@ -1645,6 +1679,76 @@ const parseGeminiJson = (raw) => {
   if (parsed) return parsed;
 
   return null;
+};
+
+// Post-processing safety net: detect unbalanced quotes that Gemini missed
+const addMissingQuoteChecks = (text, changes) => {
+  const augmented = [...changes];
+  
+  // Count opening vs closing double quotes (straight and smart)
+  const doubleQuoteOpen = (text.match(/["\u201C\u201E]/g) || []).length;
+  const doubleQuoteClose = (text.match(/["\u201D]/g) || []).length;
+  
+  // Count opening vs closing single quotes (straight and smart)
+  const singleQuoteOpen = (text.match(/['\u2018\u201A]/g) || []).length;
+  const singleQuoteClose = (text.match(/['\u2019]/g) || []).length;
+  
+  // Check if there's already a suggestion about quotes
+  const hasQuoteFix = changes.some(c => 
+    c.explanation && 
+    (c.explanation.includes('quote') || c.explanation.includes('மேற்கோள்') || c.explanation.includes('"'))
+  );
+  
+  if (!hasQuoteFix) {
+    // If unbalanced double quotes
+    if (doubleQuoteOpen !== doubleQuoteClose) {
+      const diff = doubleQuoteClose - doubleQuoteOpen;
+      if (diff > 0) {
+        // More closing than opening - likely stray quote at end
+        const lastQuoteIdx = Math.max(
+          text.lastIndexOf('"'),
+          text.lastIndexOf('\u201D')
+        );
+        if (lastQuoteIdx > 0) {
+          const contextStart = Math.max(0, lastQuoteIdx - 15);
+          const contextEnd = Math.min(text.length, lastQuoteIdx + 15);
+          const before = text.slice(contextStart, lastQuoteIdx);
+          const quoteChar = text[lastQuoteIdx];
+          const after = text.slice(lastQuoteIdx + 1, contextEnd);
+          augmented.push({
+            original: before + quoteChar + after,
+            corrected: before + after,
+            explanation: "மேற்கோள் குறி சமநிலையற்றது; இணையற்ற மூடும் மேற்கோள் குறி அகற்றப்பட்டது. (Unbalanced quote removed)"
+          });
+        }
+      }
+    }
+    
+    // If unbalanced single quotes (only if significant count)
+    if (singleQuoteOpen !== singleQuoteClose && singleQuoteOpen > 0) {
+      const diff = singleQuoteClose - singleQuoteOpen;
+      if (Math.abs(diff) === 1 && diff > 0) {
+        const lastQuoteIdx = Math.max(
+          text.lastIndexOf("'"),
+          text.lastIndexOf('\u2019')
+        );
+        if (lastQuoteIdx > 0) {
+          const contextStart = Math.max(0, lastQuoteIdx - 15);
+          const contextEnd = Math.min(text.length, lastQuoteIdx + 15);
+          const before = text.slice(contextStart, lastQuoteIdx);
+          const quoteChar = text[lastQuoteIdx];
+          const after = text.slice(lastQuoteIdx + 1, contextEnd);
+          augmented.push({
+            original: before + quoteChar + after,
+            corrected: before + after,
+            explanation: "ஒற்றை மேற்கோள் குறி சமநிலையற்றது; அகற்றப்பட்டது. (Unbalanced single quote removed)"
+          });
+        }
+      }
+    }
+  }
+  
+  return augmented;
 };
 
 app.post("/api/proofread", async (req, res) => {
@@ -1875,7 +1979,7 @@ app.post("/api/proofread", async (req, res) => {
         ? parsed.corrected_text
         : text;
 
-    const changes = Array.isArray(parsed.changes)
+    let changes = Array.isArray(parsed.changes)
       ? parsed.changes.filter((change) => {
           if (!change || typeof change !== "object") return false;
           if (typeof change.original !== "string" || change.original.length === 0) return false;
@@ -1883,6 +1987,9 @@ app.post("/api/proofread", async (req, res) => {
           return true;
         })
       : [];
+
+    // Apply post-processing safety net to catch unbalanced quotes
+    changes = addMissingQuoteChecks(text, changes);
 
     const result = {
       corrected_text: correctedText,
