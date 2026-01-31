@@ -21,7 +21,7 @@ const BlogPost = () => {
 
       <main className="flex-1">
         <section className="border-b border-border bg-gradient-to-b from-background to-accent/5 py-10 md:py-14">
-          <div className="container max-w-3xl">
+          <div className="container max-w-5xl">
             <div className="flex flex-col gap-3">
               <Link to="/blog" className="text-sm text-muted-foreground hover:underline">
                 ← Back to Blog
@@ -51,7 +51,7 @@ const BlogPost = () => {
 
         {post ? (
           <section className="py-10">
-            <div className="container max-w-3xl">
+            <div className="container max-w-5xl">
               <article className="prose prose-neutral dark:prose-invert max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
               </article>

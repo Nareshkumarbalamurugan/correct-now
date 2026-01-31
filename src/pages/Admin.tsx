@@ -92,11 +92,13 @@ type AdminUser = {
 type BlogPost = {
   id: string;
   title: string;
+  slug?: string;
   contentHtml: string;
   contentText?: string;
   imageUrls?: string[];
   imagePaths?: string[];
   coverImageUrl?: string;
+  views?: number;
   publishedAt?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1357,14 +1359,31 @@ Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
         ...uploaded.map((item) => item.path),
       ];
 
+      const slugify = (value: string) => {
+        const base = value
+          .trim()
+          .toLowerCase()
+          .replace(/['"`]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "");
+        return base;
+      };
+      const slugBase = slugify(blogTitle.trim());
+      const stableSlug =
+        existing?.slug ||
+        (slugBase ? `${slugBase}-${docRef.id.slice(0, 6)}` : `post-${docRef.id.slice(0, 8)}`);
+
       const payload: BlogPost = {
         id: docRef.id,
         title: blogTitle.trim(),
+        slug: stableSlug,
         contentHtml: blogContentHtml.trim(),
         contentText: plainText,
         imageUrls: finalImageUrls,
         imagePaths: finalImagePaths,
         coverImageUrl: finalImageUrls[0] || "",
+        views: existing?.views || 0,
         publishedAt: publishedAtIso,
         updatedAt: nowIso,
         createdAt: existing?.createdAt || nowIso,

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -16,8 +17,8 @@ import {
   SheetContent,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { FileText, Search, Star, LogOut, User, Menu } from "lucide-react";
-import { formatUpdated, getDocs, sectionForDate } from "@/lib/docs";
+import { FileText, Search, Star, LogOut, User, Menu, Archive, MoreVertical, Trash2, RotateCcw } from "lucide-react";
+import { archiveDocById, deleteArchivedDocPermanently, deleteArchivedDocsPermanently, formatUpdated, getDocs, restoreDocById, sectionForDate } from "@/lib/docs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { getEffectivePlan } from "@/lib/entitlements";
@@ -27,6 +28,12 @@ import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { deleteUser, onAuthStateChanged, signOut } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs as getFirestoreDocs, onSnapshot, setDoc } from "firebase/firestore";
 import { clearSessionId } from "@/lib/session";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Index = () => {
   const [query, setQuery] = useState("");
@@ -38,6 +45,7 @@ const Index = () => {
     preview: string;
     text: string;
     updatedAt: string;
+    archivedAt?: string;
     section: string;
     updated: string;
   }>>([]);
@@ -47,7 +55,7 @@ const Index = () => {
   const [suggestionText, setSuggestionText] = useState("");
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [sidebarView, setSidebarView] = useState<"docs" | "account">("docs");
+  const [sidebarView, setSidebarView] = useState<"docs" | "archived" | "account">("docs");
   const [userProfile, setUserProfile] = useState<{
     plan: string;
     wordLimit: number;
@@ -63,6 +71,7 @@ const Index = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -83,6 +92,7 @@ const Index = () => {
           if (user) {
             const userDocs = getDocs().map((doc) => ({
               ...doc,
+              archivedAt: typeof (doc as any).archivedAt === "string" ? (doc as any).archivedAt : undefined,
               section: sectionForDate(doc.updatedAt),
               updated: formatUpdated(doc.updatedAt),
             }));
@@ -194,6 +204,7 @@ const Index = () => {
       setDocs(
         getDocs().map((doc) => ({
           ...doc,
+          archivedAt: typeof (doc as any).archivedAt === "string" ? (doc as any).archivedAt : undefined,
           section: sectionForDate(doc.updatedAt),
           updated: formatUpdated(doc.updatedAt),
         }))
@@ -222,13 +233,87 @@ const Index = () => {
     };
   }, [location.key]);
 
-  const filtered = useMemo(
-    () =>
-      docs.filter((doc) =>
-        `${doc.title} ${doc.preview}`.toLowerCase().includes(query.toLowerCase())
-      ),
-    [docs, query]
-  );
+  const { activeDocs, archivedDocs } = useMemo(() => {
+    const active = docs.filter((d) => !d.archivedAt);
+    const archived = docs
+      .filter((d) => Boolean(d.archivedAt))
+      .sort((a, b) => String(b.archivedAt || "").localeCompare(String(a.archivedAt || "")));
+    return { activeDocs: active, archivedDocs: archived };
+  }, [docs]);
+
+  const filtered = useMemo(() => {
+    const source = sidebarView === "archived" ? archivedDocs : activeDocs;
+    return source.filter((doc) =>
+      `${doc.title} ${doc.preview}`.toLowerCase().includes(query.toLowerCase())
+    );
+  }, [activeDocs, archivedDocs, query, sidebarView]);
+
+  useEffect(() => {
+    if (sidebarView !== "archived") {
+      setSelectedArchivedIds(new Set());
+      return;
+    }
+
+    // Drop selections that are no longer in Archived
+    setSelectedArchivedIds((prev) => {
+      const archivedIdSet = new Set(archivedDocs.map((d) => d.id));
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (archivedIdSet.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }, [sidebarView, archivedDocs]);
+
+  const toggleArchivedSelected = (id: string, checked: boolean) => {
+    setSelectedArchivedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const selectAllVisibleArchived = () => {
+    setSelectedArchivedIds((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((d) => next.add(d.id));
+      return next;
+    });
+  };
+
+  const clearArchivedSelection = () => setSelectedArchivedIds(new Set());
+
+  const deleteSelectedArchived = async () => {
+    const ids = Array.from(selectedArchivedIds);
+    if (!ids.length) return;
+    const confirmed = window.confirm(
+      `Delete ${ids.length} archived document(s) permanently? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      await deleteArchivedDocsPermanently(ids);
+      setSelectedArchivedIds(new Set());
+      toast.success("Deleted selected archived docs");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete archived docs");
+    }
+  };
+
+  const deleteAllArchived = async () => {
+    if (!archivedDocs.length) return;
+    const confirmed = window.confirm(
+      `Delete ALL ${archivedDocs.length} archived document(s) permanently? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      await deleteArchivedDocsPermanently(archivedDocs.map((d) => d.id));
+      setSelectedArchivedIds(new Set());
+      toast.success("Deleted all archived docs");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete archived docs");
+    }
+  };
 
   const sections = useMemo(
     () =>
@@ -292,7 +377,13 @@ const Index = () => {
       const userRef = doc(db, "users", uid);
 
       const docsSnap = await getFirestoreDocs(collection(db, `users/${uid}/docs`));
-      await Promise.all(docsSnap.docs.map((docSnap) => deleteDoc(docSnap.ref)));
+      const archivedAtIso = new Date().toISOString();
+      await Promise.all(
+        docsSnap.docs.map(async (docSnap) => {
+          await setDoc(docSnap.ref, { archivedAt: archivedAtIso }, { merge: true });
+          await deleteDoc(docSnap.ref);
+        })
+      );
 
       await deleteDoc(userRef);
       window.localStorage.removeItem("correctnow:docs");
@@ -331,6 +422,21 @@ const Index = () => {
           >
             <FileText className="w-4 h-4" />
             Docs
+          </button>
+
+          <button
+            onClick={() => {
+              setSidebarView("archived");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              sidebarView === "archived"
+                ? "bg-secondary text-foreground"
+                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+            }`}
+          >
+            <Archive className="w-4 h-4" />
+            Archived
           </button>
           
           <button
@@ -408,20 +514,24 @@ const Index = () => {
                     </SheetContent>
                   </Sheet>
                   <h1 className="text-lg font-semibold text-foreground">
-                    {sidebarView === "docs" ? "Docs" : "Account"}
+                    {sidebarView === "docs" ? "Docs" : sidebarView === "archived" ? "Archived" : "Account"}
                   </h1>
                 </div>
 
-                {sidebarView === "docs" && (
+                {(sidebarView === "docs" || sidebarView === "archived") && (
                   <>
                     <div className="container pt-3 pb-2">
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                        <h1 className="text-2xl font-semibold text-foreground">Docs</h1>
+                        <h1 className="text-2xl font-semibold text-foreground">
+                          {sidebarView === "docs" ? "Docs" : "Archived"}
+                        </h1>
                         <div className="flex items-center gap-2">
-                          <Button variant="accent" size="sm" className="h-9 blink-green-slow" onClick={() => navigate("/editor")}>
-                            <FileText className="w-4 h-4 mr-2" />
-                            New doc
-                          </Button>
+                          {sidebarView === "docs" ? (
+                            <Button variant="accent" size="sm" className="h-9 blink-green-slow" onClick={() => navigate("/editor")}>
+                              <FileText className="w-4 h-4 mr-2" />
+                              New doc
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                       <div className="relative w-full sm:max-w-md mt-3">
@@ -433,6 +543,38 @@ const Index = () => {
                           onChange={(e) => setQuery(e.target.value)}
                         />
                       </div>
+
+                      {sidebarView === "archived" ? (
+                        <div className="flex flex-wrap items-center gap-2 mt-3">
+                          <Button type="button" variant="outline" size="sm" onClick={selectAllVisibleArchived}>
+                            Select visible
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={clearArchivedSelection}>
+                            Clear selection
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={deleteSelectedArchived}
+                            disabled={selectedArchivedIds.size === 0}
+                          >
+                            Delete selected
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={deleteAllArchived}
+                            disabled={archivedDocs.length === 0}
+                          >
+                            Delete all
+                          </Button>
+                          <div className="text-xs text-muted-foreground">
+                            Selected: {selectedArchivedIds.size}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <main className="pt-2 pb-8">
@@ -440,16 +582,109 @@ const Index = () => {
                         {filtered.length === 0 ? (
                           <div className="flex flex-col items-center justify-center text-center py-16">
                             <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
-                              <FileText className="w-8 h-8 text-muted-foreground" />
+                              {sidebarView === "archived" ? (
+                                <Archive className="w-8 h-8 text-muted-foreground" />
+                              ) : (
+                                <FileText className="w-8 h-8 text-muted-foreground" />
+                              )}
                             </div>
-                            <h3 className="text-lg font-semibold text-foreground mb-2">No documents yet</h3>
+                            <h3 className="text-lg font-semibold text-foreground mb-2">
+                              {sidebarView === "archived" ? "No archived documents" : "No documents yet"}
+                            </h3>
                             <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                              Your checked documents will appear here. Start by checking your first document.
+                              {sidebarView === "archived"
+                                ? "Archived documents will appear here."
+                                : "Your checked documents will appear here. Start by checking your first document."}
                             </p>
-                            <Button variant="accent" onClick={() => navigate("/editor")}>
-                              <FileText className="w-4 h-4 mr-2" />
-                              Create your first document
-                            </Button>
+                            {sidebarView === "docs" ? (
+                              <Button variant="accent" onClick={() => navigate("/editor")}>
+                                <FileText className="w-4 h-4 mr-2" />
+                                Create your first document
+                              </Button>
+                            ) : null}
+                          </div>
+                        ) : sidebarView === "archived" ? (
+                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            {filtered.map((docItem) => (
+                              <Card key={docItem.id} className="hover:shadow-card transition-shadow">
+                                <CardContent className="p-5 min-h-[140px] relative">
+                                  <div className="absolute left-3 top-3">
+                                    <Checkbox
+                                      checked={selectedArchivedIds.has(docItem.id)}
+                                      onCheckedChange={(v) => toggleArchivedSelected(docItem.id, v === true)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      aria-label={`Select ${docItem.title || "Document"}`}
+                                    />
+                                  </div>
+                                  <div className="absolute right-3 top-3">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <MoreVertical className="w-4 h-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                          onClick={async (e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            await restoreDocById(docItem.id);
+                                            toast.success("Restored from archive");
+                                          }}
+                                        >
+                                          <RotateCcw className="w-4 h-4 mr-2" />
+                                          Restore
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="text-destructive focus:text-destructive"
+                                          onClick={async (e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            const confirmed = window.confirm(
+                                              "Delete this document permanently? This cannot be undone."
+                                            );
+                                            if (!confirmed) return;
+                                            try {
+                                              await deleteArchivedDocPermanently(docItem.id);
+                                              toast.success("Deleted permanently");
+                                            } catch (err) {
+                                              toast.error(
+                                                err instanceof Error ? err.message : "Failed to delete"
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          <Trash2 className="w-4 h-4 mr-2" />
+                                          Delete permanently
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                                      <Archive className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <div className="flex-1 min-w-0 pr-8 pl-6">
+                                      <p className="text-base font-semibold text-foreground line-clamp-1">
+                                        {docItem.title}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                        {docItem.preview}
+                                      </p>
+                                      <div className="text-xs text-muted-foreground mt-2">
+                                        Archived
+                                      </div>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
                           </div>
                         ) : (
                           sections.map((section) => (
@@ -457,22 +692,54 @@ const Index = () => {
                               <div className="text-sm font-semibold text-muted-foreground mb-3">{section}</div>
                               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                 {filtered
-                                  .filter((doc) => doc.section === section)
-                                  .map((doc) => (
-                                    <Card key={doc.id} className="hover:shadow-card transition-shadow cursor-pointer" onClick={() => openDoc(doc.id)}>
-                                      <CardContent className="p-5 min-h-[140px]">
+                                  .filter((docItem) => docItem.section === section)
+                                  .map((docItem) => (
+                                    <Card
+                                      key={docItem.id}
+                                      className="hover:shadow-card transition-shadow cursor-pointer"
+                                      onClick={() => openDoc(docItem.id)}
+                                    >
+                                      <CardContent className="p-5 min-h-[140px] relative">
+                                        <div className="absolute right-3 top-3">
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 p-0"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <MoreVertical className="w-4 h-4" />
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                              <DropdownMenuItem
+                                                onClick={async (e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  await archiveDocById(docItem.id);
+                                                  toast.success("Moved to Archived");
+                                                }}
+                                              >
+                                                <Archive className="w-4 h-4 mr-2" />
+                                                Archive
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        </div>
+
                                         <div className="flex items-start gap-3">
                                           <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
                                             <FileText className="w-5 h-5 text-primary" />
                                           </div>
-                                          <div className="flex-1 min-w-0">
+                                          <div className="flex-1 min-w-0 pr-8">
                                             <p className="text-base font-semibold text-foreground hover:text-primary transition-colors line-clamp-1">
-                                              {doc.title}
+                                              {docItem.title}
                                             </p>
                                             <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                              {doc.preview}
+                                              {docItem.preview}
                                             </p>
-                                            <div className="text-xs text-muted-foreground mt-2">{doc.updated}</div>
+                                            <div className="text-xs text-muted-foreground mt-2">{docItem.updated}</div>
                                           </div>
                                         </div>
                                       </CardContent>

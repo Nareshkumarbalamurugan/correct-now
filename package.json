@@ -53,6 +53,7 @@
     "cors": "^2.8.5",
     "date-fns": "^3.6.0",
     "diff-match-patch": "^1.0.5",
+    "dompurify": "^3.3.1",
     "dotenv": "^16.4.5",
     "embla-carousel-react": "^8.6.0",
     "express": "^4.19.2",

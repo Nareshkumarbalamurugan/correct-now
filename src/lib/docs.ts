@@ -7,6 +7,8 @@ import {
   collection,
   doc as firestoreDoc,
   getDocs as getFirestoreDocs,
+  updateDoc,
+  deleteDoc,
   setDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -17,6 +19,7 @@ export interface DocItem {
   preview: string;
   text: string;
   updatedAt: string;
+  archivedAt?: string;
 }
 
 const STORAGE_KEY = "correctnow:docs";
@@ -53,6 +56,7 @@ export const upsertDoc = (text: string, id?: string): DocItem => {
   }
   
   const docs = getDocs();
+  const existing = id ? docs.find((d) => d.id === id) : undefined;
   const content = text.trim();
   const title = content.split("\n")[0]?.slice(0, 60) || "Untitled";
   const preview = content.slice(0, 180);
@@ -64,6 +68,7 @@ export const upsertDoc = (text: string, id?: string): DocItem => {
     preview,
     text: content,
     updatedAt,
+    archivedAt: existing?.archivedAt,
   };
 
   const next = [doc, ...docs.filter((d) => d.id !== doc.id)].slice(0, DOC_LIMIT);
@@ -92,6 +97,91 @@ export const upsertDoc = (text: string, id?: string): DocItem => {
   }
 
   return doc;
+};
+
+export const archiveDocById = async (id: string) => {
+  const auth = getFirebaseAuth();
+  const archivedAt = new Date().toISOString();
+
+  const docs = getDocs();
+  const next = docs.map((d) => (d.id === id ? { ...d, archivedAt } : d));
+  saveDocs(next);
+  window.dispatchEvent(new Event("correctnow:docs-updated"));
+
+  const db = getFirebaseDb();
+  if (auth?.currentUser && db) {
+    const ref = firestoreDoc(db, `users/${auth.currentUser.uid}/docs/${id}`);
+    await updateDoc(ref, { archivedAt }).catch(() => {
+      // ignore
+    });
+  }
+};
+
+export const restoreDocById = async (id: string) => {
+  const auth = getFirebaseAuth();
+
+  const docs = getDocs();
+  const next = docs.map((d) => {
+    if (d.id !== id) return d;
+    const { archivedAt, ...rest } = d;
+    return rest;
+  });
+  saveDocs(next);
+  window.dispatchEvent(new Event("correctnow:docs-updated"));
+
+  const db = getFirebaseDb();
+  if (auth?.currentUser && db) {
+    const ref = firestoreDoc(db, `users/${auth.currentUser.uid}/docs/${id}`);
+    // Set to null so rules can distinguish from archived (string)
+    await updateDoc(ref, { archivedAt: null }).catch(() => {
+      // ignore
+    });
+  }
+};
+
+export const deleteArchivedDocPermanently = async (id: string) => {
+  const auth = getFirebaseAuth();
+  const docs = getDocs();
+  const target = docs.find((d) => d.id === id);
+  if (!target?.archivedAt) {
+    throw new Error("You can only delete docs from Archived");
+  }
+
+  const next = docs.filter((d) => d.id !== id);
+  saveDocs(next);
+  window.dispatchEvent(new Event("correctnow:docs-updated"));
+
+  const db = getFirebaseDb();
+  if (auth?.currentUser && db) {
+    const ref = firestoreDoc(db, `users/${auth.currentUser.uid}/docs/${id}`);
+    await deleteDoc(ref);
+  }
+};
+
+export const deleteArchivedDocsPermanently = async (ids: string[]) => {
+  const auth = getFirebaseAuth();
+  const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
+  if (!uniqueIds.length) return;
+
+  const docs = getDocs();
+  const notArchived = uniqueIds.find((id) => {
+    const item = docs.find((d) => d.id === id);
+    return !item?.archivedAt;
+  });
+  if (notArchived) {
+    throw new Error("You can only delete docs from Archived");
+  }
+
+  const next = docs.filter((d) => !uniqueIds.includes(d.id));
+  saveDocs(next);
+  window.dispatchEvent(new Event("correctnow:docs-updated"));
+
+  const db = getFirebaseDb();
+  if (auth?.currentUser && db) {
+    await Promise.all(
+      uniqueIds.map((id) => deleteDoc(firestoreDoc(db, `users/${auth.currentUser.uid}/docs/${id}`)))
+    );
+  }
 };
 
 export const getDocById = (id: string): DocItem | undefined => {

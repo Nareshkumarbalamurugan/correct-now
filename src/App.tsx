@@ -21,6 +21,8 @@ import FeaturesPage from "./pages/FeaturesPage";
 import Terms from "./pages/Terms";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
+import BlogPostFirestore from "./pages/BlogPostFirestore";
+import BlogPostPublic from "./pages/BlogPostPublic";
 import NotFound from "./pages/NotFound";
 import Languages from "./pages/Languages";
 import { initDocsSync } from "@/lib/docs";
@@ -75,7 +77,10 @@ const App = () => {
             <Route path="/languages" element={<Languages />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/blog" element={<Blog />} />
-            <Route path="/blog/:slug" element={<BlogPost />} />
+            <Route path="/blog/:slug" element={<BlogPostPublic />} />
+            <Route path="/blog-md/:slug" element={<BlogPost />} />
+            <Route path="/blogs" element={<Blog />} />
+            <Route path="/blogs/:id" element={<BlogPostFirestore />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
