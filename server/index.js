@@ -49,7 +49,10 @@ const initAdminDb = () => {
         return null;
       }
     }
-    return admin.firestore();
+    const db = admin.firestore();
+    // Enable ignoreUndefinedProperties to prevent Firestore errors
+    db.settings({ ignoreUndefinedProperties: true });
+    return db;
   } catch (err) {
     console.error("Firebase admin init error:", err);
     return null;
@@ -919,12 +922,10 @@ app.post("/api/admin/create-user", async (req, res) => {
 
     // Create user document in Firestore
     const nowIso = new Date().toISOString();
-    await adminDb.collection("users").doc(userRecord.uid).set({
+    const userData = {
       uid: userRecord.uid,
       email: email,
       name: name,
-      phone: phoneValue || undefined,
-      category: category ? String(category).trim() : undefined,
       plan: "free",
       wordLimit: 200,
       credits: 0,
@@ -933,19 +934,37 @@ app.post("/api/admin/create-user", async (req, res) => {
       status: "active",
       createdAt: nowIso,
       updatedAt: nowIso,
-    });
+    };
+    
+    // Only add phone and category if they have values
+    if (phoneValue) {
+      userData.phone = phoneValue;
+    }
+    if (category && String(category).trim()) {
+      userData.category = String(category).trim();
+    }
+    
+    await adminDb.collection("users").doc(userRecord.uid).set(userData);
 
     console.log(`Created Firestore document for user: ${userRecord.uid}`);
 
-    res.json({ 
+    // Build response object without undefined values
+    const responseData = {
       success: true, 
       message: `User created successfully: ${email}`,
       uid: userRecord.uid,
       email: email,
       name: name,
-      phone: phoneValue || undefined,
-      category: category ? String(category).trim() : undefined
-    });
+    };
+    
+    if (phoneValue) {
+      responseData.phone = phoneValue;
+    }
+    if (category && String(category).trim()) {
+      responseData.category = String(category).trim();
+    }
+    
+    res.json(responseData);
   } catch (error) {
     console.error("Create user error:", error);
     res.status(500).json({ error: error.message });

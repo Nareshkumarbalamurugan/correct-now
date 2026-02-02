@@ -71,6 +71,7 @@ const Index = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -251,19 +252,78 @@ const Index = () => {
   useEffect(() => {
     if (sidebarView !== "archived") {
       setSelectedArchivedIds(new Set());
-      return;
+    } else {
+      // Drop selections that are no longer in Archived
+      setSelectedArchivedIds((prev) => {
+        const archivedIdSet = new Set(archivedDocs.map((d) => d.id));
+        const next = new Set<string>();
+        for (const id of prev) {
+          if (archivedIdSet.has(id)) next.add(id);
+        }
+        return next;
+      });
     }
 
-    // Drop selections that are no longer in Archived
-    setSelectedArchivedIds((prev) => {
-      const archivedIdSet = new Set(archivedDocs.map((d) => d.id));
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (archivedIdSet.has(id)) next.add(id);
-      }
+    if (sidebarView !== "docs") {
+      setSelectedDocIds(new Set());
+    } else {
+      // Drop selections that are no longer in Docs (e.g., archived)
+      setSelectedDocIds((prev) => {
+        const activeIdSet = new Set(activeDocs.map((d) => d.id));
+        const next = new Set<string>();
+        for (const id of prev) {
+          if (activeIdSet.has(id)) next.add(id);
+        }
+        return next;
+      });
+    }
+  }, [sidebarView, archivedDocs, activeDocs]);
+
+  const toggleDocSelected = (id: string, checked: boolean) => {
+    setSelectedDocIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
       return next;
     });
-  }, [sidebarView, archivedDocs]);
+  };
+
+  const selectAllVisibleDocs = () => {
+    setSelectedDocIds((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((d) => next.add(d.id));
+      return next;
+    });
+  };
+
+  const clearDocSelection = () => setSelectedDocIds(new Set());
+
+  const archiveSelectedDocs = async () => {
+    const ids = Array.from(selectedDocIds);
+    if (!ids.length) return;
+    const confirmed = window.confirm(`Archive ${ids.length} document(s)?`);
+    if (!confirmed) return;
+    try {
+      await Promise.all(ids.map((id) => archiveDocById(id)));
+      setSelectedDocIds(new Set());
+      toast.success("Archived selected docs");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to archive docs");
+    }
+  };
+
+  const archiveAllDocs = async () => {
+    if (!activeDocs.length) return;
+    const confirmed = window.confirm(`Archive ALL ${activeDocs.length} document(s)?`);
+    if (!confirmed) return;
+    try {
+      await Promise.all(activeDocs.map((d) => archiveDocById(d.id)));
+      setSelectedDocIds(new Set());
+      toast.success("Archived all docs");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to archive docs");
+    }
+  };
 
   const toggleArchivedSelected = (id: string, checked: boolean) => {
     setSelectedArchivedIds((prev) => {
@@ -574,6 +634,36 @@ const Index = () => {
                             Selected: {selectedArchivedIds.size}
                           </div>
                         </div>
+                      ) : sidebarView === "docs" ? (
+                        <div className="flex flex-wrap items-center gap-2 mt-3">
+                          <Button type="button" variant="outline" size="sm" onClick={selectAllVisibleDocs}>
+                            Select visible
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={clearDocSelection}>
+                            Clear selection
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={archiveSelectedDocs}
+                            disabled={selectedDocIds.size === 0}
+                          >
+                            Archive selected
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={archiveAllDocs}
+                            disabled={activeDocs.length === 0}
+                          >
+                            Archive all
+                          </Button>
+                          <div className="text-xs text-muted-foreground">
+                            Selected: {selectedDocIds.size}
+                          </div>
+                        </div>
                       ) : null}
                     </div>
 
@@ -700,6 +790,14 @@ const Index = () => {
                                       onClick={() => openDoc(docItem.id)}
                                     >
                                       <CardContent className="p-5 min-h-[140px] relative">
+                                        <div className="absolute left-3 top-3">
+                                          <Checkbox
+                                            checked={selectedDocIds.has(docItem.id)}
+                                            onCheckedChange={(v) => toggleDocSelected(docItem.id, v === true)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            aria-label={`Select ${docItem.title || "Document"}`}
+                                          />
+                                        </div>
                                         <div className="absolute right-3 top-3">
                                           <DropdownMenu>
                                             <DropdownMenuTrigger asChild>

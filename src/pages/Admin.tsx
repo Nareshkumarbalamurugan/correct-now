@@ -809,22 +809,45 @@ Bob Wilson,bob${timestamp}@example.com,,Uncategorized,password789`;
 
     setCreatingUser(true);
     try {
+      const payload: Record<string, unknown> = {
+        name: newUserName.trim(),
+        email: newUserEmail.trim(),
+        password: newUserPassword,
+      };
+      if (phoneValue) payload.phone = phoneValue;
+      if (categoryValue) payload.category = categoryValue;
+
       const response = await fetch("/api/admin/create-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newUserName.trim(),
-          email: newUserEmail.trim(),
-          phone: phoneValue || undefined,
-          category: categoryValue || undefined,
-          password: newUserPassword,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const rawText = await response.text();
+      const contentType = response.headers.get("content-type") || "";
+      let data: any = null;
+
+      if (rawText) {
+        const looksJson = contentType.includes("application/json") || rawText.trim().startsWith("{") || rawText.trim().startsWith("[");
+        if (looksJson) {
+          try {
+            data = JSON.parse(rawText);
+          } catch {
+            data = null;
+          }
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create user");
+        const message =
+          (data && (data.error || data.message)) ||
+          rawText ||
+          `Failed to create user (HTTP ${response.status})`;
+        throw new Error(message);
+      }
+
+      if (!data) {
+        throw new Error("Server returned an empty response");
       }
 
       // Add new user to local state
