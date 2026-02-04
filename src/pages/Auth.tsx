@@ -33,6 +33,7 @@ const Auth = () => {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [returnToAppPending, setReturnToAppPending] = useState(false);
 
   const [showGoogleNameDialog, setShowGoogleNameDialog] = useState(false);
   const [googleName, setGoogleName] = useState("");
@@ -59,6 +60,21 @@ const Auth = () => {
   const shouldUseRedirect = () => {
     const ua = navigator.userAgent || "";
     return /Android|iPhone|iPad|iPod/i.test(ua);
+  };
+
+  const triggerReturnToApp = () => {
+    const isAndroid = /Android/i.test(navigator.userAgent || "");
+    const deepLink = "correctnow://auth-success";
+    const intentLink = "intent://auth-success#Intent;scheme=correctnow;package=com.correctnow.webview;end";
+    setReturnToAppPending(true);
+    if (isAndroid) {
+      window.location.href = intentLink;
+      setTimeout(() => {
+        window.location.href = deepLink;
+      }, 800);
+    } else {
+      window.location.href = deepLink;
+    }
   };
 
   useEffect(() => {
@@ -145,6 +161,12 @@ const Auth = () => {
             { merge: true }
           );
           await writeSessionId(result.user, true);
+        }
+        const params = new URLSearchParams(location.search);
+        if (params.get("returnToApp") === "true" && shouldUseRedirect()) {
+          toast.success("Login successful! Returning to app...", { duration: 2000 });
+          triggerReturnToApp();
+          return;
         }
         toast.success("Signed in successfully");
       } else {
@@ -261,17 +283,7 @@ const Auth = () => {
       
       // Try to redirect to the app
       setTimeout(() => {
-        const deepLink = "correctnow://auth-success";
-        const isAndroid = /Android/i.test(navigator.userAgent || "");
-        const intentLink = "intent://auth-success#Intent;scheme=correctnow;package=com.correctnow.webview;end";
-        window.location.href = isAndroid ? intentLink : deepLink;
-
-        // Fallback to the plain scheme after a short delay
-        if (isAndroid) {
-          setTimeout(() => {
-            window.location.href = deepLink;
-          }, 800);
-        }
+        triggerReturnToApp();
         
         // Show manual instruction after a delay if redirect doesn't work
         setTimeout(() => {
@@ -501,6 +513,16 @@ const Auth = () => {
       {/* Right Panel - Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-6 md:p-8">
         <div className="w-full max-w-md space-y-6 sm:space-y-8">
+          {returnToAppPending && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
+              <p className="text-sm text-foreground">
+                Login successful. Tap below if you are not redirected to the app.
+              </p>
+              <Button type="button" className="mt-3 w-full" onClick={triggerReturnToApp}>
+                Return to App
+              </Button>
+            </div>
+          )}
           <div className="lg:hidden flex flex-col items-center gap-3 sm:gap-4">
             <Link to="/" className="flex items-center gap-2 text-foreground text-xs sm:text-sm">
               <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

@@ -4,8 +4,9 @@ import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-const START_URL = 'https://correctnow.app/';
-const EXTERNAL_GOOGLE_URL = 'https://correctnow.app/auth?mode=login&autoGoogle=1&returnToApp=true';
+const WEB_URL = 'https://correctnow.app/';
+const START_URL = WEB_URL;
+const EXTERNAL_GOOGLE_URL = `${WEB_URL}auth?mode=login&autoGoogle=1&returnToApp=true`;
 
 const isAllowedUrl = (url) => {
   // Block custom scheme to prevent "Can't open url" warnings
