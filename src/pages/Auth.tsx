@@ -41,7 +41,13 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";
-  const [hasAutoTriggeredGoogle, setHasAutoTriggeredGoogle] = useState(false);
+  const [hasAutoTriggeredGoogle, setHasAutoTriggeredGoogle] = useState(() => {
+    try {
+      return sessionStorage.getItem("cn:autoGoogleTriggered") === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const isWebView = () => {
     const ua = navigator.userAgent || "";
@@ -75,9 +81,28 @@ const Auth = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const autoGoogle = params.get("autoGoogle");
-    if (autoGoogle === "1" && !hasAutoTriggeredGoogle && !isWebView()) {
+    const returnToApp = params.get("returnToApp") === "true";
+    let alreadyTriggered = hasAutoTriggeredGoogle;
+    try {
+      alreadyTriggered = alreadyTriggered || sessionStorage.getItem("cn:autoGoogleTriggered") === "1";
+    } catch {
+      // ignore storage errors
+    }
+    if (autoGoogle === "1" && !alreadyTriggered && !isWebView()) {
+      try {
+        sessionStorage.setItem("cn:autoGoogleTriggered", "1");
+      } catch {
+        // ignore storage errors
+      }
       setHasAutoTriggeredGoogle(true);
       handleGoogleSignIn(true);
+    } else if (returnToApp) {
+      // Ensure we never auto-trigger again on return-to-app flows
+      try {
+        sessionStorage.setItem("cn:autoGoogleTriggered", "1");
+      } catch {
+        // ignore storage errors
+      }
     }
   }, [location.search, hasAutoTriggeredGoogle]);
 
@@ -236,7 +261,16 @@ const Auth = () => {
       // Try to redirect to the app
       setTimeout(() => {
         const deepLink = "correctnow://auth-success";
-        window.location.href = deepLink;
+        const isAndroid = /Android/i.test(navigator.userAgent || "");
+        const intentLink = "intent://auth-success#Intent;scheme=correctnow;package=com.correctnow.webview;end";
+        window.location.href = isAndroid ? intentLink : deepLink;
+
+        // Fallback to the plain scheme after a short delay
+        if (isAndroid) {
+          setTimeout(() => {
+            window.location.href = deepLink;
+          }, 800);
+        }
         
         // Show manual instruction after a delay if redirect doesn't work
         setTimeout(() => {
