@@ -63,18 +63,17 @@ const Auth = () => {
   };
 
   const triggerReturnToApp = () => {
-    const isAndroid = /Android/i.test(navigator.userAgent || "");
+    console.log('[Auth] triggerReturnToApp called');
     const deepLink = "correctnow://auth-success";
-    const intentLink = "intent://auth-success#Intent;scheme=correctnow;package=com.correctnow.webview;end";
     setReturnToAppPending(true);
-    if (isAndroid) {
-      window.location.href = intentLink;
-      setTimeout(() => {
-        window.location.href = deepLink;
-      }, 800);
-    } else {
-      window.location.href = deepLink;
-    }
+    
+    console.log('[Auth] Attempting to open:', deepLink);
+    window.location.href = deepLink;
+    
+    // Show success message
+    setTimeout(() => {
+      toast.info("If the app didn't open, tap 'Return to App' button", { duration: 5000 });
+    }, 1000);
   };
 
   useEffect(() => {
@@ -277,18 +276,18 @@ const Auth = () => {
     }
     // Check if we need to return to the app
     const params = new URLSearchParams(window.location.search);
-    if (params.get("returnToApp") === "true" && shouldUseRedirect()) {
+    const returnToApp = params.get("returnToApp") === "true";
+    console.log('[Auth] returnToApp param:', returnToApp);
+    console.log('[Auth] shouldUseRedirect:', shouldUseRedirect());
+    
+    if (returnToApp && shouldUseRedirect()) {
       console.log('[Auth] returnToApp detected - redirecting to app');
-      toast.success("Login successful! Returning to app...", { duration: 2000 });
+      setReturnToAppPending(true);
+      toast.success("Login successful! Tap 'Return to App' button below.", { duration: 5000 });
       
-      // Try to redirect to the app
+      // Try automatic redirect first
       setTimeout(() => {
         triggerReturnToApp();
-        
-        // Show manual instruction after a delay if redirect doesn't work
-        setTimeout(() => {
-          toast.info("You can close this browser tab to return to the app", { duration: 5000 });
-        }, 1500);
       }, 500);
       return;
     }

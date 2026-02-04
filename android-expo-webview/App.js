@@ -71,27 +71,42 @@ export default function App() {
   // Handle deep link redirects from browser after login
   React.useEffect(() => {
     const handleDeepLink = (event) => {
-      console.log('[DeepLink] Received:', event.url);
-      if (event.url.startsWith('correctnow://')) {
-        console.log('[DeepLink] Auth success - reloading WebView');
+      console.log('[DeepLink] ===== DEEP LINK RECEIVED =====');
+      console.log('[DeepLink] Full event:', JSON.stringify(event));
+      console.log('[DeepLink] URL:', event.url);
+      
+      if (event.url && event.url.startsWith('correctnow://')) {
+        console.log('[DeepLink] ✓ CorrectNow deep link detected!');
+        console.log('[DeepLink] Reloading WebView to refresh session');
+        
         if (webViewRef.current) {
+          // Reload the WebView to pick up the new login session
           webViewRef.current.reload();
         }
+      } else {
+        console.log('[DeepLink] ✗ Not a correctnow:// link');
       }
     };
 
-    // Listen for deep links
+    console.log('[DeepLink] Setting up deep link listener');
     const subscription = Linking.addEventListener('url', handleDeepLink);
     
     // Check if app was opened via deep link
     Linking.getInitialURL().then(url => {
       if (url) {
-        console.log('[DeepLink] Initial URL:', url);
+        console.log('[DeepLink] Initial URL on app start:', url);
         handleDeepLink({ url });
+      } else {
+        console.log('[DeepLink] No initial URL');
       }
+    }).catch(err => {
+      console.error('[DeepLink] Error getting initial URL:', err);
     });
 
-    return () => subscription.remove();
+    return () => {
+      console.log('[DeepLink] Removing listener');
+      subscription.remove();
+    };
   }, []);
 
   if (Platform.OS === 'web') {
