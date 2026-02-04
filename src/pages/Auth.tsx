@@ -82,6 +82,7 @@ const Auth = () => {
     const params = new URLSearchParams(location.search);
     const autoGoogle = params.get("autoGoogle");
     const returnToApp = params.get("returnToApp") === "true";
+    const isMobileBrowser = shouldUseRedirect();
     let alreadyTriggered = hasAutoTriggeredGoogle;
     try {
       alreadyTriggered = alreadyTriggered || sessionStorage.getItem("cn:autoGoogleTriggered") === "1";
@@ -96,8 +97,8 @@ const Auth = () => {
       }
       setHasAutoTriggeredGoogle(true);
       handleGoogleSignIn(true);
-    } else if (returnToApp) {
-      // Ensure we never auto-trigger again on return-to-app flows
+    } else if (returnToApp && isMobileBrowser) {
+      // Ensure we never auto-trigger again on return-to-app flows (mobile only)
       try {
         sessionStorage.setItem("cn:autoGoogleTriggered", "1");
       } catch {
@@ -254,7 +255,7 @@ const Auth = () => {
     }
     // Check if we need to return to the app
     const params = new URLSearchParams(window.location.search);
-    if (params.get("returnToApp") === "true") {
+    if (params.get("returnToApp") === "true" && shouldUseRedirect()) {
       console.log('[Auth] returnToApp detected - redirecting to app');
       toast.success("Login successful! Returning to app...", { duration: 2000 });
       
