@@ -1,0 +1,262 @@
+/**
+ * CorrectNow Background Service Worker (Manifest V3)
+ * Handles API communication for grammar checking with multi-language support
+ * - Receives messages from content.js
+ * - Makes API calls to the grammar checking backend
+ * - Returns structured error responses
+ */
+
+console.log('🔧 CorrectNow Service Worker loaded');
+
+// Listen for messages from content scripts
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('📨 Message received:', request.action);
+  console.log('📍 From:', sender.url);
+
+  if (request.action === 'checkGrammar') {
+    // Handle async with promise
+    handleGrammarCheck(request, sender)
+      .then(sendResponse)
+      .catch(error => {
+        console.error('❌ Unhandled error:', error);
+        sendResponse({
+          error: error.message || 'Unknown error occurred',
+          details: error.toString(),
+        });
+      });
+    // Return true to indicate async response
+    return true;
+  }
+});
+
+/**
+ * Detect language of the text
+ */
+async function detectLanguage(text, apiBase, apiKey) {
+  try {
+    const apiUrl = `${apiBase}/api/detect-language`;
+    console.log('🌍 Detecting language...');
+
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (apiKey && apiKey !== 'YOUR_API_KEY_HERE') {
+      headers['X-API-Key'] = apiKey;
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ text }),
+    });
+
+    if (!response.ok) {
+      console.error('❌ Language detection failed:', response.status);
+      return 'auto'; // Fallback to auto
+    }
+
+    const data = await response.json();
+    const detectedCode = data.code || 'auto';
+    console.log('🌍 Detected language:', detectedCode);
+    return detectedCode;
+  } catch (error) {
+    console.error('❌ Language detection error:', error);
+    return 'auto'; // Fallback to auto
+  }
+}
+
+/**
+ * Convert new API response format to old format for extension compatibility
+ */
+function convertResponseToErrors(data, originalText) {
+  const { corrected_text, changes } = data;
+
+  if (!Array.isArray(changes) || changes.length === 0) {
+    return [];
+  }
+
+  const errors = [];
+
+  changes.forEach((change) => {
+    const original = change.original || '';
+    const corrected = change.corrected || '';
+    const explanation = change.explanation || 'Grammar or spelling error';
+
+    // Find all occurrences of the original text
+    let searchIndex = 0;
+    while (searchIndex < originalText.length) {
+      const foundIndex = originalText.indexOf(original, searchIndex);
+
+      if (foundIndex === -1) {
+        break; // No more occurrences
+      }
+
+      // Check if we already have an error at this position
+      const hasExistingError = errors.some(
+        (e) => e.start === foundIndex && e.end === foundIndex + original.length
+      );
+
+      if (!hasExistingError) {
+        errors.push({
+          start: foundIndex,
+          end: foundIndex + original.length,
+          type: 'grammar',
+          message: explanation,
+          suggestion: corrected,
+          original: original,
+        });
+      }
+
+      searchIndex = foundIndex + 1;
+    }
+  });
+
+  console.log('✅ Converted', changes.length, 'changes to', errors.length, 'errors');
+  return errors;
+}
+
+/**
+ * Handle grammar check request
+ * Calls the backend API and returns results
+ */
+async function handleGrammarCheck(request, sender) {
+  try {
+    const { text, apiBase, language, apiKey } = request;
+
+    console.log('📝 Text length:', text.length);
+    console.log('🌐 API Base:', apiBase);
+    console.log('🔑 API Key:', apiKey ? 'Provided' : 'Not provided');
+
+    if (!text || text.trim() === '') {
+      console.log('❌ Empty text');
+      return { error: 'Empty text provided' };
+    }
+
+    // Detect language if not provided
+    let targetLanguage = language || 'auto';
+    if (targetLanguage === 'auto') {
+      targetLanguage = await detectLanguage(text, apiBase, apiKey);
+    }
+    console.log('🌍 Target language:', targetLanguage);
+
+    // Construct API URL for proofreading
+    const apiUrl = `${apiBase}/api/proofread`;
+
+    console.log('🔗 Making request to:', apiUrl);
+
+    // Make fetch request to backend API
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+    // Build headers with API key if provided
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Add API key header if provided (bypasses rate limits)
+    if (apiKey && apiKey !== 'YOUR_API_KEY_HERE') {
+      headers['X-API-Key'] = apiKey;
+      console.log('🔑 Using API key for authentication');
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        text: text,
+        language: targetLanguage,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    console.log('📨 Response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ API error:', response.status, errorText);
+      
+      // Handle specific HTTP status codes
+      if (response.status === 429) {
+        return {
+          error: 'Too many requests. This might be a server issue. Please contact support.',
+          details: errorText,
+        };
+      }
+      
+      if (response.status === 503) {
+        return {
+          error: 'Service temporarily unavailable. Please try again in a moment.',
+          details: errorText,
+        };
+      }
+      
+      return {
+        error: `API error: ${response.status} ${response.statusText}`,
+        details: errorText,
+      };
+    }
+
+    // Parse API response
+    const data = await response.json();
+    console.log('📤 Response received:', data);
+
+    // Validate response format (new format: corrected_text and changes)
+    if (!data.corrected_text || !Array.isArray(data.changes)) {
+      console.error('❌ Invalid response format');
+      return {
+        error: 'Invalid API response format',
+        details: data,
+      };
+    }
+
+    // Convert new API format to old error format
+    const errors = convertResponseToErrors(data, text);
+
+    // Return parsed errors
+    console.log('✅ Returning errors:', errors.length);
+    return {
+      errors: errors,
+      correctedText: data.corrected_text,
+      changes: data.changes,
+    };
+  } catch (error) {
+    console.error('❌ Grammar check error:', error);
+
+    // Check if it's an AbortError (timeout)
+    if (error.name === 'AbortError') {
+      return {
+        error: 'Request timed out. The API might be slow or rate-limited.',
+        details: 'Please try again in a few moments.',
+      };
+    }
+
+    return {
+      error: error.message || 'Unknown error occurred',
+      details: error.toString(),
+    };
+  }
+}
+
+/**
+ * Extension lifecycle hooks
+ */
+
+// On extension install or update
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    console.log('CorrectNow extension installed');
+    // Optionally open welcome page
+    // chrome.tabs.create({ url: 'welcome.html' });
+  } else if (details.reason === 'update') {
+    console.log('CorrectNow extension updated');
+  }
+});
+
+// Optional: Handle extension icon click
+chrome.action.onClicked.addListener((tab) => {
+  // Show notification or perform action when extension icon is clicked
+  console.log('Extension icon clicked on tab:', tab.id);
+});

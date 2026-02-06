@@ -1573,35 +1573,6 @@ UNIVERSAL LINGUISTIC RULES (Apply to ALL languages):
   - Tamil Accusative before comparisons: If using "போல/மாதிரி" for comparison,
     apply the required case ending when needed.
     Example: "பகையாளி போல" → "பகையாளியைப் போல" (ஐ-வேற்றுமை)
-   
-   ENGLISH-SPECIFIC GRAMMAR RULES (MANDATORY):
-   - CAPITALIZATION: Always capitalize the pronoun "I" everywhere, including after conjunctions
-     * Examples: "i went" → "I went", "but i was" → "but I was", "and i decided" → "and I decided"
-   - VERB TENSE CONSISTENCY: Maintain consistent past/present/future tense throughout
-     * Past: "decide" → "decided", "wakes" → "woke", "miss" → "missed", "telling" → "told"
-     * Progressive: "i feeling" → "I felt", "was starting" → "started" (for simple past actions)
-     * Conditional/Subjunctive: When expressing hypothetical future (promises, intentions in past narrative),
-       use "would" instead of "will" for consistency with past tense context
-       Example: Past narrative: "I promised that I will study" → "I promised that I would study"
-   - ARTICLE USAGE: Use "an" before vowel sounds, "a" before consonant sounds
-     * Examples: "a online" → "an online", "a hour" → "an hour", "a university" (correct - starts with /j/ sound)
-   - INFINITIVE vs GERUND: Use "to + verb" (infinitive) for purpose, not "for + verb"
-     * Examples: "for improve" → "to improve", "for study" → "to study"
-   - SINGULAR/PLURAL AGREEMENT: Match number with quantity words
-     * Examples: "many lesson" → "many lessons", "one skill" → "skills" (when referring to multiple)
-   - AUXILIARY VERBS: Use proper helping verbs in negatives and questions
-     * Examples: "i not follow" → "I did not follow", "you not know" → "you do not know"
-   - AM/PM FORMATTING: Use proper time notation
-     * Examples: "9 am" → "9 a.m." or "9 AM", "3 pm" → "3 p.m." or "3 PM"
-   - EVERYDAY vs EVERY DAY: Distinguish adjective form from adverbial phrase
-     * "everyday" (adjective) = ordinary, common: "everyday problems", "everyday life"
-     * "every day" (adverb phrase) = each day, daily: "I study every day", "happens every day"
-     * Examples: "I go to school everyday" → "I go to school every day"
-   - COMMA PLACEMENT (Critical):
-     * After introductory phrases: "Last week, I decided...", "However, I promised..."
-     * Before conjunctions joining independent clauses: "I was nervous, but I tried"
-     * After transitional words: "Therefore, the plan...", "Moreover, he said..."
-     * In lists: "tired, hungry, and upset"
 
 7. WORD SPACING (Otrumizhal):
    - Separate run-on words and normalize spacing.
@@ -1888,12 +1859,7 @@ app.post("/api/proofread", async (req, res) => {
   try {
     const { text, language, userId } = req.body || {};
 
-    // Check for extension API key in multiple headers
-    const extensionKey = String(
-      req.headers["x-api-key"] || 
-      req.headers["x-correctnow-api-key"] || 
-      ""
-    ).trim();
+    const extensionKey = String(req.headers["x-correctnow-api-key"] || "").trim();
     const expectedKey = String(process.env.CORRECTNOW_EXTENSION_API_KEY || "").trim();
     const bypassFreeLimit = !!expectedKey && extensionKey === expectedKey;
     
