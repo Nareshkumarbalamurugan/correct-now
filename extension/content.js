@@ -9,8 +9,8 @@
 
 // Configuration
 const CONFIG = {
-  API_BASE_URL: 'http://localhost:8787', // Change to your API URL
-  API_KEY: 'AIzaSyA7oyCyeggdZ_PTf3E0ANqne-EynWfUQJI', // 🔑 PASTE YOUR API KEY HERE to bypass rate limits
+  API_BASE_URL: 'https://correctnow.app', // Production API URL (deployed backend)
+  EXTENSION_TOKEN: 'CORRECTNOW_CHROME_EXTENSION_V1', // Extension identifier (not sensitive)
   BUTTON_TEXT: 'Check with CorrectNow',
   BUTTON_CLASS: 'correctnow-check-button',
   HIGHLIGHT_CLASS: 'correctnow-error-highlight',
@@ -278,7 +278,7 @@ function handleCheckClick() {
       action: 'checkGrammar',
       text: text,
       apiBase: CONFIG.API_BASE_URL,
-      apiKey: CONFIG.API_KEY,
+      apiKey: CONFIG.EXTENSION_TOKEN, // Extension access token (not Google API key)
     },
     (response) => {
       clearTimeout(checkTimeout);
