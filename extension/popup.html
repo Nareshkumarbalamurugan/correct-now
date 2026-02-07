@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CorrectNow - Login</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 350px;
+      min-height: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #333;
+    }
+
+    .container {
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .logo {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 10px;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    h1 {
+      font-size: 20px;
+      color: white;
+      margin-bottom: 5px;
+    }
+
+    .tagline {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    /* Login View */
+    .login-view {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .login-view h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      text-align: center;
+      color: #333;
+    }
+
+    .auth-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .auth-btn {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .auth-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #f7fafc;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .divider {
+      text-align: center;
+      margin: 15px 0;
+      color: #999;
+      font-size: 12px;
+      position: relative;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 40%;
+      height: 1px;
+      background: #ddd;
+    }
+
+    .divider::before {
+      left: 0;
+    }
+
+    .divider::after {
+      right: 0;
+    }
+
+    /* Dashboard View */
+    .dashboard-view {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .user-info {
+      text-align: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+      margin-bottom: 15px;
+    }
+
+    .user-email {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .plan-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #667eea;
+      color: white;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .usage-stats {
+      margin: 15px 0;
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: #f7fafc;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s ease;
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .btn-upgrade {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+    }
+
+    .btn-logout {
+      background: #f7fafc;
+      color: #e53e3e;
+      border: 2px solid #feb2b2;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: white;
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .error-message {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .success-message {
+      background: #c6f6d5;
+      color: #2f855a;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">CN</div>
+      <h1>CorrectNow</h1>
+      <p class="tagline">Grammar & Spell Checker</p>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingView" class="loading">
+      <div class="spinner"></div>
+      <p>Loading...</p>
+    </div>
+
+    <!-- Login View -->
+    <div id="loginView" class="login-view hidden">
+      <h2>Sign in to continue</h2>
+      <p style="text-align: center; font-size: 13px; color: #666; margin-bottom: 15px;">
+        Access unlimited checks and premium features
+      </p>
+      <div class="auth-buttons">
+        <a href="#" id="loginBtn" class="auth-btn btn-primary">
+          <span>Sign In / Register</span>
+        </a>
+        <div class="divider">OR</div>
+        <button id="continueWithoutLoginBtn" class="auth-btn btn-secondary">
+          Continue Without Login
+        </button>
+      </div>
+      <p style="text-align: center; font-size: 11px; color: #999; margin-top: 15px;">
+        Free users: 5 checks per day
+      </p>
+      <div id="errorMessage" class="error-message hidden"></div>
+    </div>
+
+    <!-- Dashboard View -->
+    <div id="dashboardView" class="dashboard-view hidden">
+      <div class="user-info">
+        <div class="user-email" id="userEmail">Loading...</div>
+        <span class="plan-badge" id="planBadge">Free Plan</span>
+      </div>
+
+      <div class="usage-stats">
+        <div class="stat-item">
+          <span class="stat-label">Checks Used Today</span>
+          <span class="stat-value" id="checksUsed">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Credits Remaining</span>
+          <span class="stat-value" id="creditsRemaining">∞</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <a href="#" id="upgradeBtn" class="auth-btn btn-upgrade hidden">
+          ⭐ Upgrade to Premium
+        </a>
+        <a href="#" id="dashboardBtn" class="auth-btn btn-secondary">
+          📊 View Dashboard
+        </a>
+        <button id="logoutBtn" class="auth-btn btn-logout">
+          Sign Out
+        </button>
+      </div>
+      <div id="successMessage" class="success-message hidden"></div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -26,13 +26,170 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     // Return true to indicate async response
     return true;
+  } else if (request.action === 'getAuthState') {
+    // Get stored authentication state
+    getAuthState()
+      .then(sendResponse)
+      .catch(error => {
+        console.error('❌ Error getting auth state:', error);
+        sendResponse(null);
+      });
+    return true;
+  } else if (request.action === 'getUserStats') {
+    // Get user usage statistics
+    getUserStats()
+      .then(sendResponse)
+      .catch(error => {
+        console.error('❌ Error getting user stats:', error);
+        sendResponse(null);
+      });
+    return true;
+  } else if (request.action === 'logout') {
+    // Logout user
+    logout()
+      .then(() => sendResponse({ success: true }))
+      .catch(error => {
+        console.error('❌ Error logging out:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  } else if (request.action === 'saveAuthToken') {
+    // Save Firebase auth token
+    saveAuthToken(request.token, request.user)
+      .then(() => sendResponse({ success: true }))
+      .catch(error => {
+        console.error('❌ Error saving auth token:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
   }
 });
 
 /**
+ * Get stored authentication state
+ */
+async function getAuthState() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['authToken', 'authUser'], (result) => {
+      if (result.authToken && result.authUser) {
+        resolve({
+          token: result.authToken,
+          user: result.authUser
+        });
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
+/**
+ * Get user usage statistics from backend
+ */
+async function getUserStats() {
+  try {
+    const authState = await getAuthState();
+    
+    if (!authState || !authState.token) {
+      return {
+        planType: 'free',
+        dailyChecksUsed: 0,
+        dailyLimit: 5,
+        creditsRemaining: null
+      };
+    }
+
+    // Fetch stats from backend
+    const response = await fetch('https://correctnow.app/api/user/stats', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authState.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch user stats:', response.status);
+      return null;
+    }
+
+    const stats = await response.json();
+    return stats;
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    return null;
+  }
+}
+
+/**
+ * Save authentication token and user info
+ */
+async function saveAuthToken(token, user) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ 
+      authToken: token,
+      authUser: user,
+      guestMode: false
+    }, () => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+      } else {
+        console.log('✅ Auth token saved');
+        // Notify popup of auth state change
+        chrome.runtime.sendMessage({ 
+          action: 'authStateChanged', 
+          user: user 
+        }).catch(() => {}); // Ignore if popup is closed
+        resolve();
+      }
+    });
+  });
+}
+
+/**
+ * Logout user - clear stored auth data
+ */
+async function logout() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.remove(['authToken', 'authUser'], () => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+      } else {
+        console.log('✅ User logged out');
+        // Notify popup of auth state change
+        chrome.runtime.sendMessage({ 
+          action: 'authStateChanged', 
+          user: null 
+        }).catch(() => {}); // Ignore if popup is closed
+        resolve();
+      }
+    });
+  });
+}
+
+/**
+ * Listen for auth messages from web app (when user logs in on website)
+ */
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  console.log('📨 External message received:', request.action);
+  
+  if (request.action === 'authUpdate' && request.token && request.user) {
+    saveAuthToken(request.token, request.user)
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
+});
+
+
+/**
  * Detect language of the text
  */
-async function detectLanguage(text, apiBase, apiKey) {
+async function detectLanguage(text, apiBase, apiKey, authToken) {
   try {
     const apiUrl = `${apiBase}/api/detect-language`;
     console.log('🌍 Detecting language...');
@@ -41,7 +198,10 @@ async function detectLanguage(text, apiBase, apiKey) {
       'Content-Type': 'application/json',
     };
     
-    if (apiKey && apiKey !== 'YOUR_API_KEY_HERE') {
+    // Use auth token if available, otherwise fall back to extension token
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    } else if (apiKey && apiKey !== 'YOUR_API_KEY_HERE') {
       headers['X-API-Key'] = apiKey;
     }
 
@@ -122,11 +282,13 @@ function convertResponseToErrors(data, originalText) {
  */
 async function handleGrammarCheck(request, sender) {
   try {
-    const { text, apiBase, language, apiKey } = request;
+    const { text, apiBase, language, apiKey, authToken, userId } = request;
 
     console.log('📝 Text length:', text.length);
     console.log('🌐 API Base:', apiBase);
-    console.log('🔑 API Key:', apiKey ? 'Provided' : 'Not provided');
+    console.log('🔑 Extension Token:', apiKey ? 'Provided' : 'Not provided');
+    console.log('🔐 Auth Token:', authToken ? 'Logged in' : 'Guest');
+    console.log('👤 User ID:', userId || 'None');
 
     if (!text || text.trim() === '') {
       console.log('❌ Empty text');
@@ -136,7 +298,7 @@ async function handleGrammarCheck(request, sender) {
     // Detect language if not provided
     let targetLanguage = language || 'auto';
     if (targetLanguage === 'auto') {
-      targetLanguage = await detectLanguage(text, apiBase, apiKey);
+      targetLanguage = await detectLanguage(text, apiBase, apiKey, authToken);
     }
     console.log('🌍 Target language:', targetLanguage);
 
@@ -149,24 +311,37 @@ async function handleGrammarCheck(request, sender) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
-    // Build headers with API key if provided
+    // Build headers
     const headers = {
       'Content-Type': 'application/json',
     };
     
-    // Add API key header if provided (bypasses rate limits)
-    if (apiKey && apiKey !== 'YOUR_API_KEY_HERE') {
+    // Priority 1: Use Firebase auth token if user is logged in (for usage tracking)
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+      console.log('🔐 Using Firebase auth token (logged in user)');
+    }
+    // Priority 2: Use extension API key for guest users (bypasses rate limits)
+    else if (apiKey && apiKey !== 'YOUR_API_KEY_HERE') {
       headers['X-API-Key'] = apiKey;
-      console.log('🔑 Using API key for authentication');
+      console.log('🔑 Using extension token (guest user)');
+    }
+
+    // Prepare request body
+    const requestBody = {
+      text: text,
+      language: targetLanguage,
+    };
+
+    // Add userId if available (for usage tracking)
+    if (userId) {
+      requestBody.userId = userId;
     }
 
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: headers,
-      body: JSON.stringify({
-        text: text,
-        language: targetLanguage,
-      }),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
 

@@ -61,6 +61,147 @@ const initAdminDb = () => {
 
 const adminDb = initAdminDb();
 
+/**
+ * Verify Firebase auth token
+ * @param {string} token - Firebase ID token
+ * @returns {Promise<DecodedIdToken|null>} Decoded token or null if invalid
+ */
+const verifyAuthToken = async (token) => {
+  try {
+    if (!admin.apps.length) {
+      console.error('Firebase admin not initialized');
+      return null;
+    }
+    
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    return decodedToken;
+  } catch (error) {
+    console.error('Error verifying auth token:', error.message);
+    return null;
+  }
+};
+
+/**
+ * Get user data from Firestore
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<Object|null>} User data or null
+ */
+const getUserData = async (userId) => {
+  try {
+    if (!adminDb) {
+      console.error('Firestore not initialized');
+      return null;
+    }
+    
+    const userDoc = await adminDb.collection('users').doc(userId).get();
+    
+    if (!userDoc.exists) {
+      return null;
+    }
+    
+    return userDoc.data();
+  } catch (error) {
+    console.error('Error getting user data:', error);
+    return null;
+  }
+};
+
+/**
+ * Update user's daily check count
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<boolean>} Success status
+ */
+const incrementUserCheck = async (userId) => {
+  try {
+    if (!adminDb) {
+      console.error('Firestore not initialized');
+      return false;
+    }
+    
+    const userRef = adminDb.collection('users').doc(userId);
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Get current data
+    const userDoc = await userRef.get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+    
+    // Reset daily count if it's a new day
+    if (userData.lastCheckDate !== today) {
+      await userRef.set({
+        ...userData,
+        dailyChecksUsed: 1,
+        lastCheckDate: today
+      }, { merge: true });
+    } else {
+      // Increment daily count
+      await userRef.update({
+        dailyChecksUsed: admin.firestore.FieldValue.increment(1)
+      });
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error incrementing user check:', error);
+    return false;
+  }
+};
+
+/**
+ * Get user entitlements (similar to frontend entitlements.ts)
+ * @param {Object} userData - User data from Firestore
+ * @returns {Object} Entitlements object
+ */
+const getUserEntitlements = (userData) => {
+  if (!userData) {
+    return {
+      plan: 'free',
+      isPro: false,
+      checksLimit: 5, // Free limit: 5 per day
+      checksUsed: 0
+    };
+  }
+
+  const planField = String(userData?.plan || '').trim().toLowerCase();
+  const wordLimit = Number(userData?.wordLimit) || 0;
+  const isPro = wordLimit >= 5000 || planField === 'pro';
+  
+  const subscriptionStatus = String(userData?.subscriptionStatus || '').trim().toLowerCase();
+  const updatedAtRaw = userData?.subscriptionUpdatedAt;
+  const updatedAt = updatedAtRaw ? new Date(String(updatedAtRaw)) : null;
+  const isRecent = updatedAt
+    ? Date.now() - updatedAt.getTime() <= 1000 * 60 * 60 * 24 * 31 // 31 days
+    : false;
+  const isActive = subscriptionStatus === 'active' && (updatedAt ? isRecent : true);
+  
+  const effectiveIsPro = subscriptionStatus ? (isActive && isPro) : isPro;
+  
+  // Get today's date for daily check reset
+  const today = new Date().toISOString().split('T')[0];
+  const lastCheckDate = userData?.lastCheckDate;
+  const dailyChecksUsed = lastCheckDate === today ? (userData?.dailyChecksUsed || 0) : 0;
+  
+  return {
+    plan: effectiveIsPro ? 'pro' : 'free',
+    isPro: effectiveIsPro,
+    checksLimit: effectiveIsPro ? -1 : 5, // Pro: unlimited, Free: 5/day
+    checksUsed: dailyChecksUsed,
+    subscriptionStatus: subscriptionStatus || 'inactive'
+  };
+};
+
+/**
+ * Increment usage count for authenticated user
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<void>}
+ */
+const incrementUsageCount = async (userId) => {
+  try {
+    await incrementUserCheck(userId);
+  } catch (error) {
+    console.error('Error incrementing usage:', error);
+  }
+};
+
 // Simple in-memory cache to reduce latency and cost
 const cacheStore = new Map();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -1884,11 +2025,111 @@ const addMissingQuoteChecks = (text, changes) => {
   return augmented;
 };
 
+/**
+ * Extension: Get user statistics
+ */
+app.get("/api/user/stats", async (req, res) => {
+  try {
+    // Verify auth token
+    const authHeader = req.headers.authorization || '';
+    const authToken = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : '';
+    
+    if (!authToken) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const decodedToken = await verifyAuthToken(authToken);
+    if (!decodedToken) {
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+    
+    const userId = decodedToken.uid;
+    const email = decodedToken.email;
+    
+    // Get user data
+    const userData = await getUserData(userId);
+    if (!userData) {
+      // Return default for new users
+      return res.json({
+        userId,
+        email,
+        plan: 'free',
+        checksUsed: 0,
+        checksLimit: 5,
+        entitlements: {
+          plan: 'free',
+          proofreadingLimit: 5,
+          isPro: false
+        }
+      });
+    }
+    
+    // Get entitlements
+    const entitlements = getUserEntitlements(userData);
+    
+    res.json({
+      userId,
+      email,
+      planType: entitlements.plan, // 'free' or 'pro'
+      dailyChecksUsed: entitlements.checksUsed,
+      dailyLimit: entitlements.checksLimit === -1 ? 999999 : entitlements.checksLimit,
+      creditsRemaining: entitlements.isPro ? null : (entitlements.checksLimit - entitlements.checksUsed)
+    });
+  } catch (error) {
+    console.error('❌ Error fetching user stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post("/api/proofread", async (req, res) => {
   try {
-    const { text, language, userId } = req.body || {};
+    const { text, language, userId: bodyUserId } = req.body || {};
 
-    // Check for extension API key in multiple headers
+    // Check for Firebase auth token (Priority 1: Logged-in users)
+    const authHeader = req.headers.authorization || '';
+    const authToken = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : '';
+    
+    let authenticatedUser = null;
+    let userId = bodyUserId;
+
+    if (authToken) {
+      // Verify Firebase token
+      const decodedToken = await verifyAuthToken(authToken);
+      if (decodedToken) {
+        authenticatedUser = decodedToken;
+        userId = decodedToken.uid;
+        console.log('✅ Authenticated user:', userId);
+        
+        // Get user data and check entitlements
+        const userData = await getUserData(userId);
+        const entitlements = getUserEntitlements(userData);
+        
+        console.log('📊 User entitlements:', entitlements);
+        
+        // Track usage
+        await incrementUsageCount(userId);
+        
+        // Check if user exceeded free limit (only for free users)
+        if (!entitlements.isPro && entitlements.checksUsed >= entitlements.checksLimit) {
+          return res.status(429).json({
+            message: "Free limit reached. Upgrade to Pro for unlimited checks.",
+            requiresUpgrade: true,
+            plan: entitlements.plan,
+            checksRemaining: 0,
+            checksUsed: entitlements.checksUsed,
+            checksLimit: entitlements.checksLimit
+          });
+        }
+        
+        // Set usage headers for frontend
+        res.setHeader('X-Checks-Used', entitlements.checksUsed.toString());
+        res.setHeader('X-Checks-Limit', entitlements.checksLimit === -1 ? 'unlimited' : entitlements.checksLimit.toString());
+      } else {
+        console.log('⚠️ Invalid auth token');
+      }
+    }
+
+    // If not authenticated, check for extension API key (Priority 2: Guest users with extension)
     const extensionKey = String(
       req.headers["x-api-key"] || 
       req.headers["x-correctnow-api-key"] || 
@@ -1902,7 +2143,7 @@ app.post("/api/proofread", async (req, res) => {
       req.socket.remoteAddress;
 
     // Rate limiting for non-authenticated users (extension key can bypass)
-    if (!userId && !bypassFreeLimit) {
+    if (!authenticatedUser && !bypassFreeLimit) {
       const now = Date.now();
       const ipData = ipCheckCount.get(clientIp);
       

@@ -9,7 +9,7 @@
 
 // Configuration
 const CONFIG = {
-  API_BASE_URL: 'https://correctnow.app', // Production API URL (deployed backend)
+  API_BASE_URL: 'http://localhost:8787', // Production API URL (deployed backend)
   EXTENSION_TOKEN: 'CORRECTNOW_CHROME_EXTENSION_V1', // Extension identifier (not sensitive)
   BUTTON_TEXT: 'Check with CorrectNow',
   BUTTON_CLASS: 'correctnow-check-button',
@@ -272,26 +272,37 @@ function handleCheckClick() {
     resetButton();
   }, 60000);
 
-  // Send message to background.js
-  chrome.runtime.sendMessage(
-    {
-      action: 'checkGrammar',
-      text: text,
-      apiBase: CONFIG.API_BASE_URL,
-      apiKey: CONFIG.EXTENSION_TOKEN, // Extension access token (not Google API key)
-    },
-    (response) => {
-      clearTimeout(checkTimeout);
-      console.log('📥 Response received:', response);
+  // Get auth token from storage (if user is logged in)
+  chrome.storage.local.get(['authToken', 'authUser'], (storageData) => {
+    const authToken = storageData.authToken || null;
+    const authUser = storageData.authUser || null;
+    const userId = authUser ? (authUser.uid || authUser.id) : null;
 
-      resetButton();
+    console.log('🔑 Auth status:', authToken ? 'Logged in' : 'Guest');
+    console.log('👤 User:', authUser ? authUser.email : 'Guest');
 
-      if (chrome.runtime.lastError) {
-        const error = chrome.runtime.lastError;
-        console.error('❌ Runtime error:', error);
-        showMessage('Error: ' + error.message, 'error');
-        return;
-      }
+    // Send message to background.js
+    chrome.runtime.sendMessage(
+      {
+        action: 'checkGrammar',
+        text: text,
+        apiBase: CONFIG.API_BASE_URL,
+        apiKey: CONFIG.EXTENSION_TOKEN, // Extension access token (for guest users)
+        authToken: authToken, // Firebase auth token (for logged-in users)
+        userId: userId, // User ID (for usage tracking)
+      },
+      (response) => {
+        clearTimeout(checkTimeout);
+        console.log('📥 Response received:', response);
+
+        resetButton();
+
+        if (chrome.runtime.lastError) {
+          const error = chrome.runtime.lastError;
+          console.error('❌ Runtime error:', error);
+          showMessage('Error: ' + error.message, 'error');
+          return;
+        }
 
       if (!response) {
         console.log('❌ No response');
@@ -488,7 +499,8 @@ function handleCheckClick() {
         showMessage('No issues found', 'success');
       }
     }
-  );
+  ); // End chrome.runtime.sendMessage
+  }); // End chrome.storage.local.get
 }
 
 /**

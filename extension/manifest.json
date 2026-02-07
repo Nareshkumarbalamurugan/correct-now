@@ -5,13 +5,16 @@
   "description": "Check grammar and spelling on any webpage with CorrectNow",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "*://*/*"
   ],
   "action": {
-    "default_title": "CorrectNow Grammar Checker"
+    "default_title": "CorrectNow Grammar Checker",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"
@@ -27,5 +30,11 @@
       "run_at": "document_start",
       "all_frames": false
     }
-  ]
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://correctnow.app/*",
+      "http://localhost:5173/*"
+    ]
+  }
 }
