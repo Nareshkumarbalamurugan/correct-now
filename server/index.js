@@ -2053,27 +2053,44 @@ app.get("/api/user/stats", async (req, res) => {
       return res.json({
         userId,
         email,
-        plan: 'free',
-        checksUsed: 0,
-        checksLimit: 5,
-        entitlements: {
-          plan: 'free',
-          proofreadingLimit: 5,
-          isPro: false
-        }
+        planType: 'free',
+        dailyChecksUsed: 0,
+        dailyLimit: 5,
+        creditsRemaining: 5
       });
     }
     
-    // Get entitlements
-    const entitlements = getUserEntitlements(userData);
+    // Calculate credits
+    const nowMs = Date.now();
+    const planField = String(userData.plan || '').toLowerCase();
+    const wordLimit = Number(userData.wordLimit) || 0;
+    const isPro = wordLimit >= 5000 || planField === 'pro';
+    
+    // Get credit information
+    const creditsUsed = Number(userData.creditsUsed || 0);
+    const baseCredits = userData.credits ?? (isPro ? 50000 : 0);
+    
+    // Handle addon credits
+    const rawAddonCredits = Number(userData.addonCredits || 0);
+    const addonExpiry = userData.addonCreditsExpiryAt
+      ? new Date(String(userData.addonCreditsExpiryAt))
+      : null;
+    const addonValid = addonExpiry && !Number.isNaN(addonExpiry.getTime())
+      ? addonExpiry.getTime() > nowMs
+      : false;
+    const validAddonCredits = addonValid && Number.isFinite(rawAddonCredits) ? rawAddonCredits : 0;
+    
+    // Calculate total credits
+    const totalCredits = Number(baseCredits) + validAddonCredits;
+    const creditsRemaining = Math.max(0, totalCredits - creditsUsed);
     
     res.json({
       userId,
       email,
-      planType: entitlements.plan, // 'free' or 'pro'
-      dailyChecksUsed: entitlements.checksUsed,
-      dailyLimit: entitlements.checksLimit === -1 ? 999999 : entitlements.checksLimit,
-      creditsRemaining: entitlements.isPro ? null : (entitlements.checksLimit - entitlements.checksUsed)
+      planType: isPro ? 'pro' : 'free',
+      dailyChecksUsed: creditsUsed,
+      dailyLimit: totalCredits,
+      creditsRemaining: creditsRemaining
     });
   } catch (error) {
     console.error('❌ Error fetching user stats:', error);

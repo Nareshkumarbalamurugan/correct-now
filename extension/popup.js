@@ -104,32 +104,38 @@ async function showDashboard(authState) {
     planBadge.style.background = planType === 'free' ? '#667eea' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
     
     // Update usage stats
-    const dailyChecks = stats.dailyChecksUsed || 0;
-    const dailyLimit = stats.dailyLimit || 5;
-    const credits = stats.creditsRemaining;
+    const creditsUsed = stats.dailyChecksUsed || 0;
+    const totalCredits = stats.dailyLimit || 5;
+    const creditsLeft = stats.creditsRemaining;
     
-    checksUsed.textContent = `${dailyChecks}/${dailyLimit}`;
+    // Format numbers with commas
+    const formatNumber = (num) => {
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    };
     
-    if (credits !== null && credits !== undefined && credits >= 0) {
-      creditsRemaining.textContent = credits;
+    // Show usage as "used / total"
+    checksUsed.textContent = `${formatNumber(creditsUsed)} / ${formatNumber(totalCredits)}`;
+    
+    if (creditsLeft !== null && creditsLeft !== undefined && creditsLeft >= 0) {
+      creditsRemaining.textContent = formatNumber(creditsLeft);
     } else {
       creditsRemaining.textContent = '∞';
     }
     
     // Update progress bar
-    const progress = Math.min((dailyChecks / dailyLimit) * 100, 100);
+    const progress = Math.min((creditsUsed / totalCredits) * 100, 100);
     progressFill.style.width = progress + '%';
     
-    // Show/hide upgrade button
-    if (planType === 'free' || dailyChecks >= dailyLimit) {
+    // Show/hide upgrade button (only for free users)
+    if (planType === 'free') {
       upgradeBtn.classList.remove('hidden');
     } else {
       upgradeBtn.classList.add('hidden');
     }
   } else {
     // Default values if stats not available
-    checksUsed.textContent = '0/5';
-    creditsRemaining.textContent = '∞';
+    checksUsed.textContent = '0 / 5';
+    creditsRemaining.textContent = '5';
     progressFill.style.width = '0%';
   }
 }
