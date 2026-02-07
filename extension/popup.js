@@ -101,7 +101,7 @@ async function showDashboard(authState) {
     // Update plan badge
     const planType = stats.planType || 'free';
     planBadge.textContent = planType.charAt(0).toUpperCase() + planType.slice(1) + ' Plan';
-    planBadge.style.background = planType === 'free' ? '#667eea' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+    planBadge.style.background = planType === 'free' ? '#71717a' : '#0077B5';
     
     // Update usage stats
     const creditsUsed = stats.dailyChecksUsed || 0;
