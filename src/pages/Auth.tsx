@@ -77,6 +77,56 @@ const Auth = () => {
   };
 
   /**
+   * Wait for extension ID to be injected by content script
+   */
+  const waitForExtensionId = async (maxAttempts = 10, delayMs = 100): Promise<string | null> => {
+    // First, check if it's already available
+    let extensionId = (window as any).__CORRECTNOW_EXTENSION_ID;
+    if (extensionId) {
+      console.log('[Auth] Extension ID already available:', extensionId);
+      return extensionId;
+    }
+
+    // Wait for custom event from extension
+    const eventPromise = new Promise<string | null>((resolve) => {
+      const handler = (event: any) => {
+        console.log('[Auth] Received correctnow-extension-ready event');
+        resolve(event.detail?.extensionId || null);
+      };
+      window.addEventListener('correctnow-extension-ready', handler, { once: true });
+      
+      // Clean up after timeout
+      setTimeout(() => {
+        window.removeEventListener('correctnow-extension-ready', handler);
+        resolve(null);
+      }, maxAttempts * delayMs);
+    });
+
+    // Also poll for the ID
+    const pollPromise = (async () => {
+      for (let i = 0; i < maxAttempts; i++) {
+        extensionId = (window as any).__CORRECTNOW_EXTENSION_ID;
+        if (extensionId) {
+          console.log('[Auth] Extension ID found via polling:', extensionId);
+          return extensionId;
+        }
+        console.log(`[Auth] Waiting for extension ID... (attempt ${i + 1}/${maxAttempts})`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+      return null;
+    })();
+
+    // Race between event and polling
+    const result = await Promise.race([eventPromise, pollPromise]);
+    
+    if (!result) {
+      console.log('[Auth] Extension ID not found after all attempts. Extension may not be installed.');
+    }
+    
+    return result;
+  };
+
+  /**
    * Notify Chrome extension of authentication
    * Sends auth token to extension if it's installed
    */
@@ -93,14 +143,17 @@ const Auth = () => {
 
       // Get ID token from Firebase
       const token = await user.getIdToken();
+      console.log('[Auth] Firebase token obtained');
       
-      // Get extension ID injected by the extension
-      const extensionId = (window as any).__CORRECTNOW_EXTENSION_ID;
+      // Wait for extension ID to be injected by content script
+      const extensionId = await waitForExtensionId();
       
       if (!extensionId) {
-        console.log('[Auth] Extension ID not found. Extension may not be installed.');
+        console.log('[Auth] Extension not installed or ID not available');
         return;
       }
+      
+      console.log('[Auth] Attempting to send message to extension:', extensionId);
       
       // Try to send message to extension
       chromeApi.runtime.sendMessage(
@@ -116,9 +169,9 @@ const Auth = () => {
         },
         (response: any) => {
           if (chromeApi.runtime.lastError) {
-            console.log('[Auth] Extension not installed or not responding:', chromeApi.runtime.lastError.message);
+            console.log('[Auth] Extension not responding:', chromeApi.runtime.lastError.message);
           } else {
-            console.log('[Auth] ✅ Auth token sent to extension:', response);
+            console.log('[Auth] ✅ Auth token sent to extension successfully:', response);
           }
         }
       );
@@ -151,7 +204,7 @@ const Auth = () => {
         const isChrome = typeof chromeApi !== 'undefined' && chromeApi.runtime;
         
         if (isChrome) {
-          const extensionId = (window as any).__CORRECTNOW_EXTENSION_ID;
+          const extensionId = await waitForExtensionId(5, 200); // Shorter wait for refresh
           
           if (!extensionId) {
             console.log('[Auth] Extension ID not found during refresh');

@@ -246,17 +246,29 @@ async function logout() {
  * Listen for auth messages from web app (when user logs in on website)
  */
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  console.log('📨 External message received:', request.action);
+  console.log('📨 External message received from:', sender.url);
+  console.log('📨 Message action:', request.action);
+  console.log('📨 Message details:', { 
+    hasToken: !!request.token, 
+    hasUser: !!request.user,
+    userEmail: request.user?.email 
+  });
   
   if (request.action === 'authUpdate' && request.token && request.user) {
+    console.log('✅ Valid authUpdate message received, saving token...');
     saveAuthToken(request.token, request.user)
       .then(() => {
-        sendResponse({ success: true });
+        console.log('✅ Token saved successfully');
+        sendResponse({ success: true, message: 'Auth token saved' });
       })
       .catch(error => {
+        console.error('❌ Error saving token:', error);
         sendResponse({ success: false, error: error.message });
       });
-    return true;
+    return true; // Keep channel open for async response
+  } else {
+    console.log('⚠️ Invalid message format or missing data');
+    sendResponse({ success: false, error: 'Invalid message format' });
   }
 });
 

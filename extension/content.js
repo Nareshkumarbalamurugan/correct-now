@@ -8,13 +8,42 @@
  */
 
 // Inject extension ID into CorrectNow website for authentication
-if (window.location.hostname === 'correctnow.app' || window.location.hostname === 'localhost') {
-  const script = document.createElement('script');
-  script.textContent = `window.__CORRECTNOW_EXTENSION_ID = "${chrome.runtime.id}";`;
-  (document.head || document.documentElement).appendChild(script);
-  script.remove();
-  console.log('[CorrectNow Extension] Extension ID injected:', chrome.runtime.id);
-}
+// This must happen IMMEDIATELY at document_start in the main world
+(function() {
+  const hostname = window.location.hostname;
+  console.log('[CorrectNow Extension] Content script loaded on:', hostname);
+  
+  if (hostname === 'correctnow.app' || hostname === 'localhost') {
+    try {
+      const extensionId = chrome.runtime.id;
+      console.log('[CorrectNow Extension] Preparing to inject extension ID:', extensionId);
+      
+      // Set it directly in the content script world first
+      window.__CORRECTNOW_EXTENSION_ID = extensionId;
+      
+      // Also inject into the main page world
+      const script = document.createElement('script');
+      script.textContent = `
+        (function() {
+          console.log('[CorrectNow Extension] Injecting extension ID in main world');
+          window.__CORRECTNOW_EXTENSION_ID = '${extensionId}';
+          console.log('[CorrectNow Extension] Extension ID available:', window.__CORRECTNOW_EXTENSION_ID);
+          
+          // Dispatch event to notify page that extension is ready
+          window.dispatchEvent(new CustomEvent('correctnow-extension-ready', { 
+            detail: { extensionId: '${extensionId}' } 
+          }));
+        })();
+      `;
+      (document.head || document.documentElement).appendChild(script);
+      script.remove();
+      
+      console.log('[CorrectNow Extension] Extension ID injected successfully in both worlds');
+    } catch (error) {
+      console.error('[CorrectNow Extension] Failed to inject extension ID:', error);
+    }
+  }
+})();
 
 // Configuration
 const CONFIG = {
