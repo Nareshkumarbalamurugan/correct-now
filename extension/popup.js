@@ -30,14 +30,19 @@ const successMessage = document.getElementById('successMessage');
 async function init() {
   console.log('Popup initializing...');
   
-  // Check if user is logged in
-  const authState = await getAuthState();
-  
-  if (authState && authState.user) {
-    console.log('User is logged in:', authState.user.email);
-    await showDashboard(authState);
-  } else {
-    console.log('User is not logged in');
+  try {
+    // Check if user is logged in
+    const authState = await getAuthState();
+    
+    if (authState && authState.user) {
+      console.log('User is logged in:', authState.user.email);
+      await showDashboard(authState);
+    } else {
+      console.log('User is not logged in');
+      showLogin();
+    }
+  } catch (error) {
+    console.error('Error during initialization:', error);
     showLogin();
   }
 }
@@ -47,14 +52,25 @@ async function init() {
  */
 async function getAuthState() {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'getAuthState' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error getting auth state:', chrome.runtime.lastError);
+    try {
+      chrome.runtime.sendMessage({ action: 'getAuthState' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error getting auth state:', chrome.runtime.lastError);
+          resolve(null);
+        } else {
+          resolve(response);
+        }
+      });
+      
+      // Timeout fallback
+      setTimeout(() => {
+        console.warn('Auth state request timed out');
         resolve(null);
-      } else {
-        resolve(response);
-      }
-    });
+      }, 3000);
+    } catch (error) {
+      console.error('Exception getting auth state:', error);
+      resolve(null);
+    }
   });
 }
 
@@ -63,14 +79,25 @@ async function getAuthState() {
  */
 async function getUserStats() {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'getUserStats' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error getting user stats:', chrome.runtime.lastError);
+    try {
+      chrome.runtime.sendMessage({ action: 'getUserStats' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error getting user stats:', chrome.runtime.lastError);
+          resolve(null);
+        } else {
+          resolve(response);
+        }
+      });
+      
+      // Timeout fallback
+      setTimeout(() => {
+        console.warn('User stats request timed out');
         resolve(null);
-      } else {
-        resolve(response);
-      }
-    });
+      }, 3000);
+    } catch (error) {
+      console.error('Exception getting user stats:', error);
+      resolve(null);
+    }
   });
 }
 
