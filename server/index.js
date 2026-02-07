@@ -2064,11 +2064,18 @@ app.get("/api/user/stats", async (req, res) => {
     const nowMs = Date.now();
     const planField = String(userData.plan || '').toLowerCase();
     const wordLimit = Number(userData.wordLimit) || 0;
-    const isPro = wordLimit >= 5000 || planField === 'pro';
+    
+    // Pro users have wordLimit >= 50,000 or plan = 'pro'
+    // Free users typically have 5,000 or less
+    const isPro = wordLimit >= 50000 || planField === 'pro';
     
     // Get credit information
     const creditsUsed = Number(userData.creditsUsed || 0);
-    const baseCredits = userData.credits ?? (isPro ? 50000 : 0);
+    
+    // Use actual credits from database, or default based on plan
+    // Free users: use their actual credits (typically 5000)
+    // Pro users: default to 50000 if not set
+    const baseCredits = Number(userData.credits) || (isPro ? 50000 : 5000);
     
     // Handle addon credits
     const rawAddonCredits = Number(userData.addonCredits || 0);
