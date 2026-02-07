@@ -50,8 +50,9 @@ function createFloatingButton() {
     position: fixed;
     z-index: 2147483647;
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
   `;
 
   // Create button
@@ -63,19 +64,21 @@ function createFloatingButton() {
 
   // Style the button
   button.style.cssText = `
-    padding: 8px 12px;
+    padding: 8px 14px;
     background-color: #2563eb;
     color: white;
     border: none;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     transition: all 0.2s ease;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     pointer-events: auto;
     user-select: none;
+    white-space: nowrap;
+    flex-shrink: 0;
   `;
 
   console.log('🔷 Button created');
@@ -99,7 +102,62 @@ function createFloatingButton() {
     handleCheckClick();
   }, true);
 
+  // Create close button
+  const closeButton = document.createElement('button');
+  closeButton.className = 'correctnow-close-button';
+  closeButton.innerHTML = '&times;';
+  closeButton.type = 'button';
+  closeButton.title = 'Close';
+  
+  closeButton.style.cssText = `
+    padding: 0;
+    background-color: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 20px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+    transition: all 0.2s ease;
+    font-family: Arial, sans-serif;
+    pointer-events: auto;
+    user-select: none;
+    line-height: 1;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  `;
+  
+  closeButton.addEventListener('mouseenter', () => {
+    closeButton.style.backgroundColor = '#dc2626';
+    closeButton.style.boxShadow = '0 4px 10px rgba(239, 68, 68, 0.4)';
+    closeButton.style.transform = 'scale(1.1)';
+  });
+  
+  closeButton.addEventListener('mouseleave', () => {
+    closeButton.style.backgroundColor = '#ef4444';
+    closeButton.style.boxShadow = '0 2px 6px rgba(239, 68, 68, 0.3)';
+    closeButton.style.transform = 'scale(1)';
+  });
+  
+  closeButton.addEventListener('click', (e) => {
+    console.log('🔴 Close button clicked');
+    e.preventDefault();
+    e.stopPropagation();
+    if (floatingButton) {
+      floatingButton.style.display = 'none';
+      floatingButton.style.opacity = '0';
+    }
+  }, true);
+
   container.appendChild(button);
+  container.appendChild(closeButton);
   
   // Store reference to button element for later use
   floatingButtonElement = button;
@@ -130,39 +188,49 @@ function handleFocus(event) {
 
   // Only attach to textarea and text inputs
   if (!isEditableField(element)) return;
-
-  // Clear previous highlights
-  clearHighlights();
-
-  // For Gmail and similar editors, find the main compose container
-  let targetElement = element;
-  if (element.isContentEditable) {
-    // Walk up the tree to find the root contentEditable container
-    let parent = element.parentElement;
-    while (parent && parent.isContentEditable) {
-      targetElement = parent;
-      parent = parent.parentElement;
+  
+  // Check if extension is enabled
+  chrome.storage.local.get(['extensionEnabled'], (result) => {
+    const isEnabled = result.extensionEnabled !== false; // default to true
+    
+    if (!isEnabled) {
+      console.log('🔷 Extension is disabled, not showing button');
+      return;
     }
-    console.log('🎯 Found compose container:', targetElement.className || targetElement.tagName);
-  }
 
-  // Store focused element
-  currentFocusedElement = targetElement;
+    // Clear previous highlights
+    clearHighlights();
 
-  // Create button if it doesn't exist
-  if (!floatingButton || !document.body.contains(floatingButton)) {
-    console.log('🔷 Creating new button');
-    floatingButton = createFloatingButton();
-    document.body.appendChild(floatingButton);
-  } else {
-    console.log('🔷 Reusing existing button');
-  }
+    // For Gmail and similar editors, find the main compose container
+    let targetElement = element;
+    if (element.isContentEditable) {
+      // Walk up the tree to find the root contentEditable container
+      let parent = element.parentElement;
+      while (parent && parent.isContentEditable) {
+        targetElement = parent;
+        parent = parent.parentElement;
+      }
+      console.log('🎯 Found compose container:', targetElement.className || targetElement.tagName);
+    }
 
-  // Position and show button
-  positionButton(targetElement, floatingButton);
-  floatingButton.style.display = 'block';
-  floatingButton.style.opacity = '1';
-  console.log('🔷 Button shown at position:', floatingButton.style.left, floatingButton.style.top);
+    // Store focused element
+    currentFocusedElement = targetElement;
+
+    // Create button if it doesn't exist
+    if (!floatingButton || !document.body.contains(floatingButton)) {
+      console.log('🔷 Creating new button');
+      floatingButton = createFloatingButton();
+      document.body.appendChild(floatingButton);
+    } else {
+      console.log('🔷 Reusing existing button');
+    }
+
+    // Position and show button
+    positionButton(targetElement, floatingButton);
+    floatingButton.style.display = 'block';
+    floatingButton.style.opacity = '1';
+    console.log('🔷 Button shown at position:', floatingButton.style.left, floatingButton.style.top);
+  });
 }
 
 /**

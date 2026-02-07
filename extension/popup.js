@@ -16,6 +16,8 @@ const continueWithoutLoginBtn = document.getElementById('continueWithoutLoginBtn
 const logoutBtn = document.getElementById('logoutBtn');
 const upgradeBtn = document.getElementById('upgradeBtn');
 const dashboardBtn = document.getElementById('dashboardBtn');
+const disableExtensionBtn = document.getElementById('disableExtensionBtn');
+const disableExtensionBtnLogin = document.getElementById('disableExtensionBtnLogin');
 const userEmail = document.getElementById('userEmail');
 const planBadge = document.getElementById('planBadge');
 const checksUsed = document.getElementById('checksUsed');
@@ -31,6 +33,18 @@ async function init() {
   console.log('Popup initializing...');
   
   try {
+    // Check extension enabled state
+    const { extensionEnabled } = await chrome.storage.local.get(['extensionEnabled']);
+    const isEnabled = extensionEnabled !== false; // default to true
+    
+    // Update button texts based on state
+    if (disableExtensionBtn) {
+      disableExtensionBtn.textContent = isEnabled ? 'Disable Extension' : 'Enable Extension';
+    }
+    if (disableExtensionBtnLogin) {
+      disableExtensionBtnLogin.textContent = isEnabled ? 'Disable Extension' : 'Enable Extension';
+    }
+    
     // Check if user is logged in
     const authState = await getAuthState();
     
@@ -52,24 +66,35 @@ async function init() {
  */
 async function getAuthState() {
   return new Promise((resolve) => {
+    let resolved = false;
+    
     try {
       chrome.runtime.sendMessage({ action: 'getAuthState' }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('Error getting auth state:', chrome.runtime.lastError);
-          resolve(null);
-        } else {
-          resolve(response);
+        if (!resolved) {
+          resolved = true;
+          if (chrome.runtime.lastError) {
+            console.error('Error getting auth state:', chrome.runtime.lastError);
+            resolve(null);
+          } else {
+            resolve(response);
+          }
         }
       });
       
       // Timeout fallback
       setTimeout(() => {
-        console.warn('Auth state request timed out');
-        resolve(null);
-      }, 3000);
+        if (!resolved) {
+          resolved = true;
+          console.warn('Auth state request timed out');
+          resolve(null);
+        }
+      }, 5000);
     } catch (error) {
-      console.error('Exception getting auth state:', error);
-      resolve(null);
+      if (!resolved) {
+        resolved = true;
+        console.error('Exception getting auth state:', error);
+        resolve(null);
+      }
     }
   });
 }
@@ -79,24 +104,35 @@ async function getAuthState() {
  */
 async function getUserStats() {
   return new Promise((resolve) => {
+    let resolved = false;
+    
     try {
       chrome.runtime.sendMessage({ action: 'getUserStats' }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('Error getting user stats:', chrome.runtime.lastError);
-          resolve(null);
-        } else {
-          resolve(response);
+        if (!resolved) {
+          resolved = true;
+          if (chrome.runtime.lastError) {
+            console.error('Error getting user stats:', chrome.runtime.lastError);
+            resolve(null);
+          } else {
+            resolve(response);
+          }
         }
       });
       
       // Timeout fallback
       setTimeout(() => {
-        console.warn('User stats request timed out');
-        resolve(null);
-      }, 3000);
+        if (!resolved) {
+          resolved = true;
+          console.warn('User stats request timed out');
+          resolve(null);
+        }
+      }, 5000);
     } catch (error) {
-      console.error('Exception getting user stats:', error);
-      resolve(null);
+      if (!resolved) {
+        resolved = true;
+        console.error('Exception getting user stats:', error);
+        resolve(null);
+      }
     }
   });
 }
@@ -252,11 +288,86 @@ dashboardBtn.addEventListener('click', (e) => {
 });
 
 /**
+ * Handle disable extension button click (dashboard view)
+ */
+if (disableExtensionBtn) {
+  disableExtensionBtn.addEventListener('click', async () => {
+    try {
+      const { extensionEnabled } = await chrome.storage.local.get(['extensionEnabled']);
+      const isEnabled = extensionEnabled !== false;
+      
+      // Toggle the state
+      await chrome.storage.local.set({ extensionEnabled: !isEnabled });
+      
+      if (isEnabled) {
+        disableExtensionBtn.textContent = 'Enable Extension';
+        showSuccess('Extension disabled. Grammar checking is now inactive.');
+      } else {
+        disableExtensionBtn.textContent = 'Disable Extension';
+        showSuccess('Extension enabled. Grammar checking is now active.');
+      }
+      
+      // Reload all tabs to apply changes
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+            chrome.tabs.reload(tab.id);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Error toggling extension:', error);
+      showError('Failed to toggle extension state.');
+    }
+  });
+}
+
+/**
+ * Handle disable extension button click (login view)
+ */
+if (disableExtensionBtnLogin) {
+  disableExtensionBtnLogin.addEventListener('click', async () => {
+    try {
+      const { extensionEnabled } = await chrome.storage.local.get(['extensionEnabled']);
+      const isEnabled = extensionEnabled !== false;
+      
+      // Toggle the state
+      await chrome.storage.local.set({ extensionEnabled: !isEnabled });
+      
+      if (isEnabled) {
+        disableExtensionBtnLogin.textContent = 'Enable Extension';
+        showSuccess('Extension disabled. Grammar checking is now inactive.');
+      } else {
+        disableExtensionBtnLogin.textContent = 'Disable Extension';
+        showSuccess('Extension enabled. Grammar checking is now active.');
+      }
+      
+      // Reload all tabs to apply changes
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+            chrome.tabs.reload(tab.id);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Error toggling extension:', error);
+      showError('Failed to toggle extension state.');
+    }
+  });
+}
+
+/**
  * Listen for auth state changes from background script
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'authStateChanged') {
     console.log('Auth state changed:', message.user ? 'logged in' : 'logged out');
+    
+    if (message.reason === 'token_expired') {
+      showError('Your session has expired. Please log in again.');
+    }
+    
     if (message.user) {
       showDashboard({ user: message.user });
     } else {

@@ -128,6 +128,65 @@ const Auth = () => {
     setIsLogin(mode !== "register");
   }, [location.search]);
 
+  // Automatically refresh and send token to extension every 45 minutes
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    
+    const refreshTokenForExtension = async () => {
+      const auth = getFirebaseAuth();
+      if (!auth?.currentUser) return;
+      
+      try {
+        // Force token refresh
+        const token = await auth.currentUser.getIdToken(true);
+        console.log('[Auth] Token refreshed automatically for extension');
+        
+        // Send updated token to extension
+        const chromeApi = (window as any).chrome;
+        const isChrome = typeof chromeApi !== 'undefined' && chromeApi.runtime;
+        
+        if (isChrome) {
+          const extensionId = 'panjncmgnfeidefplkmmhjknboncbpmf';
+          chromeApi.runtime.sendMessage(
+            extensionId,
+            {
+              action: 'authUpdate',
+              token: token,
+              user: {
+                uid: auth.currentUser.uid,
+                email: auth.currentUser.email,
+                displayName: auth.currentUser.displayName || ''
+              }
+            },
+            (response: any) => {
+              if (!chromeApi.runtime.lastError) {
+                console.log('[Auth] ✅ Refreshed token sent to extension');
+              }
+            }
+          );
+        }
+      } catch (error) {
+        console.error('[Auth] Error refreshing token:', error);
+      }
+    };
+    
+    // Set up interval to refresh every 45 minutes (2700000 ms)
+    const auth = getFirebaseAuth();
+    if (auth?.currentUser) {
+      // Refresh immediately on mount if user is logged in
+      refreshTokenForExtension();
+      
+      // Then refresh every 45 minutes
+      intervalId = setInterval(refreshTokenForExtension, 45 * 60 * 1000);
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const runRedirectResult = async () => {
       const auth = getFirebaseAuth();

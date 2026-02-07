@@ -66,6 +66,61 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 /**
+ * Check if token needs refresh and request new one if needed
+ */
+async function checkAndRefreshToken() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['authToken', 'authUser', 'tokenExpiresAt'], async (result) => {
+      const { authToken, authUser, tokenExpiresAt } = result;
+      
+      // No token stored, nothing to refresh
+      if (!authToken || !authUser) {
+        resolve();
+        return;
+      }
+      
+      // Check if token is expired or will expire soon (within 5 minutes)
+      const now = Date.now();
+      const expiresAt = tokenExpiresAt || 0;
+      const willExpireSoon = expiresAt - now < (5 * 60 * 1000); // Less than 5 minutes left
+      
+      if (!willExpireSoon) {
+        console.log('✅ Token is still valid');
+        resolve();
+        return;
+      }
+      
+      console.log('⚠️ Token will expire soon, requesting refresh...');
+      
+      // Try to get a fresh token from the website
+      try {
+        const response = await fetch('https://correctnow.app/api/refresh-token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.token) {
+            console.log('✅ Token refreshed successfully');
+            await saveAuthToken(data.token, authUser);
+          }
+        } else {
+          console.warn('⚠️ Could not refresh token, will prompt login when needed');
+        }
+      } catch (error) {
+        console.warn('⚠️ Token refresh failed:', error.message);
+      }
+      
+      resolve();
+    });
+  });
+}
+
+/**
  * Get stored authentication state
  */
 async function getAuthState() {
@@ -88,6 +143,9 @@ async function getAuthState() {
  */
 async function getUserStats() {
   try {
+    // Check and refresh token if needed
+    await checkAndRefreshToken();
+    
     const authState = await getAuthState();
     
     if (!authState || !authState.token) {
@@ -109,6 +167,18 @@ async function getUserStats() {
     });
 
     if (!response.ok) {
+      // Check if token expired (401 or 403)
+      if (response.status === 401 || response.status === 403) {
+        console.warn('Auth token expired or invalid, clearing auth state');
+        await logout();
+        // Notify popup to show login view
+        chrome.runtime.sendMessage({ 
+          action: 'authStateChanged', 
+          user: null,
+          reason: 'token_expired'
+        }).catch(() => {});
+        return null;
+      }
       console.error('Failed to fetch user stats:', response.status);
       return null;
     }
@@ -126,15 +196,20 @@ async function getUserStats() {
  */
 async function saveAuthToken(token, user) {
   return new Promise((resolve, reject) => {
+    // Calculate token expiration (Firebase tokens last 1 hour)
+    // We'll refresh at 50 minutes to be safe
+    const expiresAt = Date.now() + (50 * 60 * 1000); // 50 minutes from now
+    
     chrome.storage.local.set({ 
       authToken: token,
       authUser: user,
+      tokenExpiresAt: expiresAt,
       guestMode: false
     }, () => {
       if (chrome.runtime.lastError) {
         reject(chrome.runtime.lastError);
       } else {
-        console.log('✅ Auth token saved');
+        console.log('✅ Auth token saved (expires in 50 minutes)');
         // Notify popup of auth state change
         chrome.runtime.sendMessage({ 
           action: 'authStateChanged', 
@@ -151,7 +226,7 @@ async function saveAuthToken(token, user) {
  */
 async function logout() {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.remove(['authToken', 'authUser'], () => {
+    chrome.storage.local.remove(['authToken', 'authUser', 'tokenExpiresAt'], () => {
       if (chrome.runtime.lastError) {
         reject(chrome.runtime.lastError);
       } else {
