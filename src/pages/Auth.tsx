@@ -76,6 +76,52 @@ const Auth = () => {
     }, 1000);
   };
 
+  /**
+   * Notify Chrome extension of authentication
+   * Sends auth token to extension if it's installed
+   */
+  const notifyExtension = async (user: any) => {
+    try {
+      // Check if we're in Chrome browser
+      const chromeApi = (window as any).chrome;
+      const isChrome = typeof chromeApi !== 'undefined' && chromeApi.runtime && chromeApi.runtime.sendMessage;
+      
+      if (!isChrome) {
+        console.log('[Auth] Not in Chrome or extension API not available');
+        return;
+      }
+
+      // Get ID token from Firebase
+      const token = await user.getIdToken();
+      
+      // Extension ID (for local testing)
+      const extensionId = 'panjncmgnfeidefplkmmhjknboncbpmf';
+      
+      // Try to send message to extension
+      chromeApi.runtime.sendMessage(
+        extensionId,
+        {
+          action: 'authUpdate',
+          token: token,
+          user: {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || ''
+          }
+        },
+        (response: any) => {
+          if (chromeApi.runtime.lastError) {
+            console.log('[Auth] Extension not installed or not responding:', chromeApi.runtime.lastError.message);
+          } else {
+            console.log('[Auth] ✅ Auth token sent to extension:', response);
+          }
+        }
+      );
+    } catch (error) {
+      console.error('[Auth] Error notifying extension:', error);
+    }
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
@@ -161,6 +207,10 @@ const Auth = () => {
           );
           await writeSessionId(result.user, true);
         }
+        
+        // Notify Chrome extension of login
+        await notifyExtension(result.user);
+        
         const params = new URLSearchParams(location.search);
         if (params.get("returnToApp") === "true" && shouldUseRedirect()) {
           toast.success("Login successful! Returning to app...", { duration: 2000 });
@@ -274,6 +324,10 @@ const Auth = () => {
       );
       await writeSessionId(result.user, true);
     }
+    
+    // Notify Chrome extension of login
+    await notifyExtension(result.user);
+    
     // Check if we need to return to the app
     const params = new URLSearchParams(window.location.search);
     const returnToApp = params.get("returnToApp") === "true";
@@ -380,6 +434,10 @@ const Auth = () => {
       
       setShowGoogleNameDialog(false);
       await writeSessionId(googleUserData, true);
+      
+      // Notify Chrome extension of login
+      await notifyExtension(googleUserData);
+      
       toast.success("Signed in with Google");
       navigate("/");
     } catch (error: any) {
