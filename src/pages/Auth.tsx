@@ -94,8 +94,13 @@ const Auth = () => {
       // Get ID token from Firebase
       const token = await user.getIdToken();
       
-      // Extension ID (for local testing)
-      const extensionId = 'panjncmgnfeidefplkmmhjknboncbpmf';
+      // Get extension ID injected by the extension
+      const extensionId = (window as any).__CORRECTNOW_EXTENSION_ID;
+      
+      if (!extensionId) {
+        console.log('[Auth] Extension ID not found. Extension may not be installed.');
+        return;
+      }
       
       // Try to send message to extension
       chromeApi.runtime.sendMessage(
@@ -146,7 +151,13 @@ const Auth = () => {
         const isChrome = typeof chromeApi !== 'undefined' && chromeApi.runtime;
         
         if (isChrome) {
-          const extensionId = 'panjncmgnfeidefplkmmhjknboncbpmf';
+          const extensionId = (window as any).__CORRECTNOW_EXTENSION_ID;
+          
+          if (!extensionId) {
+            console.log('[Auth] Extension ID not found during refresh');
+            return;
+          }
+          
           chromeApi.runtime.sendMessage(
             extensionId,
             {

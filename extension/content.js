@@ -7,6 +7,15 @@
  * - Highlights grammar errors with yellow background
  */
 
+// Inject extension ID into CorrectNow website for authentication
+if (window.location.hostname === 'correctnow.app' || window.location.hostname === 'localhost') {
+  const script = document.createElement('script');
+  script.textContent = `window.__CORRECTNOW_EXTENSION_ID = "${chrome.runtime.id}";`;
+  (document.head || document.documentElement).appendChild(script);
+  script.remove();
+  console.log('[CorrectNow Extension] Extension ID injected:', chrome.runtime.id);
+}
+
 // Configuration
 const CONFIG = {
   API_BASE_URL: 'http://correctnow.app', // Production API URL (deployed backend)
