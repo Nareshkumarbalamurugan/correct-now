@@ -8,40 +8,106 @@
  */
 
 // Inject extension ID into CorrectNow website for authentication
-// This must happen IMMEDIATELY at document_start in the main world
-(function() {
+// This must happen IMMEDIATELY at document_start
+(function injectExtensionId() {
   const hostname = window.location.hostname;
-  console.log('[CorrectNow Extension] Content script loaded on:', hostname);
+  const href = window.location.href;
   
-  if (hostname === 'correctnow.app' || hostname === 'localhost') {
-    try {
-      const extensionId = chrome.runtime.id;
-      console.log('[CorrectNow Extension] Preparing to inject extension ID:', extensionId);
-      
-      // Set it directly in the content script world first
-      window.__CORRECTNOW_EXTENSION_ID = extensionId;
-      
-      // Also inject into the main page world
-      const script = document.createElement('script');
-      script.textContent = `
-        (function() {
-          console.log('[CorrectNow Extension] Injecting extension ID in main world');
-          window.__CORRECTNOW_EXTENSION_ID = '${extensionId}';
-          console.log('[CorrectNow Extension] Extension ID available:', window.__CORRECTNOW_EXTENSION_ID);
-          
-          // Dispatch event to notify page that extension is ready
-          window.dispatchEvent(new CustomEvent('correctnow-extension-ready', { 
-            detail: { extensionId: '${extensionId}' } 
-          }));
-        })();
-      `;
-      (document.head || document.documentElement).appendChild(script);
-      script.remove();
-      
-      console.log('[CorrectNow Extension] Extension ID injected successfully in both worlds');
-    } catch (error) {
-      console.error('[CorrectNow Extension] Failed to inject extension ID:', error);
+  console.log('[CorrectNow Extension] ========================================');
+  console.log('[CorrectNow Extension] Content script initializing');
+  console.log('[CorrectNow Extension] Hostname:', hostname);
+  console.log('[CorrectNow Extension] Full URL:', href);
+  console.log('[CorrectNow Extension] ========================================');
+  
+  // Check if we're on the correct domain (supports localhost on any port)
+  const isCorrectDomain = hostname === 'correctnow.app' || 
+                          hostname === 'localhost' || 
+                          hostname === '127.0.0.1' ||
+                          hostname.endsWith('.correctnow.app');
+  
+  if (!isCorrectDomain) {
+    console.log('[CorrectNow Extension] Not on CorrectNow domain, skipping auth injection');
+    return;
+  }
+  
+  console.log('[CorrectNow Extension] ✅ On CorrectNow domain, proceeding with auth injection');
+  
+  try {
+    const extensionId = chrome.runtime.id;
+    console.log('[CorrectNow Extension] 🔑 Extension ID:', extensionId);
+    
+    // Method 1: Set directly in content script world
+    window.__CORRECTNOW_EXTENSION_ID = extensionId;
+    console.log('[CorrectNow Extension] ✅ Method 1: Set in content script world');
+    
+    // Method 2: Inject into main world via script tag
+    const script = document.createElement('script');
+    script.id = 'correctnow-extension-id-injector';
+    script.textContent = `
+      (function() {
+        console.log('[CorrectNow Extension] 🚀 Main world script executing');
+        console.log('[CorrectNow Extension] Injecting extension ID: ${extensionId}');
+        
+        // Set the extension ID
+        window.__CORRECTNOW_EXTENSION_ID = '${extensionId}';
+        
+        // Verify it was set
+        console.log('[CorrectNow Extension] ✅ Extension ID set:', window.__CORRECTNOW_EXTENSION_ID);
+        
+        // Dispatch readyevent
+        try {
+          const event = new CustomEvent('correctnow-extension-ready', { 
+            detail: { extensionId: '${extensionId}' },
+            bubbles: true
+          });
+          window.dispatchEvent(event);
+          console.log('[CorrectNow Extension] ✅ Dispatched correctnow-extension-ready event');
+        } catch (e) {
+          console.error('[CorrectNow Extension] ❌ Failed to dispatch event:', e);
+        }
+        
+        // Also set on document for redundancy
+        document.__CORRECTNOW_EXTENSION_ID = '${extensionId}';
+      })();
+    `;
+    
+    // Inject as early as possible
+    const targetElement = document.head || document.documentElement;
+    if (targetElement) {
+      targetElement.appendChild(script);
+      console.log('[CorrectNow Extension] ✅ Method 2: Injected into', targetElement.tagName);
+      script.remove(); // Clean up
+    } else {
+      console.warn('[CorrectNow Extension] ⚠️ No head or documentElement yet, will retry');
+      // Retry after a tiny delay
+      setTimeout(() => {
+        const el = document.head || document.documentElement || document.body;
+        if (el) {
+          el.appendChild(script);
+          script.remove();
+          console.log('[CorrectNow Extension] ✅ Method 2: Injected after retry');
+        }
+      }, 10);
     }
+    
+    // Method 3: Listen for requests from the page
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'REQUEST_EXTENSION_ID') {
+        console.log('[CorrectNow Extension] 📨 Received REQUEST_EXTENSION_ID message');
+        window.postMessage({
+          type: 'EXTENSION_ID_RESPONSE',
+          extensionId: extensionId
+        }, '*');
+        console.log('[CorrectNow Extension] ✅ Sent EXTENSION_ID_RESPONSE');
+      }
+    });
+    
+    console.log('[CorrectNow Extension] ✅ All injection methods completed');
+    console.log('[CorrectNow Extension] ========================================');
+    
+  } catch (error) {
+    console.error('[CorrectNow Extension] ❌ CRITICAL ERROR during injection:', error);
+    console.error('[CorrectNow Extension] Stack:', error.stack);
   }
 })();
 

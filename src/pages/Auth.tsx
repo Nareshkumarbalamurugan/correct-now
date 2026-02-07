@@ -79,18 +79,24 @@ const Auth = () => {
   /**
    * Wait for extension ID to be injected by content script
    */
-  const waitForExtensionId = async (maxAttempts = 10, delayMs = 100): Promise<string | null> => {
+  const waitForExtensionId = async (maxAttempts = 20, delayMs = 100): Promise<string | null> => {
+    console.log('[Auth] ========================================');
+    console.log('[Auth] Waiting for extension ID...');
+    console.log('[Auth] Max attempts:', maxAttempts, 'Delay:', delayMs, 'ms');
+    
     // First, check if it's already available
     let extensionId = (window as any).__CORRECTNOW_EXTENSION_ID;
     if (extensionId) {
-      console.log('[Auth] Extension ID already available:', extensionId);
+      console.log('[Auth] ✅ Extension ID already available:', extensionId);
+      console.log('[Auth] ========================================');
       return extensionId;
     }
 
-    // Wait for custom event from extension
+    // Method 1: Wait for custom event from extension
     const eventPromise = new Promise<string | null>((resolve) => {
+      console.log('[Auth] Method 1: Listening for correctnow-extension-ready event');
       const handler = (event: any) => {
-        console.log('[Auth] Received correctnow-extension-ready event');
+        console.log('[Auth] ✅ Received correctnow-extension-ready event:', event.detail);
         resolve(event.detail?.extensionId || null);
       };
       window.addEventListener('correctnow-extension-ready', handler, { once: true });
@@ -98,29 +104,61 @@ const Auth = () => {
       // Clean up after timeout
       setTimeout(() => {
         window.removeEventListener('correctnow-extension-ready', handler);
+        console.log('[Auth] Method 1: Event timeout');
         resolve(null);
       }, maxAttempts * delayMs);
     });
 
-    // Also poll for the ID
+    // Method 2: Poll for the ID in window object
     const pollPromise = (async () => {
+      console.log('[Auth] Method 2: Polling for window.__CORRECTNOW_EXTENSION_ID');
       for (let i = 0; i < maxAttempts; i++) {
-        extensionId = (window as any).__CORRECTNOW_EXTENSION_ID;
+        extensionId = (window as any).__CORRECTNOW_EXTENSION_ID || (document as any).__CORRECTNOW_EXTENSION_ID;
         if (extensionId) {
-          console.log('[Auth] Extension ID found via polling:', extensionId);
+          console.log(`[Auth] ✅ Extension ID found via polling (attempt ${i + 1}):`, extensionId);
           return extensionId;
         }
-        console.log(`[Auth] Waiting for extension ID... (attempt ${i + 1}/${maxAttempts})`);
+        console.log(`[Auth] Attempt ${i + 1}/${maxAttempts} - not found yet`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
+      console.log('[Auth] Method 2: Polling timeout');
       return null;
     })();
 
-    // Race between event and polling
-    const result = await Promise.race([eventPromise, pollPromise]);
+    // Method 3: Request via postMessage
+    const messagePromise = new Promise<string | null>((resolve) => {
+      console.log('[Auth] Method 3: Requesting via postMessage');
+      const handler = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'EXTENSION_ID_RESPONSE') {
+          console.log('[Auth] ✅ Received EXTENSION_ID_RESPONSE:', event.data.extensionId);
+          window.removeEventListener('message', handler);
+          resolve(event.data.extensionId);
+        }
+      };
+      window.addEventListener('message', handler);
+      
+      // Send request
+      window.postMessage({ type: 'REQUEST_EXTENSION_ID' }, '*');
+      console.log('[Auth] Sent REQUEST_EXTENSION_ID message');
+      
+      // Clean up after timeout
+      setTimeout(() => {
+        window.removeEventListener('message', handler);
+        console.log('[Auth] Method 3: Message timeout');
+        resolve(null);
+      }, maxAttempts * delayMs);
+    });
+
+    // Race between all three methods
+    console.log('[Auth] Racing all three methods...');
+    const result = await Promise.race([eventPromise, pollPromise, messagePromise]);
     
     if (!result) {
-      console.log('[Auth] Extension ID not found after all attempts. Extension may not be installed.');
+      console.log('[Auth] ❌ All methods failed - Extension not installed or not responding');
+      console.log('[Auth] ========================================');
+    } else {
+      console.log('[Auth] ✅ Got extension ID:', result);
+      console.log('[Auth] ========================================');
     }
     
     return result;
@@ -204,7 +242,7 @@ const Auth = () => {
         const isChrome = typeof chromeApi !== 'undefined' && chromeApi.runtime;
         
         if (isChrome) {
-          const extensionId = await waitForExtensionId(5, 200); // Shorter wait for refresh
+          const extensionId = await waitForExtensionId(10, 200); // Shorter wait for refresh
           
           if (!extensionId) {
             console.log('[Auth] Extension ID not found during refresh');

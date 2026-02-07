@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CorrectNow Extension Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #0077B5;
+      margin-bottom: 10px;
+    }
+    .status {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+      font-weight: 600;
+    }
+    .success {
+      background: #d1f4e0;
+      color: #0f5132;
+      border: 2px solid #0f5132;
+    }
+    .error {
+      background: #f8d7da;
+      color: #842029;
+      border: 2px solid #842029;
+    }
+    .info {
+      background: #d1ecf1;
+      color: #055160;
+      border: 2px solid #055160;
+    }
+    pre {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+    button {
+      background: #0077B5;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #005885;
+    }
+    .logs {
+      max-height: 400px;
+      overflow-y: auto;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+    .log-entry {
+      margin: 2px 0;
+      padding: 2px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 CorrectNow Extension Test</h1>
+    <p>This page tests if the CorrectNow Chrome extension is properly installed and communicating.</p>
+    
+    <div id="status" class="status info">
+      ⏳ Testing extension connection...
+    </div>
+    
+    <div id="details"></div>
+    
+    <div>
+      <button onclick="testExtension()">🔄 Test Again</button>
+      <button onclick="clearLogs()">🗑️ Clear Logs</button>
+      <button onclick="copyExtensionId()">📋 Copy Extension ID</button>
+    </div>
+    
+    <div class="logs" id="logs"></div>
+  </div>
+
+  <script>
+    let extensionId = null;
+    const logs = [];
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const logEntry = `[${timestamp}] ${message}`;
+      logs.push({ message: logEntry, type });
+      updateLogs();
+      console.log(message);
+    }
+
+    function updateLogs() {
+      const logsEl = document.getElementById('logs');
+      logsEl.innerHTML = logs.map(l => 
+        `<div class="log-entry" style="color: ${
+          l.type === 'success' ? '#4ade80' : 
+          l.type === 'error' ? '#f87171' : 
+          l.type === 'warn' ? '#fbbf24' : '#d4d4d4'
+        }">${l.message}</div>`
+      ).reverse().join('');
+    }
+
+    function clearLogs() {
+      logs.length = 0;
+      updateLogs();
+    }
+
+    function copyExtensionId() {
+      if (extensionId) {
+        navigator.clipboard.writeText(extensionId).then(() => {
+          alert('Extension ID copied to clipboard!');
+        });
+      } else {
+        alert('No extension ID found yet!');
+      }
+    }
+
+    async function testExtension() {
+      log('========================================', 'info');
+      log('🚀 Starting extension test...', 'info');
+      
+      const statusEl = document.getElementById('status');
+      const detailsEl = document.getElementById('details');
+      
+      statusEl.className = 'status info';
+      statusEl.textContent = '⏳ Testing extension connection...';
+      detailsEl.innerHTML = '';
+      
+      // Check if Chrome extension API is available
+      if (typeof chrome === 'undefined' || !chrome.runtime) {
+        log('❌ Chrome extension API not available', 'error');
+        statusEl.className = 'status error';
+        statusEl.textContent = '❌ Not running in Chrome or extension API blocked';
+        return;
+      }
+      
+      log('✅ Chrome extension API available', 'success');
+      
+      // Method 1: Check window.__CORRECTNOW_EXTENSION_ID
+      log('Method 1: Checking window.__CORRECTNOW_EXTENSION_ID', 'info');
+      extensionId = window.__CORRECTNOW_EXTENSION_ID;
+      if (extensionId) {
+        log(`✅ Found in window: ${extensionId}`, 'success');
+      } else {
+        log('⚠️ Not found in window (yet)', 'warn');
+      }
+      
+      // Method 2: Check document.__CORRECTNOW_EXTENSION_ID
+      log('Method 2: Checking document.__CORRECTNOW_EXTENSION_ID', 'info');
+      const docId = document.__CORRECTNOW_EXTENSION_ID;
+      if (docId) {
+        log(`✅ Found in document: ${docId}`, 'success');
+        extensionId = docId;
+      } else {
+        log('⚠️ Not found in document', 'warn');
+      }
+      
+      // Method 3: Listen for event
+      log('Method 3: Waiting for correctnow-extension-ready event', 'info');
+      const eventPromise = new Promise(resolve => {
+        window.addEventListener('correctnow-extension-ready', (event) => {
+          log('✅ Received correctnow-extension-ready event', 'success');
+          log(`Event detail: ${JSON.stringify(event.detail)}`, 'info');
+          extensionId = event.detail?.extensionId;
+          resolve(extensionId);
+        }, { once: true });
+        setTimeout(() => {
+          log('⏱️ Event timeout (1 second)', 'warn');
+          resolve(null);
+        }, 1000);
+      });
+      
+      // Method 4: Request via postMessage
+      log('Method 4: Requesting via postMessage', 'info');
+      const messagePromise = new Promise(resolve => {
+        window.addEventListener('message', function handler(event) {
+          if (event.data && event.data.type === 'EXTENSION_ID_RESPONSE') {
+            log('✅ Received EXTENSION_ID_RESPONSE', 'success');
+            log(`Response: ${event.data.extensionId}`, 'info');
+            window.removeEventListener('message', handler);
+            extensionId = event.data.extensionId;
+            resolve(extensionId);
+          }
+        });
+        window.postMessage({ type: 'REQUEST_EXTENSION_ID' }, '*');
+        log('📤 Sent REQUEST_EXTENSION_ID', 'info');
+        setTimeout(() => {
+          log('⏱️ postMessage timeout (1 second)', 'warn');
+          resolve(null);
+        }, 1000);
+      });
+      
+      // Wait for results
+      await Promise.allSettled([eventPromise, messagePromise]);
+      
+      // Re-check window variable after waiting
+      extensionId = extensionId || window.__CORRECTNOW_EXTENSION_ID;
+      
+      // Show results
+      if (extensionId) {
+        log(`✅ SUCCESS! Extension ID: ${extensionId}`, 'success');
+        statusEl.className = 'status success';
+        statusEl.innerHTML = `✅ Extension Connected!<br><small>Extension ID: ${extensionId}</small>`;
+        
+        detailsEl.innerHTML = `
+          <pre>${JSON.stringify({
+            extensionId: extensionId,
+            chromeAvailable: typeof chrome !== 'undefined',
+            chromeRuntimeAvailable: typeof chrome?.runtime !== 'undefined',
+            hostname: window.location.hostname,
+            url: window.location.href
+          }, null, 2)}</pre>
+        `;
+      } else {
+        log('❌ FAILED: Extension not responding', 'error');
+        statusEl.className = 'status error';
+        statusEl.textContent = '❌ Extension not installed or not responding';
+        
+        detailsEl.innerHTML = `
+          <h3 style="color: #842029;">Troubleshooting:</h3>
+          <ol>
+            <li>Make sure the CorrectNow extension is installed</li>
+            <li>Check that the extension is enabled in chrome://extensions/</li>
+            <li>Refresh this page after installing/enabling the extension</li>
+            <li>Open Chrome DevTools Console (F12) to see detailed logs</li>
+            <li>Look for "[CorrectNow Extension]" messages in the console</li>
+          </ol>
+        `;
+      }
+      
+      log('========================================', 'info');
+    }
+
+    // Auto-run test on load
+    window.addEventListener('load', () => {
+      setTimeout(testExtension, 500);
+    });
+  </script>
+</body>
+</html>
