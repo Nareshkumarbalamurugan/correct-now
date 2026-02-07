@@ -26,6 +26,7 @@ let highlightedRanges = [];
 let originalContent = null; // Store original content for restoration
 let isCheckingInProgress = false; // Prevent concurrent checks
 let hoverTooltip = null; // Hover correction tooltip
+let tooltipHideTimeout = null; // Tooltip hide timeout
 let currentErrors = []; // Store errors for correction
 let lastCheckedText = ''; // Store last checked text to align offsets
 let lastCorrectedText = ''; // Store last corrected text to prevent re-checking
@@ -1000,8 +1001,6 @@ function applyAllCorrections() {
 /**
  * Show correction tooltip on hover
  */
-let tooltipHideTimeout = null;
-
 function showCorrectionTooltip(event, error) {
   // Clear any pending hide timeout
   if (tooltipHideTimeout) {
