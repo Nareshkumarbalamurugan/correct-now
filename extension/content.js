@@ -9,7 +9,7 @@
 
 // Configuration
 const CONFIG = {
-  API_BASE_URL: 'http://localhost:8787', // Production API URL (deployed backend)
+  API_BASE_URL: 'http://correctnow.app', // Production API URL (deployed backend)
   EXTENSION_TOKEN: 'CORRECTNOW_CHROME_EXTENSION_V1', // Extension identifier (not sensitive)
   BUTTON_TEXT: 'Check with CorrectNow',
   BUTTON_CLASS: 'correctnow-check-button',
