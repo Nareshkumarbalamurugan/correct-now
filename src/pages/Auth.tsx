@@ -295,19 +295,21 @@ const Auth = () => {
         const db = getFirebaseDb();
         if (db) {
           const ref = firestoreDoc(db, `users/${result.user.uid}`);
-          await setDoc(
-            ref,
-            {
-              uid: result.user.uid,
-              name: name.trim(),
-              email: result.user.email || "",
-              phone: phoneValue || undefined,
-              status: "active",
-              updatedAt: new Date().toISOString(),
-              createdAt: new Date().toISOString(),
-            },
-            { merge: true }
-          );
+          const userData: any = {
+            uid: result.user.uid,
+            name: name.trim(),
+            email: result.user.email || "",
+            status: "active",
+            updatedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+          };
+          
+          // Only include phone if it has a value
+          if (phoneValue) {
+            userData.phone = phoneValue;
+          }
+          
+          await setDoc(ref, userData, { merge: true });
         }
         const verifyRes = await fetch(`${apiBase}/api/auth/send-verification`, {
           method: "POST",
@@ -472,20 +474,22 @@ const Auth = () => {
       const db = getFirebaseDb();
       if (db && googleUserData) {
         const ref = firestoreDoc(db, `users/${googleUserData.uid}`);
-        await setDoc(
-          ref,
-          {
-            uid: googleUserData.uid,
-            name: googleName.trim(),
-            email: googleUserData.email || "",
-            phone: phoneValue || undefined,
-            profileCompleted: true,
-            status: "active",
-            updatedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
+        const userData: any = {
+          uid: googleUserData.uid,
+          name: googleName.trim(),
+          email: googleUserData.email || "",
+          profileCompleted: true,
+          status: "active",
+          updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+        };
+        
+        // Only include phone if it has a value
+        if (phoneValue) {
+          userData.phone = phoneValue;
+        }
+        
+        await setDoc(ref, userData, { merge: true });
         
         // Update Firebase Auth profile
         await updateProfile(googleUserData, { displayName: googleName.trim() });
